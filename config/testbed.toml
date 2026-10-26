@@ -1,0 +1,49 @@
+# IntentQoS configuration for the network-namespace testbed (testbed/testbed.py).
+# Run inside the gateway namespace:  ip netns exec iq-gw python3 -m intentqos.daemon --config config/testbed.toml
+
+[interfaces]
+lan = "gw-lan"
+wan = "gw-wan"
+lan_subnets = ["192.168.50.0/24", "fd00:50::/64"]
+
+[link]
+down_mbit = 100.0
+up_mbit = 20.0
+
+[estimator]
+enabled = true
+reflectors = ["203.0.113.10"]      # the emulated "internet" server answers ICMP timestamp requests
+method = "icmp-ts"
+probe_interval_ms = 50
+tick_ms = 250
+
+[classifier]
+mode = "ml"
+model_path = "models/flowclf.iqm"
+
+[enforce]
+backend = "auto"                   # CAKE when the kernel has sch_cake, else HTB
+
+[api]
+listen = "0.0.0.0:8080"
+
+[watchdog]
+heartbeat_path = "/run/intentqos/heartbeat.json"
+timeout_s = 2.0
+
+[devices]                          # optional friendly names for the dashboard / intents
+laptop = "192.168.50.10"
+desktop = "192.168.50.11"
+tv1 = "192.168.50.12"
+tv2 = "192.168.50.13"
+tv3 = "192.168.50.14"
+console = "192.168.50.15"
+phone = "192.168.50.16"
+nas = "192.168.50.17"
+
+[agent]                            # connect this lab gateway to the lab controller (make controller)
+controller_url = "https://10.255.0.1:8443"
+ca_file = "controller/data/pki/ca.pem"
+serial = "LAB-GW-0001"             # matches controller/seed.py
+claim_code = "LAB-CLAIM-0001"      # one-time enrolment code (printed on a real router's label)
+telemetry_interval_s = 15

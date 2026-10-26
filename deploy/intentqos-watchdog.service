@@ -1,0 +1,21 @@
+[Unit]
+Description=IntentQoS dead-man watchdog (restores the safe state if the engine stalls)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/intentqos
+ExecStart=/usr/bin/python3 -m intentqos.watchdog --config /etc/intentqos.toml
+Restart=always
+RestartSec=1
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/intentqos/data /run/intentqos
+RuntimeDirectory=intentqos
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

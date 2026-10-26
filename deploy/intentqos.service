@@ -1,0 +1,29 @@
+[Unit]
+Description=IntentQoS adaptive QoS engine
+After=network-online.target nftables.service
+Wants=network-online.target intentqos-watchdog.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/intentqos
+ExecStart=/usr/bin/python3 -m intentqos.daemon --config /etc/intentqos.toml
+Restart=on-failure
+RestartSec=2
+# Leave a known-safe state on stop (see [watchdog] exit_state)
+KillSignal=SIGTERM
+TimeoutStopSec=10
+# Hardening: needs CAP_NET_ADMIN (tc, nft) and CAP_NET_RAW (capture, ICMP probes) only
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/intentqos/data /run/intentqos
+RuntimeDirectory=intentqos
+RuntimeDirectoryPreserve=yes
+# Optional API token -- set it with `systemctl edit intentqos`, never in this file:
+# Environment=INTENTQOS_TOKEN=...
+
+[Install]
+WantedBy=multi-user.target

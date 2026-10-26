@@ -1,0 +1,25 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Unit tests (engine, router runtime, agent, controller; no root needed)
+        run: python -m unittest discover -s tests -v
+      - name: Capture helper builds and compiles cleanly
+        run: gcc -O2 -Wall -Wextra -Werror -o /tmp/iq-capture router/iq-capture.c
+      - name: Router package builds
+        run: python router/build_ipk.py
+  launchers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version: "1.22"}
+      - name: Windows launchers cross-compile
+        run: python3 launcher/build.py
+      - uses: actions/upload-artifact@v4
+        with: {name: windows-launchers, path: dist/*.exe}

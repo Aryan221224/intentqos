@@ -1,0 +1,24 @@
+# IntentQoS controller (lab). Paths are relative to the repository root.
+listen = "0.0.0.0:8443"
+data_dir = "controller/data"
+tls_cert = "controller/data/pki/server.pem"
+tls_key = "controller/data/pki/server.key"
+telemetry_interval_s = 15
+demo_otp = true                    # shows the one-time code on screen: there is no SMS gateway in the lab
+lab_quick_login = true             # lab only: role buttons instead of passwords, accepted from this machine only
+ui_listen = "127.0.0.1:8088"       # plain-HTTP consoles for a browser on this machine (no certificate warning);
+                                   # routers and remote staff always use the HTTPS listener above
+auto_notify_outages = true
+test_server = "http://203.0.113.10:8099/down"   # speed/line test server across the emulated ISP link
+
+[brand]                            # fictional ISP used for the demo
+name = "SampleNet Fibre"
+short = "SampleNet"
+support_phone = "1800-000-0000"
+grievance_email = "grievance@samplenet.example"
+accent = "#3987e5"
+
+[retention]
+raw_hours = 48
+rollup_days = 90
+events_days = 90

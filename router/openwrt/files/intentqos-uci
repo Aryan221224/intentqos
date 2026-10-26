@@ -1,0 +1,3 @@
+#!/bin/sh
+# Render /etc/config/intentqos as the engine's TOML config on stdout.
+PYTHONPATH=/usr/lib/intentqos exec /usr/bin/python3 -m intentqos.uciconf "$@"

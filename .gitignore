@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+data/
+/results/runs/*/*/*/engine-data/
+ml/data/*.jsonl
+*.tmp
+.venv/
+results-lab/
+# controller state: database, keys, lab PKI and generated credentials (never commit)
+controller/data/
+# build outputs (rebuild with `make router ipk`)
+router/iq-capture
+router/dist/*.tmp
+# launcher build outputs (rebuild with launcher/build.py)
+dist/
+launcher/build/
+launcher/go/app.zip
+launcher/go/wsl-setup.sh
+launcher/go/*.syso
+# the earlier PyInstaller launcher's build leftovers
+launcher/app.zip
+launcher/build.log
+results/exe-run.log
+results/nul-in.txt
+
+# testbed emulator binary (compiled from testbed/accessemu.c on first use)
+testbed/accessemu
+# raw experiment runs (regenerate with testbed.run_eval)
+results*/runs/

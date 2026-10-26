@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IntentQoS Fleet</title>
+<style>
+/* IntentQoS Fleet: the ISP's internal console for network operations and the support desk.
+   An enterprise tool, not a showcase: light, dense, bordered, IBM Plex for text with Plex Mono for
+   identifiers people copy (serials, OLTs, versions). The memorable element is the access-network
+   strip on the overview: every home is one square, grouped by OLT and coloured by its grade, so an
+   area problem shows up as a block of colour rather than as many separate alerts. */
+@font-face{font-family:"Plex";src:url(/fonts/plex-sans-var.woff) format("woff");font-weight:100 700;font-stretch:85% 100%;font-display:swap}
+@font-face{font-family:"Plex Mono";src:url(/fonts/plex-mono-400.woff) format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"Plex Mono";src:url(/fonts/plex-mono-500.woff) format("woff");font-weight:500;font-display:swap}
+:root{
+  --canvas:#F3F4F6; --surface:#FFFFFF; --sunken:#ECEEF2; --hover:#F6F7F9; --border:#D8DCE3; --border-2:#C4CAD4;
+  --text:#1B2130; --text-2:#576173; --text-3:#8790A0;
+  --act:#2459C4; --act-soft:#E7EEFB; --act-ink:#FFFFFF;
+  --crit:#C0321D; --crit-soft:#FCE9E5; --major:#C25A0C; --major-soft:#FDEFE2; --minor:#9E7A0B; --minor-soft:#FAF3D8; --ok:#1C7C52; --ok-soft:#E1F3EA; --info-soft:#E7EEFB;
+  /* grades: a sequential scale from calm to alarming */
+  --gAp:#1C7C52; --gA:#4FA272; --gB:#C9A227; --gC:#E07B26; --gD:#CF4A2B; --gF:#9B1C1C; --gN:#C8CDD6;
+  /* traffic classes (shared with the gateway console) */
+  --intent:#8E7CEB; --voice:#2CA57A; --video:#4C86E6; --besteffort:#D69A2D; --bulk:#D9628A;
+  --brand:#1D2B5E; --lab:#F2A93B;
+  --sans:"Plex",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --canvas:#12151B; --surface:#1A1E26; --sunken:#151820; --hover:#212631; --border:#2C323E; --border-2:#3A4250;
+    --text:#E4E7EE; --text-2:#A3ABBA; --text-3:#7A8394; --act:#6E9BF0; --act-soft:#1C2A45; --act-ink:#0E1420;
+    --crit:#F07A62; --crit-soft:#3A1C17; --major:#F0A060; --major-soft:#3A2614; --minor:#DCBE5A; --minor-soft:#332B12; --ok:#58C493; --ok-soft:#14301F; --info-soft:#1C2A45;
+    --gN:#3A4250; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --canvas:#12151B; --surface:#1A1E26; --sunken:#151820; --hover:#212631; --border:#2C323E; --border-2:#3A4250;
+  --text:#E4E7EE; --text-2:#A3ABBA; --text-3:#7A8394; --act:#6E9BF0; --act-soft:#1C2A45; --act-ink:#0E1420;
+  --crit:#F07A62; --crit-soft:#3A1C17; --major:#F0A060; --major-soft:#3A2614; --minor:#DCBE5A; --minor-soft:#332B12; --ok:#58C493; --ok-soft:#14301F; --info-soft:#1C2A45;
+  --gN:#3A4250; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--canvas);color:var(--text);font-family:var(--sans);font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--act);outline-offset:1px}
+[hidden]{display:none!important}
+h1,h2,h3{margin:0;font-weight:600}
+a{color:var(--act);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.id{font-family:var(--mono);font-size:12.5px}
+code{background:var(--sunken);border-radius:3px;padding:0 4px;overflow-wrap:anywhere}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* frame: app bar on top, nav on the left */
+.app{display:grid;grid-template-rows:48px minmax(0,1fr);grid-template-columns:208px minmax(0,1fr);min-height:100%;background:linear-gradient(to right,var(--surface) 207px,var(--border) 207px,var(--border) 208px,var(--canvas) 208px)}
+.appbar{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 14px 0 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.prod{display:flex;align-items:center;gap:9px;min-width:192px;color:var(--text);text-decoration:none}
+.prod:hover{text-decoration:none}
+.prod b{font-size:15px;font-weight:600;letter-spacing:-.005em}
+.prod span{color:var(--text-3);font-size:13px}
+.search{flex:1;max-width:560px;position:relative}
+.search input{width:100%;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--sunken);padding:0 34px 0 32px}
+.search input:focus{background:var(--surface);border-color:var(--act);outline:0}
+.search svg{position:absolute;left:9px;top:8px;color:var(--text-3)}
+.search kbd{position:absolute;right:8px;top:6px;font-family:var(--mono);font-size:11px;border:1px solid var(--border-2);border-radius:4px;padding:0 5px;color:var(--text-3);background:var(--surface)}
+.appbar .sp{flex:1}
+.env{font-size:12px;font-weight:600;border-radius:4px;padding:2px 8px;background:var(--lab);color:#3A2500}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.me{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:6px;padding:3px 8px 3px 4px;background:var(--surface);cursor:pointer}
+.me .av{width:24px;height:24px;border-radius:4px;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:11.5px;font-weight:600}
+.me small{color:var(--text-3)}
+.menu{position:absolute;right:14px;top:44px;background:var(--surface);border:1px solid var(--border);border-radius:6px;min-width:200px;padding:4px;display:grid;box-shadow:0 8px 24px rgba(20,25,40,.14)}
+.menu button{background:none;border:0;text-align:left;padding:7px 10px;border-radius:4px;cursor:pointer}
+.menu button:hover{background:var(--hover)}
+.menu .hd{padding:8px 10px;color:var(--text-2);font-size:12.5px;border-bottom:1px solid var(--border);margin-bottom:4px}
+
+.nav{background:var(--surface);border-right:1px solid var(--border);padding:10px 8px;align-self:start;position:sticky;top:48px;height:calc(100vh - 48px);overflow:auto;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:5px;color:var(--text-2);font-weight:500}
+.nav a:hover{background:var(--hover);color:var(--text);text-decoration:none}
+.nav a svg{flex:none;color:var(--text-3)}
+.nav a[aria-current=page]{background:var(--act-soft);color:var(--act)}
+.nav a[aria-current=page] svg{color:var(--act)}
+.nav a .cnt{margin-left:auto;font-size:11.5px;font-weight:600;border-radius:9px;padding:0 6px;background:var(--crit-soft);color:var(--crit)}
+.nav hr{border:0;border-top:1px solid var(--border);margin:8px 6px}
+.nav .foot{margin-top:auto;color:var(--text-3);font-size:12px;padding:8px 9px 2px;line-height:1.5}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.pagehead{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:16px 24px 12px}
+.pagehead h1{font-size:20px;letter-spacing:-.01em}
+.pagehead .ctx{color:var(--text-2);font-size:13px;width:100%;margin-top:2px}
+.pagehead .sp{flex:1}
+.crumb{color:var(--text-3);font-size:12.5px;width:100%;margin-bottom:2px}
+.crumb a{color:var(--text-2)}
+.content{padding:0 24px 48px;display:grid;gap:16px;max-width:1500px;width:100%}
+
+/* surfaces */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px 16px;min-width:0}
+.panel>h2,.ph h2{font-size:14.5px;font-weight:600}
+.ph{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.ph .sp{flex:1}
+.sub{color:var(--text-2);font-size:12.5px;margin:2px 0 10px}
+.cols{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols.wl{grid-template-columns:minmax(0,1.65fr) minmax(0,1fr)}
+.cols.wr{grid-template-columns:minmax(0,1fr) minmax(0,1.65fr)}
+.hstack{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.hstack .sp{flex:1}
+
+/* controls */
+.btn{height:30px;border:1px solid var(--border-2);background:var(--surface);border-radius:5px;padding:0 12px;font-weight:500;cursor:pointer;font-size:13px;white-space:nowrap;text-decoration:none;color:var(--text);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--hover);text-decoration:none}
+.btn.primary{background:var(--act);border-color:var(--act);color:#fff}
+:root[data-theme="dark"] .btn.primary{color:var(--act-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 45%,var(--border-2))}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--act)}
+.btn.quiet:hover{background:var(--act-soft)}
+.btn.small{height:26px;padding:0 9px;font-size:12.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--border-2);border-radius:5px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:0 10px;height:28px;cursor:pointer;font-size:12.5px;color:var(--text-2);border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--act-soft);color:var(--act);font-weight:600}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--text-2);font-weight:500}
+input.t,select.t,textarea.t{border:1px solid var(--border-2);border-radius:5px;padding:5px 8px;background:var(--surface);color:var(--text);width:100%;min-height:30px}
+input.t:focus,select.t:focus,textarea.t:focus{border-color:var(--act);outline:0;box-shadow:0 0 0 3px var(--act-soft)}
+textarea.t{min-height:70px;resize:vertical}
+.form{display:grid;gap:10px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+
+/* status */
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:4px;padding:1px 7px;font-size:12px;font-weight:500;background:var(--sunken);color:var(--text-2);white-space:nowrap;line-height:1.5}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--minor-soft);color:var(--minor)} .pill.alert{background:var(--crit-soft);color:var(--crit)} .pill.info{background:var(--info-soft);color:var(--act)} .pill.major{background:var(--major-soft);color:var(--major)}
+.pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.tag{display:inline-block;font-size:11px;font-weight:500;padding:0 5px;border-radius:3px;border:1px solid var(--border-2);color:var(--text-3);vertical-align:1px}
+.tag.real{border-color:color-mix(in srgb,var(--ok) 50%,transparent);color:var(--ok)}
+.g{display:inline-grid;place-items:center;min-width:28px;height:20px;border-radius:4px;font-weight:600;font-size:12px;color:#fff;background:var(--c);padding:0 5px}
+
+/* KPI strip */
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--border);border-radius:6px;background:var(--surface)}
+.kpi{padding:10px 14px;border-right:1px solid var(--border);min-width:0}
+.kpi:last-child{border-right:0}
+.kpi .l{font-size:12px;color:var(--text-2)}
+.kpi .v{font-size:24px;font-weight:600;line-height:1.2;margin-top:2px;letter-spacing:-.01em}
+.kpi .v small{font-size:13px;color:var(--text-3);font-weight:500;margin-left:2px}
+.kpi .d{font-size:12px;color:var(--text-3)}
+.kpi.bad .v{color:var(--crit)}
+
+.gradebar{display:flex;height:14px;border-radius:3px;overflow:hidden;background:var(--sunken);gap:1px}
+.gradebar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:var(--text-2);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);vertical-align:-1px;margin-right:4px}
+
+/* access-network strip (signature) */
+.strip{display:grid;gap:2px}
+.olt-row{display:grid;grid-template-columns:200px minmax(0,1fr) 110px;gap:12px;align-items:center;padding:5px 6px;border-radius:5px}
+.olt-row:hover{background:var(--hover)}
+.olt-row.hot{background:var(--crit-soft)}
+.olt-name{display:grid;line-height:1.3;background:none;border:0;text-align:left;cursor:pointer;padding:0}
+.olt-name b{font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--text)}
+.olt-name span{font-size:11.5px;color:var(--text-3)}
+.cells{display:flex;flex-wrap:wrap;gap:2px}
+.cell{width:13px;height:13px;border-radius:2px;background:var(--c,var(--gN));border:0;padding:0;cursor:pointer}
+.cell.al{box-shadow:inset 0 0 0 2px var(--surface),0 0 0 1px var(--crit)}
+.cell.off{background:repeating-linear-gradient(45deg,var(--gN) 0 2px,transparent 2px 4px);border:1px solid var(--border-2)}
+.cell.real{outline:2px solid var(--text);outline-offset:1px}
+.olt-stat{font-size:12px;color:var(--text-2);text-align:right}
+.olt-stat b{color:var(--text)}
+.olt-row.hot .olt-stat b{color:var(--crit)}
+.region{font-size:12px;font-weight:600;color:var(--text-2);padding:8px 6px 2px;border-top:1px solid var(--border);margin-top:4px}
+.region:first-child{border-top:0;margin-top:0;padding-top:0}
+
+/* tables */
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--text-2);background:var(--sunken);border-bottom:1px solid var(--border);padding:6px 8px;white-space:nowrap;font-size:12px}
+td{border-bottom:1px solid var(--border);padding:6px 8px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--hover)}
+.kv td:first-child{color:var(--text-2);width:34%;white-space:nowrap}
+.empty{color:var(--text-2);padding:10px 0}
+.muted{color:var(--text-3)}
+
+/* incidents, diagnosis */
+.inc{border:1px solid var(--border);border-left:3px solid var(--c,var(--crit));border-radius:6px;padding:12px 14px;display:grid;gap:6px;background:var(--surface)}
+.inc h3{font-size:15px}
+.inc .meta{font-size:12px;color:var(--text-2)}
+.diag{border-radius:6px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--c-line,var(--act));display:grid;gap:8px}
+.diag b.verdict{font-size:16px;line-height:1.35;font-weight:600}
+.diag ul{margin:0;padding-left:18px;font-size:13px}
+.where{font-size:12px;font-weight:600;color:var(--c-line,var(--act))}
+
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li.empty{display:block}
+.timeline li{display:grid;grid-template-columns:52px 96px minmax(0,1fr);gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px}
+.timeline li:last-child{border-bottom:0}
+.timeline time{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+.timeline .k{font-size:12px;color:var(--text-2);font-weight:500}
+.warn-t{color:var(--minor)} .error-t{color:var(--crit)}
+canvas{width:100%;display:block}
+.chart{height:200px}
+pre.mono{font-family:var(--mono);font-size:12px;background:var(--sunken);border-radius:5px;padding:10px;overflow:auto;max-height:320px;margin:0;white-space:pre-wrap}
+.stages{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.stage{border:1px solid var(--border-2);border-radius:4px;padding:2px 8px;font-size:12.5px;font-weight:500;color:var(--text-2)}
+.stage.done{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.stage.cur{border-color:var(--act);color:var(--act);background:var(--act-soft)}
+.cmpt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--border);border-radius:6px;margin:10px 0}
+.cmpt div{padding:8px 12px;border-right:1px solid var(--border)}
+.cmpt div:last-child{border-right:0}
+.cmpt .v{font-size:20px;font-weight:600}
+.cmpt .l{font-size:12px;color:var(--text-2)}
+
+/* identity strip on the home view */
+.who-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center}
+.who-strip .av{width:40px;height:40px;border-radius:6px;background:var(--sunken);display:grid;place-items:center;font-weight:600;color:var(--text-2)}
+.who-strip h2{font-size:17px}
+.facts{display:flex;flex-wrap:wrap;gap:4px 18px;color:var(--text-2);font-size:12.5px}
+.facts b{color:var(--text);font-weight:500}
+
+/* sign-in */
+.login{min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,440px);background:var(--surface)}
+.login .art{background:var(--brand);color:#fff;padding:48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.login .art h1{font-size:30px;line-height:1.15;max-width:15em;font-weight:600}
+.login .art p{color:#C9D0EC;max-width:34em}
+.login .art svg.bg{position:absolute;right:-60px;bottom:-40px;opacity:.5}
+.login .side{padding:48px 40px;display:grid;align-content:center;gap:14px}
+.login .side h2{font-size:20px}
+.role{display:grid;grid-template-columns:36px minmax(0,1fr);gap:2px 12px;align-items:center;text-align:left;border:1px solid var(--border-2);background:var(--surface);border-radius:6px;padding:10px 12px;cursor:pointer}
+.role:hover{border-color:var(--act);background:var(--act-soft)}
+.role .av{grid-row:1/3;width:36px;height:36px;border-radius:5px;background:var(--sunken);display:grid;place-items:center;font-weight:600;color:var(--text-2)}
+.role b{font-weight:600}
+.role span{font-size:12.5px;color:var(--text-2)}
+.labnote{font-size:12.5px;color:var(--text-2);border-left:3px solid var(--lab);padding:4px 0 4px 10px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:9px 14px;border-radius:6px;z-index:60;max-width:min(560px,calc(100% - 32px))}
+.scrim{position:fixed;inset:0;background:rgba(15,20,32,.45);display:grid;place-items:center;z-index:50;padding:16px}
+.dialog{background:var(--surface);border-radius:8px;padding:18px;max-width:460px;width:100%;display:grid;gap:10px;border:1px solid var(--border)}
+.dialog h3{font-size:16px}
+@media (max-width:1200px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.kpi:nth-child(3n){border-right:0}.kpi:nth-child(-n+3){border-bottom:1px solid var(--border)}}
+@media (max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr)}
+  .appbar{flex-wrap:wrap;padding:8px 12px;height:auto}
+  .prod{min-width:0}
+  .search{order:5;flex-basis:100%;max-width:none}
+  .nav{position:static;height:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border);padding:6px}
+  .nav hr,.nav .foot{display:none}
+  .nav a{white-space:nowrap}
+  .pagehead,.content{padding-left:14px;padding-right:14px}
+  .cols,.cols.wl,.cols.wr{grid-template-columns:minmax(0,1fr)}
+  .olt-row{grid-template-columns:minmax(0,1fr) auto}
+  .olt-row .cells{grid-column:1/-1;order:3}
+  .login{grid-template-columns:minmax(0,1fr)}
+  .login .art{padding:28px}
+  .login .side{padding:24px}
+}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{border-right:0!important;border-bottom:1px solid var(--border)}.cmpt{grid-template-columns:minmax(0,1fr)}.timeline li{grid-template-columns:48px minmax(0,1fr)}.timeline .k{display:none}.me small,.prod span{display:none}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="overlay"></div>
+<script>
+"use strict";
+/* IntentQoS fleet console: the operator side of the product. Talks to the controller's /v1 API. */
+const S = {me: null, perms: new Set(), view: "overview", arg: null, data: {}, timer: null, homeQ: "", homeF: "", brand: {}};
+const GR = ["A+", "A", "B", "C", "D", "F"];
+const GCOL = {"A+": "--gAp", "A": "--gA", "B": "--gB", "C": "--gC", "D": "--gD", "F": "--gF"};
+const SEV = {major: "alert", minor: "warn", info: "info"};
+const RULE_NAME = {qoe_poor: "High delay under load", capacity_shortfall: "Line short of plan", blind: "Reflectors not answering",
+  engine_down: "Engine down", watchdog_trip: "Watchdog trip", apply_failures: "Shaper apply failed", drift: "Classifier drift",
+  cpu_high: "High CPU", capture_drops: "Capture drops", lease_degraded: "Priority not met", offline: "Gateway offline"};
+const WHERE = {network: ["Network problem in the area", "--crit"], "home-line": ["This home's line", "--major"], "gateway-software": ["Gateway software", "--major"],
+  "upstream-or-usage": ["Upstream congestion or heavy use", "--minor"], "in-home-wifi-or-device": ["Inside the home: Wi-Fi or one device", "--ok"]};
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const mbit = (k) => k == null ? "–" : (k / 1000).toFixed(k >= 10000 ? 0 : 1);
+const ago = (t) => { if (!t) return "never"; const s = Date.now() / 1000 - t; return s < 60 ? `${Math.round(s)} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const clock = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false});
+const dt = (t) => new Date(t * 1000).toLocaleString([], {day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false});
+const gradeChip = (g) => g ? `<span class="g" style="--c:var(${GCOL[g] || "--ink3"})">${esc(g)}</span>` : `<span class="g" style="--c:var(--text-3)">–</span>`;
+const can = (p) => S.perms.has(p);
+function toast(m, ms = 3500) { const e = document.createElement("div"); e.className = "toast"; e.setAttribute("role", "status"); e.textContent = m; document.body.appendChild(e); setTimeout(() => e.remove(), ms); }
+function ask(title, body, ok = "Confirm", danger = false) {
+  return new Promise(res => {
+    const o = $("overlay");
+    o.innerHTML = `<div class="scrim"><div class="dialog" role="dialog" aria-modal="true"><h3>${esc(title)}</h3><p class="sub">${esc(body)}</p>
+      <div class="hstack"><span class="sp"></span><button class="btn quiet" id="d-no" type="button">Cancel</button><button class="btn ${danger ? "danger" : "primary"}" id="d-ok" type="button">${esc(ok)}</button></div></div></div>`;
+    const done = (v) => { o.innerHTML = ""; res(v); };
+    $("d-no").onclick = () => done(false); $("d-ok").onclick = () => done(true); $("d-ok").focus();
+  });
+}
+async function api(method, path, body) {
+  const r = await fetch(path, {method, headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined, credentials: "same-origin"});
+  let d = null; try { d = await r.json(); } catch (e) { d = null; }
+  if (r.status === 401 && path !== "/v1/auth/login") { S.me = null; renderLogin(); throw new Error("signed out"); }
+  if (!r.ok) throw new Error((d && d.error) || `HTTP ${r.status}`);
+  return d;
+}
+
+/* ------------------------------------------------------------------ charts */
+function lineChart(cv, series, o) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; if (!W) return;
+  cv.width = W * dpr; cv.height = H * dpr; const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const L = 40, R = 40, T = 12, B = 22, t0 = o.t0, t1 = o.t1;
+  const X = t => L + (t - t0) / (t1 - t0) * (W - L - R);
+  x.font = `11px ${css("--sans")}`;
+  const axes = {};
+  for (const s of series) {
+    const ax = s.axis || "l", v = s.pts.map(p => p[1]).filter(Number.isFinite);
+    axes[ax] = Math.max(axes[ax] || (s.min || 1), ...v, s.min || 1);
+  }
+  for (const k in axes) { const m = axes[k] * 1.1, p = Math.pow(10, Math.floor(Math.log10(m))); axes[k] = Math.ceil(m / p) * p; }
+  const Y = (v, ax) => T + (1 - Math.max(0, v) / axes[ax || "l"]) * (H - T - B);
+  for (let i = 0; i <= 4; i++) {
+    const y = T + i / 4 * (H - T - B) + .5; x.strokeStyle = css("--border"); x.beginPath(); x.moveTo(L, y); x.lineTo(W - R, y); x.stroke();
+    x.fillStyle = css("--text-2"); x.textAlign = "right"; if (axes.l) x.fillText(+(axes.l * (1 - i / 4)).toFixed(1), L - 5, y + 4);
+    x.textAlign = "left"; if (axes.r) x.fillText(+(axes.r * (1 - i / 4)).toFixed(1), W - R + 5, y + 4);
+  }
+  x.textAlign = "center"; x.fillStyle = css("--text-2");
+  for (let i = 0; i <= 4; i++) { const t = t0 + (t1 - t0) * i / 4; x.fillText(clock(t), X(t), H - 6); }
+  for (const b of (o.bands || [])) { x.fillStyle = css("--crit"); x.globalAlpha = .08; x.fillRect(X(Math.max(t0, b[0])), T, X(Math.min(t1, b[1])) - X(Math.max(t0, b[0])), H - T - B); x.globalAlpha = 1; }
+  for (const s of series) {
+    const pts = s.pts.filter(p => Number.isFinite(p[1]) && p[0] >= t0 && !(s.skipZero && p[1] <= 0)); if (!pts.length) continue;
+    // Break the line where reports are missing (gateway offline, engine restarting) instead of drawing across the gap.
+    const dts = pts.slice(1).map((p, i) => p[0] - pts[i][0]).sort((a, b) => a - b);
+    const gap = Math.max(o.gap || 90, 3 * (dts[dts.length >> 1] || 0));
+    const segs = [[pts[0]]];
+    for (let i = 1; i < pts.length; i++) { if (pts[i][0] - pts[i - 1][0] > gap) segs.push([]); segs[segs.length - 1].push(pts[i]); }
+    for (const sg of segs) {
+      if (s.fill && sg.length > 1) { x.beginPath(); x.moveTo(X(sg[0][0]), Y(0, s.axis)); sg.forEach(([t, v]) => x.lineTo(X(t), Y(v, s.axis))); x.lineTo(X(sg[sg.length - 1][0]), Y(0, s.axis)); x.fillStyle = s.color; x.globalAlpha = .14; x.fill(); x.globalAlpha = 1; }
+      x.strokeStyle = s.color; x.lineWidth = s.width || 1.8; if (s.dash) x.setLineDash(s.dash); x.beginPath();
+      sg.forEach(([t, v], i) => i ? x.lineTo(X(t), Y(v, s.axis)) : x.moveTo(X(t), Y(v, s.axis))); x.stroke(); x.setLineDash([]);
+    }
+    const [lt, lv] = pts[pts.length - 1]; x.fillStyle = s.color; x.beginPath(); x.arc(X(lt), Y(lv, s.axis), 2.6, 0, 7); x.fill();
+  }
+}
+
+/* ------------------------------------------------------------------ shell */
+const NAV_ICON = {
+  overview: '<path d="M3 13h4v7H3z M10 9h4v11h-4z M17 4h4v16h-4z"/>',
+  incidents: '<path d="M12 3l9.5 17h-19z M12 10v4.5 M12 17.5h.01"/>',
+  alerts: '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z M10 20a2 2 0 0 0 4 0"/>',
+  homes: '<path d="M4 11l8-7 8 7v9H4z M10 20v-6h4v6"/>',
+  tickets: '<path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z M14 6v12"/>',
+  rollouts: '<path d="M4 18h4l3-12h2l3 12h4 M6 13h12"/>',
+  reports: '<path d="M6 3h9l4 4v14H6z M14 3v5h5 M9 13h7 M9 17h5"/>',
+  admin: '<path d="M12 9m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0 M5 20c1.2-3.5 3.8-5.5 7-5.5s5.8 2 7 5.5"/>'};
+const svgI = (d, n = 16) => `<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const VIEWS = [["overview", "Fleet overview", 0], ["incidents", "Incidents", 0], ["alerts", "Alerts", 0], ["homes", "Homes", 1],
+  ["tickets", "Tickets", 1], ["rollouts", "Rollouts", 2], ["reports", "Reports", 2], ["admin", "Access and audit", 2]];
+const initials = (n) => String(n || "?").replace(/\(.*\)/, "").trim().split(/\s+/).map(x => x[0]).slice(0, 2).join("").toUpperCase();
+function renderShell() {
+  $("root").innerHTML = `<div class="app">
+  <header class="appbar"><a class="prod" href="#overview"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#1D2B5E"/><path d="M8 19c3-6 13-6 16 0 M11 15.5c2.5-3.5 7.5-3.5 10 0" stroke="#F2A93B" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="16" cy="21.5" r="2.2" fill="#F2A93B"/></svg><b>IntentQoS Fleet</b><span>${esc(S.brand.short || "")}</span></a>
+    <form class="search" id="gs" role="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="gq" placeholder="Find a home: account, name, phone, serial or OLT" aria-label="Find a home" autocomplete="off"><kbd>/</kbd></form>
+    <span class="sp"></span>${S.lab ? `<span class="env" title="Lab: 1 real gateway and simulated homes">Lab</span>` : ""}<span class="live" id="live"><i></i>Live</span>
+    <button class="me" id="me" type="button" aria-haspopup="menu"><span class="av">${esc(initials(S.me.name))}</span><span>${esc(S.me.name)}</span><small>${esc(S.me.role)}</small></button>
+    <div class="menu" id="menu" role="menu" hidden><div class="hd">Signed in as <b>${esc(S.me.username || S.me.name)}</b> (${esc(S.me.role)})</div><button type="button" role="menuitem" id="theme">Switch light / dark</button><button type="button" role="menuitem" id="logout">Sign out</button></div></header>
+  <nav class="nav" id="nav" aria-label="Views"></nav>
+  <div class="main"><div class="pagehead"><div class="crumb" id="crumb" hidden></div><h1 id="vt"></h1><span class="sp"></span><span id="pact"></span><div class="ctx" id="ctx"></div></div>
+  <main class="content" id="content"></main></div></div>`;
+  $("logout").onclick = async () => { await api("POST", "/v1/auth/logout"); location.reload(); };
+  $("theme").onclick = () => { const r = document.documentElement, c = r.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); r.dataset.theme = c === "dark" ? "light" : "dark"; try { localStorage.setItem("iqf-theme", r.dataset.theme); } catch (e) {} $("menu").hidden = true; route(); };
+  $("me").onclick = (e) => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
+  document.addEventListener("click", (e) => { if (!e.target.closest("#menu")) $("menu").hidden = true; });
+  $("gs").onsubmit = (e) => { e.preventDefault(); S.homeQ = $("gq").value.trim(); S.homeF = ""; if (location.hash === "#homes") route(); else location.hash = "homes"; };
+  document.addEventListener("keydown", (e) => { if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) { e.preventDefault(); $("gq").focus(); } });
+}
+function navHTML(counts) {
+  let g = 0, out = "";
+  for (const [id, name, grp] of VIEWS) {
+    if (grp !== g) { g = grp; out += "<hr>"; }
+    const c = counts[id] ? `<span class="cnt">${counts[id]}</span>` : "";
+    out += `<a href="#${id}" ${S.view === id || (S.view === "home" && id === "homes") ? 'aria-current="page"' : ""}>${svgI(NAV_ICON[id])}${name}${c}</a>`;
+  }
+  return out + `<div class="foot">${esc(S.brand.name || "")}<br>Support ${esc(S.brand.support_phone || "")}</div>`;
+}
+async function route() {
+  const h = location.hash.slice(1) || "overview";
+  const [v, arg] = h.split("/");
+  S.view = v; S.arg = arg;
+  clearInterval(S.timer);
+  const counts = {incidents: (S.data.summary?.incidents || []).length, alerts: (S.data.summary?.alerts?.major || 0)};
+  $("nav").innerHTML = navHTML(counts);
+  const fn = PAGES[v] || PAGES.overview;
+  $("vt").textContent = fn.title(arg);
+  $("ctx").textContent = ""; $("pact").innerHTML = ""; $("crumb").hidden = true;
+  $("content").innerHTML = `<p class="empty">Loading…</p>`;
+  try { await fn.render(arg); } catch (e) { if (e.message !== "signed out") $("content").innerHTML = `<div class="panel"><h2>This view could not load</h2><p class="sub">${esc(e.message)}. It retries on its own; check that the controller is running.</p></div>`; }
+  if (fn.refresh) S.timer = setInterval(() => fn.render(arg, true).catch(() => {}), fn.refresh);
+}
+window.addEventListener("hashchange", route);
+
+/* ------------------------------------------------------------------ pages */
+const PAGES = {};
+PAGES.overview = {title: () => "Fleet overview", refresh: 10000, async render(_a, again) {
+  S.trendH = S.trendH || 3;
+  const [s, tr, olts, homes] = await Promise.all([api("GET", "/v1/fleet/summary"), api("GET", `/v1/fleet/trend?hours=${S.trendH}`), api("GET", "/v1/fleet/olts"),
+    api("GET", "/v1/homes?limit=1000")]);
+  S.data.summary = s;
+  $("ctx").textContent = `${s.homes} homes: ${s.homes - s.simulated} real gateway${s.homes - s.simulated === 1 ? "" : "s"} and ${s.simulated} simulated. Telemetry arriving at ${s.ingest_per_s} records a second.`;
+  const tot = Object.values(s.grades).reduce((a, b) => a + b, 0) || 1;
+  const byOlt = {};
+  for (const h of homes) (byOlt[h.olt] = byOlt[h.olt] || []).push(h);
+  const regions = {};
+  for (const o of olts) (regions[o.region] = regions[o.region] || []).push(o);
+  const net = new Set(["qoe_poor", "capacity_shortfall", "offline", "blind"]);
+  const cell = (h) => {
+    const al = (h.alerts || []).some(a => net.has(a.rule));
+    const tip = `${h.account} ${h.name}: ${h.online ? `grade ${h.grade || "–"}, ${h.p95 ?? "–"} ms` : "offline"}${al ? ", alert open" : ""}${h.simulated ? "" : " (real gateway)"}`;
+    return `<button type="button" class="cell${al ? " al" : ""}${h.online ? "" : " off"}${h.simulated ? "" : " real"}" style="--c:var(${h.online ? (GCOL[h.grade] || "--gN") : "--gN"})" data-gw="${h.id}" title="${esc(tip)}" aria-label="${esc(tip)}"></button>`;
+  };
+  const html = `
+  <section class="kpis">
+    <div class="kpi"><div class="l">Homes online</div><div class="v">${s.online}<small>of ${s.homes}</small></div><div class="d">${s.offline} offline</div></div>
+    <div class="kpi ${s.issue_pct >= 10 ? "bad" : ""}"><div class="l">Homes with issues</div><div class="v">${s.issue_pct}<small>%</small></div><div class="d">${s.issues} at grade C or worse</div></div>
+    <div class="kpi"><div class="l">Delay added under load</div><div class="v">${s.p95_median ?? "–"}<small>ms</small></div><div class="d">median home; worst 10% above ${s.p95_p90 ?? "–"} ms</div></div>
+    <div class="kpi"><div class="l">Within TRAI latency</div><div class="v">${s.trai_ok_pct}<small>%</small></div><div class="d">homes below 50 ms (proxy)</div></div>
+    <div class="kpi ${(s.alerts.major || 0) ? "bad" : ""}"><div class="l">Open alerts</div><div class="v">${(s.alerts.major || 0) + (s.alerts.minor || 0)}</div><div class="d">${s.alerts.major || 0} major, ${s.alerts.minor || 0} minor</div></div>
+    <div class="kpi ${s.incidents.length ? "bad" : ""}"><div class="l">Network incidents</div><div class="v">${s.incidents.length}</div><div class="d">${s.incidents.length ? "correlated by OLT" : "none open"}</div></div>
+  </section>
+  ${s.incidents.length ? `<section class="cols">${s.incidents.slice(0, 2).map(incCard).join("")}</section>` : ""}
+  <section class="panel"><div class="ph"><h2>Access network</h2><span class="sp"></span>
+      <span class="legend" style="margin:0">${GR.map(g => `<span><i style="--c:var(${GCOL[g]})"></i>${g}</span>`).join("")}<span><i style="--c:var(--gN)"></i>offline</span><span><i style="--c:transparent;box-shadow:0 0 0 1px var(--crit)"></i>alert open</span><span><i style="--c:transparent;outline:2px solid var(--text);outline-offset:-2px"></i>real gateway</span></span></div>
+    <p class="sub">Each square is one home, grouped by the OLT it hangs off and coloured by its grade. When many squares on one OLT turn at once, the problem is in the network, not in those homes.</p>
+    <div class="strip">${Object.entries(regions).map(([r, os]) => `<div class="region">${esc(r)}</div>` + os.map(o => {
+      const f = o.affected / Math.max(1, o.homes);
+      return `<div class="olt-row${f >= .25 && o.affected >= 3 ? " hot" : ""}"><button type="button" class="olt-name" data-olt="${esc(o.olt)}"><b>${esc(o.olt)}</b><span>${esc(o.pop)}</span></button>
+        <div class="cells">${(byOlt[o.olt] || []).map(cell).join("")}</div><div class="olt-stat"><b>${o.affected}</b> of ${o.homes} affected<br>${o.online} online</div></div>`; }).join("")).join("")}</div></section>
+  <section class="cols wl">
+    <div class="panel"><div class="ph"><h2>Quality across the fleet</h2><span class="sp"></span><span class="seg" id="th">${[1, 3, 12].map(hh => `<button type="button" data-h="${hh}" aria-pressed="${S.trendH === hh}">${hh} h</button>`).join("")}</span></div>
+      <p class="sub">Share of online homes per grade now (delay added under load, 95th percentile over the last minute), and the trend.</p>
+      <div class="gradebar">${GR.map(g => `<i style="width:${(s.grades[g] / tot * 100).toFixed(2)}%;background:var(${GCOL[g]})" title="${g}: ${s.grades[g]}"></i>`).join("")}</div>
+      <div class="legend">${GR.map(g => `<span><i style="--c:var(${GCOL[g]})"></i>${g}: ${s.grades[g]}</span>`).join("")}</div>
+      <canvas class="chart" id="c-trend" style="margin-top:12px"></canvas>
+      <div class="legend"><span><i style="--c:var(--crit)"></i>homes at grade C or worse, % (left)</span><span><i style="--c:var(--video)"></i>mean delay added, ms (right)</span></div></div>
+    <div class="panel"><h2>Regions</h2><p class="sub">Homes, problems and the typical delay added.</p>
+      <table><thead><tr><th>Region</th><th class="n">Homes</th><th class="n">Online</th><th class="n">Issues</th><th class="n">Median delay</th></tr></thead><tbody>
+      ${Object.entries(s.regions).map(([r, v]) => `<tr><td>${esc(r)}</td><td class="n">${v.homes}</td><td class="n">${v.online}</td><td class="n">${v.issues}</td><td class="n">${v.p95_median ?? "–"} ms</td></tr>`).join("")}</tbody></table>
+      ${s.rollout ? `<div class="ph" style="margin:16px 0 4px"><h2>Latest rollout</h2><span class="sp"></span><a href="#rollouts">Open rollouts</a></div><p style="margin:0"><b>${esc(s.rollout.name)}</b> <span class="pill ${s.rollout.status === "running" ? "info" : s.rollout.status === "completed" ? "ok" : "warn"}">${esc(s.rollout.status.replace("_", " "))}</span><br><span class="muted">stage ${s.rollout.stage + 1} of ${JSON.parse(s.rollout.stages).length}</span></p>` : ""}</div>
+  </section>`;
+  $("content").innerHTML = html;
+  const t1 = Date.now() / 1000;
+  lineChart($("c-trend"), [{color: css("--crit"), fill: true, pts: tr.map(r => [r.t, r.poor_pct]), min: 5},
+    {color: css("--video"), axis: "r", pts: tr.map(r => [r.t, r.p95_mean]), min: 10}], {t0: t1 - S.trendH * 3600, t1});
+  document.querySelectorAll("[data-olt]").forEach(b => b.onclick = () => { S.homeQ = b.dataset.olt; S.homeF = ""; location.hash = "homes"; });
+  document.querySelectorAll(".cell[data-gw]").forEach(b => b.onclick = () => { location.hash = `home/${b.dataset.gw}`; });
+  document.querySelectorAll("#th [data-h]").forEach(b => b.onclick = () => { S.trendH = +b.dataset.h; PAGES.overview.render(); });
+  if (S.lab && can("incidents") && !$("simbtn")) {
+    $("pact").innerHTML = `<button class="btn" type="button" id="simbtn" title="Lab only: affects simulated homes">Simulate a network problem</button>`;
+    $("simbtn").onclick = () => simDialog(olts);
+  }
+  bindInc();
+}};
+function simDialog(olts) {
+  const o = $("overlay");
+  o.innerHTML = `<div class="scrim"><form class="dialog" id="sim-f" role="dialog" aria-modal="true"><h3>Simulate a network problem</h3>
+    <p class="sub" style="margin:0">Lab only. The simulated homes on the chosen OLT start reporting the problem; the controller has to notice and correlate it by itself, which takes one to two minutes.</p>
+    <div class="row"><label class="f" for="sim-o">OLT<select class="t" id="sim-o">${olts.map(x => `<option value="${esc(x.olt)}">${esc(x.olt)} (${x.homes} homes)</option>`).join("")}</select></label>
+      <label class="f" for="sim-k">Problem<select class="t" id="sim-k"><option value="olt_congestion">Congestion: slow and laggy</option><option value="olt_outage">Outage: homes go offline</option></select></label>
+      <label class="f" for="sim-m">For<select class="t" id="sim-m"><option value="6">6 minutes</option><option value="10">10 minutes</option></select></label></div>
+    <div class="hstack"><button class="btn quiet" type="button" id="sim-clear">Clear all simulated problems</button><span class="sp"></span><button class="btn" type="button" id="sim-no">Cancel</button><button class="btn primary" type="submit">Start</button></div></form></div>`;
+  const close = () => { o.innerHTML = ""; };
+  $("sim-no").onclick = close;
+  $("sim-clear").onclick = async () => { await api("POST", "/v1/lab/scenario", {kind: "clear"}); toast("Simulated problems cleared."); close(); };
+  $("sim-f").onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api("POST", "/v1/lab/scenario", {kind: $("sim-k").value, olt: $("sim-o").value, minutes: +$("sim-m").value}); toast(`Started on ${$("sim-o").value}. Watch its row in the access network.`); close(); }
+    catch (err) { toast(err.message); }
+  };
+}
+function incCard(i) {
+  const col = i.status === "resolved" ? "--ok" : i.kind === "outage" ? "--alert" : "--warn";
+  return `<div class="inc" style="--c:var(${col})"><div class="hstack"><span class="pill ${i.status === "resolved" ? "ok" : "alert"}"><span class="dot"></span>${esc(i.kind === "outage" ? "Outage" : "Degradation")}, ${esc(i.status)}</span><span class="meta">opened ${ago(i.opened)}${i.closed ? `, resolved ${ago(i.closed)}` : ""}</span></div>
+    <h3>${esc(i.scope)}: ${i.affected} of ${i.total} homes affected</h3><p class="sub" style="margin:0">${esc(i.summary)}</p>
+    <div class="hstack"><span class="meta">${i.notified ? `Subscribers notified ${ago(i.notified)}` : "Subscribers not notified yet"}</span><span class="sp"></span>
+    ${i.status !== "resolved" && can("notify") && !i.notified ? `<button class="btn small primary" type="button" data-notify="${i.id}">Notify affected subscribers</button>` : ""}
+    <a class="btn small quiet" href="#incidents/${i.id}">Open</a><button class="btn small quiet" type="button" data-homes="${esc(i.scope)}">Affected homes</button></div></div>`;
+}
+function bindInc() {
+  document.querySelectorAll("[data-notify]").forEach(b => b.onclick = async () => {
+    if (!(await ask("Notify affected subscribers?", "Everyone on this OLT gets an in-app message that there is a problem in their area and that engineers are on it.", "Send notification"))) return;
+    const r = await api("POST", `/v1/incidents/${b.dataset.notify}/notify`); toast(`Notified ${r.notified} subscribers.`); route();
+  });
+  document.querySelectorAll("[data-homes]").forEach(b => b.onclick = () => { S.homeQ = b.dataset.homes; S.homeF = "issues"; location.hash = "homes"; });
+}
+
+PAGES.incidents = {title: (a) => a ? `Incident #${a}` : "Incidents", refresh: 15000, async render(a) {
+  const list = await api("GET", "/v1/incidents");
+  $("ctx").textContent = "Correlated from home alerts: same OLT, same time.";
+  if (a) {
+    const i = list.find(x => String(x.id) === a); if (!i) { $("content").innerHTML = `<p class="empty">No such incident.</p>`; return; }
+    const notes = JSON.parse(i.notes || "[]");
+    $("content").innerHTML = `${incCard(i)}<section class="cols"><div class="panel"><h2>Status</h2><p class="sub">Owner: ${esc(i.owner || "unassigned")}</p>
+      <div class="hstack">${["investigating", "identified", "resolved"].map(st => `<button class="btn small ${i.status === st ? "primary" : "quiet"}" type="button" data-st="${st}" ${can("incidents") ? "" : "disabled"}>${st}</button>`).join("")}</div>
+      <form class="form" id="inc-note" style="margin-top:12px"><label class="f" for="inc-t">Add a note<textarea class="t" id="inc-t" placeholder="e.g. Fibre cut confirmed near the PoP; field team dispatched"></textarea></label><div><button class="btn small" type="submit" ${can("incidents") ? "" : "disabled"}>Add note</button></div></form></div>
+      <div class="panel"><h2>Timeline</h2><ul class="timeline">${notes.slice().reverse().map(n => `<li><time>${clock(n.t)}</time><span class="k">${esc(n.by)}</span><span>${esc(n.text)}</span></li>`).join("") || `<li class="empty">No notes yet.</li>`}
+      <li><time>${clock(i.opened)}</time><span class="k">system</span><span>Opened automatically: ${esc(i.summary)}</span></li></ul></div></section>`;
+    document.querySelectorAll("[data-st]").forEach(b => b.onclick = async () => { await api("POST", `/v1/incidents/${i.id}/status`, {status: b.dataset.st}); toast("Status updated."); route(); });
+    $("inc-note").onsubmit = async (e) => { e.preventDefault(); await api("POST", `/v1/incidents/${i.id}/note`, {text: $("inc-t").value}); route(); };
+    bindInc(); return;
+  }
+  $("content").innerHTML = list.length ? `<section class="cols">${list.map(incCard).join("")}</section>` : `<div class="panel"><h2>No incidents</h2><p class="sub">An incident opens automatically when at least a quarter of the homes on one OLT raise capacity, delay or connectivity alerts at the same time.</p></div>`;
+  bindInc();
+}};
+
+PAGES.alerts = {title: () => "Alerts", refresh: 15000, async render() {
+  const list = await api("GET", "/v1/alerts");
+  $("ctx").textContent = `${list.length} open, worst first`;
+  $("content").innerHTML = `<section class="panel"><div class="tablewrap"><table><thead><tr><th>Severity</th><th>Alert</th><th>Home</th><th>OLT</th><th>Detail</th><th>Opened</th><th>Incident</th><th></th></tr></thead><tbody>
+    ${list.map(a => `<tr class="click" data-gw="${a.gw}"><td><span class="pill ${SEV[a.severity]}">${esc(a.severity)}</span></td><td>${esc(RULE_NAME[a.rule] || a.rule)}</td><td>${esc(a.account)} · ${esc(a.name)}</td><td><code>${esc(a.olt)}</code></td><td>${esc(a.detail)}</td><td>${ago(a.opened)}</td><td>${a.incident_id ? `<a href="#incidents/${a.incident_id}">#${a.incident_id}</a>` : ""}</td>
+    <td>${a.status === "ack" ? `<span class="pill">ack · ${esc(a.ack_by)}</span>` : can("home_actions") ? `<button class="btn small quiet" type="button" data-ack="${a.id}">Acknowledge</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No open alerts.</td></tr>`}</tbody></table></div></section>`;
+  document.querySelectorAll("tr[data-gw]").forEach(r => r.onclick = (e) => { if (!e.target.closest("button,a")) location.hash = `home/${r.dataset.gw}`; });
+  document.querySelectorAll("[data-ack]").forEach(b => b.onclick = async () => { await api("POST", `/v1/alerts/${b.dataset.ack}/ack`); route(); });
+}};
+
+PAGES.homes = {title: () => "Homes", async render() {
+  $("ctx").textContent = "Search by account, name, phone, serial, area or OLT";
+  $("content").innerHTML = `<section class="panel"><form class="hstack" id="hs"><input class="t" id="hq" placeholder="SN-100001, Asha, 98…, LAB-GW, GN-OLT-07" value="${esc(S.homeQ)}" style="max-width:380px" aria-label="Search homes">
+    <select class="t" id="hf" style="width:auto" aria-label="Filter"><option value="">All homes</option><option value="issues">With issues</option><option value="offline">Offline</option><option value="real">Real gateways only</option></select>
+    <button class="btn primary" type="submit">Search</button><span class="sp"></span><span class="sub" id="hn" style="margin:0"></span></form>
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Account</th><th>Subscriber</th><th>Area · OLT</th><th>Plan</th><th>Grade</th><th class="n">Delay added p95</th><th class="n">Shaping</th><th>Alerts</th><th>Last report</th></tr></thead><tbody id="hb"></tbody></table></div></section>`;
+  $("hf").value = S.homeF;
+  const load = async () => {
+    S.homeQ = $("hq").value.trim(); S.homeF = $("hf").value;
+    const rows = await api("GET", `/v1/homes?q=${encodeURIComponent(S.homeQ)}&filter=${S.homeF}&limit=300`);
+    $("hn").textContent = `${rows.length} homes`;
+    $("hb").innerHTML = rows.map(h => `<tr class="click" data-gw="${h.id}"><td><b>${esc(h.account)}</b> ${h.simulated ? '<span class="tag">sim</span>' : '<span class="tag real">real</span>'}</td><td>${esc(h.name)}<br><span class="sub" style="margin:0">${esc(h.phone)}</span></td>
+      <td>${esc(h.area)}<br><code>${esc(h.olt)}</code></td><td>${esc(h.plan)}</td><td>${gradeChip(h.grade)}</td><td class="n">${h.p95 ?? "–"} ms</td><td class="n">${mbit(h.rate_d)} / ${h.down_mbit ?? "–"}</td>
+      <td>${(h.alerts || []).map(a => `<span class="pill ${SEV[a.severity]}">${esc(RULE_NAME[a.rule] || a.rule)}</span>`).join(" ")}</td><td>${h.online ? ago(h.last_seen) : `<span class="pill alert">offline</span>`}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">No homes match.</td></tr>`;
+    document.querySelectorAll("tr[data-gw]").forEach(r => r.onclick = () => location.hash = `home/${r.dataset.gw}`);
+  };
+  $("hs").onsubmit = (e) => { e.preventDefault(); load(); };
+  $("hf").onchange = load;
+  await load();
+}};
+
+const CMD_NAME = {relay: "console request", line_test: "line test", install_model: "install model", rollback_model: "roll back model",
+  apply_config: "apply config", set_level: "telemetry level", snapshot: "status snapshot"};
+function groupCmds(cs) {            // consecutive console requests by the same person collapse into one row
+  const out = [];
+  for (const c of cs) {
+    const p = out[out.length - 1];
+    if (p && p.kind === c.kind && p.requested_by === c.requested_by && p.status === c.status && c.kind === "relay" && Math.abs(p.created - c.created) < 600) p.n++;
+    else out.push({...c, n: 1});
+  }
+  return out;
+}
+PAGES.home = {title: () => "Home", refresh: 15000, async render(id, again) {
+  const [d, tl] = await Promise.all([api("GET", `/v1/homes/${id}`), api("GET", `/v1/homes/${id}/timeline?hours=2`)]);
+  const g = d.gateway, s = d.subscriber, r = d.latest || {}, dg = d.diagnosis;
+  $("vt").textContent = s.name;
+  $("crumb").hidden = false; $("crumb").innerHTML = `<a href="#homes">Homes</a> / <span class="id">${esc(s.account)}</span>`;
+  $("pact").innerHTML = g.simulated ? '<span class="tag">simulated home</span>' : '<span class="tag real">real gateway</span>';
+  $("ctx").innerHTML = `<span class="facts"><span>Area <b>${esc(s.area)}, ${esc(s.region)}</b></span><span>OLT <b class="id">${esc(s.olt)}</b> port <b class="id">${esc(s.pon)}</b></span><span>Plan <b>${esc(s.plan_name)}, ${s.down_mbit}/${s.up_mbit} Mbit/s</b></span><span>Phone <b>${esc(s.phone || "")}</b></span></span>`;
+  const w = WHERE[dg.where] || ["Not enough data yet", "--act"];
+  const consent = s.consent || {};
+  const html = `
+  <section class="cols wl">
+    <div class="diag" style="--c-line:var(${w[1]})"><span class="where">Home or network: ${esc(w[0])}</span><b class="verdict">${esc(dg.verdict)}</b>
+      ${dg.evidence.length ? `<ul>${dg.evidence.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+      <div><b style="font-size:13px">Recommended</b><ul>${dg.actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul></div></div>
+    <div class="panel"><div class="hstack"><h2>Gateway</h2><span class="sp"></span>${g.online ? `<span class="pill ok"><span class="dot"></span>online, reported ${ago(g.last_seen)}</span>` : `<span class="pill alert"><span class="dot"></span>offline since ${ago(g.last_seen)}</span>`}</div>
+      <table class="kv" style="margin-top:8px"><tbody>
+      <tr><td>Serial</td><td><span class="id">${esc(g.serial)}</span><br><span class="id muted">${esc(g.device_id)}</span></td></tr>
+      <tr><td>Software</td><td>engine ${esc(g.engine_version)}, agent ${esc(g.agent_version)}, ${esc(g.arch || "")}</td></tr>
+      <tr><td>Model</td><td><code>${esc(g.model_version || "–")}</code></td></tr>
+      <tr><td>Config</td><td>${esc(d.profile ? `${d.profile.name} v${d.profile.version}` : "default")}, applied v${g.config_version} of v${g.desired_config_version} ${g.config_version === g.desired_config_version ? '<span class="pill ok">in sync</span>' : '<span class="pill warn">pending</span>'}</td></tr>
+      <tr><td>Telemetry</td><td>${esc(g.level)}${g.level_until ? ` until ${clock(g.level_until)}` : ""}<br><span class="muted">consent: quality ${consent.quality_improvement ? "yes" : "no"}, support diagnostics ${consent.support_diagnostics ? "yes" : "no"}</span></td></tr>
+      </tbody></table></div>
+  </section>
+  <section class="panel"><div class="hstack"><h2>Actions</h2><span class="sp"></span><span class="sub" style="margin:0">Every action is recorded in the audit log.</span></div>
+    <div class="hstack" style="margin-top:10px">
+      ${!g.simulated && can("relay_read") ? `<a class="btn primary" target="_blank" rel="noopener" href="/ops/home-console.html?gw=${g.id}#monitor">Open live console</a>` : ""}
+      ${can("line_test") ? `<button class="btn" type="button" data-cmd="line_test">Run line test</button>` : ""}
+      ${can("home_actions") ? `<button class="btn" type="button" data-cmd="request_diagnostics">Ask for diagnostic access</button><button class="btn quiet" type="button" data-cmd="push_config">Re-send config</button>` : ""}
+      ${can("relay_write") && !g.simulated ? `<button class="btn quiet" type="button" data-cmd="rollback">Roll back policy</button><button class="btn danger" type="button" data-cmd="safe">Safe baseline</button>` : ""}
+      ${can("tickets") ? `<button class="btn quiet" type="button" id="mk-ticket">Open ticket</button>` : ""}
+    </div><div id="cmd-out"></div></section>
+  <section class="cols wl">
+    <div class="panel"><h2>Last 2 hours</h2><p class="sub">Delay added under load (p95, ms, left) and download shaping rate vs plan (Mbit/s, right). Red bands: alerts open.</p>
+      <canvas class="chart" id="c-home"></canvas>
+      <div class="legend"><span><i style="--c:var(--video)"></i>delay added p95</span><span><i style="--c:var(--text)"></i>shaping rate</span><span><i style="--c:var(--voice)"></i>achieved</span><span><i style="--c:var(--text-3)"></i>plan</span></div></div>
+    <div class="panel"><h2>Devices now</h2><p class="sub">${r.dev ? `From the last report (${ago(r.t)}).` : "Not shared: the subscriber limited telemetry to basic, or it is not reported yet."}</p>
+      <table><tbody>${(r.dev || []).map(v => `<tr><td>${esc(v.name || v.ip)}</td><td>${esc(v.act)}</td><td class="n">${mbit(v.kd)} Mbit/s</td>${v.paused ? '<td><span class="pill warn">paused</span></td>' : "<td></td>"}</tr>`).join("") || `<tr><td class="empty">–</td></tr>`}</tbody></table>
+      ${(r.intents || []).length ? `<h3 style="font-size:15px;margin:12px 0 4px">Priorities</h3>${r.intents.map(i => `<p class="sub" style="margin:0">${esc(i.label || i.goal)} for ${esc(i.target)} · ${Math.round(i.remaining_s / 60)} min left · ${esc(i.assurance)}</p>`).join("")}` : ""}</div>
+  </section>
+  <section class="cols">
+    <div class="panel"><h2>Events</h2><div style="max-height:360px;overflow:auto"><ul class="timeline">${d.events.map(e => `<li><time>${clock(e.t)}</time><span class="k">${esc(e.kind)}</span><span class="${e.level === "warn" ? "warn-t" : e.level === "error" ? "error-t" : ""}">${esc(e.msg).replace(/ -&gt; /g, " → ")}</span></li>`).join("") || `<li class="empty">No events.</li>`}</ul></div></div>
+    <div class="panel"><h2>Commands</h2><table><thead><tr><th>When</th><th>Command</th><th>By</th><th>Status</th></tr></thead><tbody>${groupCmds(d.commands).slice(0, 14).map(c => `<tr><td>${clock(c.created)}</td><td>${esc(CMD_NAME[c.kind] || c.kind)}${c.n > 1 ? ` <span class="muted">×${c.n}</span>` : ""}</td><td>${esc(c.requested_by)}</td><td><span class="pill ${c.status === "done" ? "ok" : c.status === "failed" || c.status === "timeout" ? "alert" : "info"}">${esc(c.status)}</span></td></tr>`).join("") || `<tr><td colspan="4" class="empty">None.</td></tr>`}</tbody></table>
+      <h3 style="font-size:16px;margin:14px 0 6px">Notes and tickets</h3>
+      ${d.tickets.map(t => `<p class="sub" style="margin:0 0 4px"><a href="#tickets/${t.id}">#${t.id}</a> ${esc(t.category)} · ${esc(t.status)} · ${esc(t.summary)}</p>`).join("")}
+      ${d.notes.map(n => `<p class="sub" style="margin:0 0 4px"><b>${esc(n.author)}</b> ${dt(n.t)}: ${esc(n.text)}</p>`).join("")}
+      ${can("notes") ? `<form class="hstack" id="note-f" style="margin-top:8px"><input class="t" id="note-t" placeholder="Add a note for the next agent" style="flex:1"><button class="btn small" type="submit">Add</button></form>` : ""}</div>
+  </section>`;
+  const keepOut = $("cmd-out") ? $("cmd-out").innerHTML : "";
+  $("content").innerHTML = html;
+  if (again && keepOut) $("cmd-out").innerHTML = keepOut;
+  const t1 = Date.now() / 1000, t0 = t1 - 7200;
+  const bands = d.alerts.filter(a => ["qoe_poor", "capacity_shortfall", "offline", "engine_down"].includes(a.rule)).map(a => [a.opened, a.closed || t1]);
+  lineChart($("c-home"), [{color: css("--video"), pts: tl.map(x => [x.t, x.p95_add_d]), min: 20},
+    {color: css("--voice"), axis: "r", fill: true, pts: tl.map(x => [x.t, (x.ach_d || 0) / 1000])},
+    {color: css("--text"), axis: "r", skipZero: true, pts: tl.map(x => [x.t, (x.rate_d || 0) / 1000])},
+    {color: css("--text-3"), axis: "r", dash: [4, 4], width: 1.2, skipZero: true, pts: tl.map(x => [x.t, (x.plan_d || 0) / 1000])}], {t0, t1, bands});
+  document.querySelectorAll("[data-cmd]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.cmd;
+    if ((k === "safe" || k === "rollback") && !(await ask(k === "safe" ? "Put this home in the safe baseline?" : "Roll back this home's policy?", "The change is applied on the router now and recorded in the audit log.", "Go ahead", k === "safe"))) return;
+    b.disabled = true; $("cmd-out").innerHTML = `<p class="sub">Sending to the router…</p>`;
+    try {
+      const r = await api("POST", `/v1/homes/${id}/command`, {kind: k});
+      $("cmd-out").innerHTML = k === "line_test" && r.ok ? `<div class="cmpt"><div><div class="v num">${r.line_mbps ?? r.mbps}</div><div class="l">Mbit/s line (plan ${r.plan_down_mbit})${r.household_mbps != null ? ` · test ${r.mbps} + home ${r.household_mbps}` : ""}</div></div><div><div class="v num">${r.loaded_added_ms_p95 ?? "–"} ms</div><div class="l">delay added while loaded (p95)</div></div><div><div class="v num">${r.seconds} s</div><div class="l">test length${r.simulated ? " · simulated home" : ""}</div></div></div>`
+        : `<pre class="mono">${esc(JSON.stringify(r, null, 1)).slice(0, 2000)}</pre>`;
+      toast(r.asked ? "The subscriber has been asked in their app." : r.ok === false ? (r.error || "Failed") : "Done.");
+    } catch (e) { $("cmd-out").innerHTML = `<p class="sub" style="color:var(--crit)">${esc(e.message)}</p>`; }
+    b.disabled = false;
+  });
+  if ($("note-f")) $("note-f").onsubmit = async (e) => { e.preventDefault(); await api("POST", `/v1/homes/${id}/notes`, {text: $("note-t").value}); route(); };
+  if ($("mk-ticket")) $("mk-ticket").onclick = async () => { const r = await api("POST", `/v1/homes/${id}/ticket`, {category: "quality", summary: "Opened by support from the home view", diagnostics: true}); toast(`Ticket #${r.ticket} opened.`); route(); };
+}};
+
+PAGES.tickets = {title: (a) => a ? `Ticket #${a}` : "Tickets", async render(a) {
+  if (a) {
+    const t = await api("GET", `/v1/tickets/${a}`);
+    const dg = t.diagnosis || {};
+    $("ctx").textContent = `${t.source === "app" ? "Reported in the app" : "Opened by support"} ${dt(t.created)}`;
+    $("content").innerHTML = `<section class="cols wl"><div class="panel"><div class="hstack"><h2>${esc(t.category)}</h2><span class="pill ${t.status === "closed" ? "ok" : "info"}">${esc(t.status)}</span><span class="sp"></span><a class="btn small quiet" href="#home/${t.gw}">Open home</a></div>
+      <ul class="timeline" style="margin-top:10px">${t.thread.map(m => `<li><time>${clock(m.t)}</time><span class="k">${esc(m.from)}</span><span>${esc(m.text)}</span></li>`).join("")}</ul>
+      ${can("tickets") ? `<form class="form" id="tk-f" style="margin-top:12px"><label class="f" for="tk-r">Reply to the subscriber (appears in their app)<textarea class="t" id="tk-r"></textarea></label>
+      <div class="hstack"><select class="t" id="tk-s" style="width:auto"><option value="">keep status</option><option value="in_progress">in progress</option><option value="waiting">waiting for customer</option><option value="closed">closed</option></select><button class="btn primary" type="submit">Send</button></div></form>` : ""}</div>
+      <div class="diag" style="--c-line:var(${(WHERE[dg.where] || [0, "--act"])[1]})"><span class="where">Diagnosis when reported</span><b class="verdict">${esc(dg.verdict || "–")}</b>${(dg.evidence || []).length ? `<ul>${dg.evidence.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+      ${t.snapshot ? `<details><summary>Router snapshot attached</summary><pre class="mono">${esc(JSON.stringify(t.snapshot, null, 1)).slice(0, 6000)}</pre></details>` : `<span class="sub" style="margin:0">No router snapshot (not allowed or not available).</span>`}</div></section>`;
+    if ($("tk-f")) $("tk-f").onsubmit = async (e) => { e.preventDefault(); await api("POST", `/v1/tickets/${a}`, {reply: $("tk-r").value || null, status: $("tk-s").value || null}); toast("Sent."); route(); };
+    return;
+  }
+  const list = await api("GET", "/v1/tickets");
+  $("ctx").textContent = "Reported in the consumer app or opened by support";
+  $("content").innerHTML = `<section class="panel"><div class="tablewrap"><table><thead><tr><th>#</th><th>Subscriber</th><th>Category</th><th>Summary</th><th>Source</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+    ${list.map(t => `<tr class="click" data-t="${t.id}"><td>${t.id}</td><td>${esc(t.account)} · ${esc(t.name)}</td><td>${esc(t.category)}</td><td>${esc(t.summary)}</td><td>${esc(t.source)}</td><td><span class="pill ${t.status === "closed" ? "ok" : "info"}">${esc(t.status)}</span></td><td>${ago(t.updated)}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">No tickets.</td></tr>`}</tbody></table></div></section>`;
+  document.querySelectorAll("tr[data-t]").forEach(r => r.onclick = () => location.hash = `tickets/${r.dataset.t}`);
+}};
+
+PAGES.rollouts = {title: () => "Rollouts", refresh: 15000, async render(_a, again) {
+  if (again && document.activeElement && document.activeElement.closest("form")) return;
+  const [ro, models, pr] = await Promise.all([api("GET", "/v1/rollouts"), api("GET", "/v1/models"), api("GET", "/v1/profiles")]);
+  $("ctx").textContent = "Staged, signed and guarded: config profiles and classifier models";
+  const cur = ro.find(r => ["running", "paused", "halted"].includes(r.status));
+  const rcard = (r) => { const ev = r.eval || {}; return `<div class="panel"><div class="hstack"><h2>${esc(r.name)}</h2><span class="pill ${r.status === "running" ? "info" : r.status === "completed" ? "ok" : "alert"}">${esc(r.status)}</span><span class="sp"></span><span class="sub" style="margin:0">${esc(r.kind)} → <code>${esc(r.target)}</code> · by ${esc(r.created_by)} ${ago(r.created)}</span></div>
+    <div class="stages" style="margin:10px 0">${r.stages.map((s, i) => `<span class="stage ${i < r.stage || r.status === "completed" ? "done" : i === r.stage ? "cur" : ""}">${s.pct}% · ≥${s.min_minutes} min</span>`).join("→")}</div>
+    ${r.eval ? `<div class="cmpt"><div><div class="v num">${ev.canary_p95 != null ? ev.canary_p95.toFixed(1) : "–"} ms</div><div class="l">updated homes (${ev.canary_n}): median delay added p95</div></div><div><div class="v num">${ev.control_p95 != null ? ev.control_p95.toFixed(1) : "–"} ms</div><div class="l">other homes (${ev.control_n})</div></div><div><div class="v num">${ev.p != null ? (ev.p < .001 ? "<0.001" : ev.p.toFixed(3)) : "–"}</div><div class="l">p-value (Mann-Whitney) · ${ev.acked}/${ev.members} applied, ${ev.fail} failed</div></div></div>
+      <p class="sub">Guardrail: halt and roll back if updated homes are worse by more than ${r.guardrails.max_p95_increase_ms} ms and ${r.guardrails.max_p95_increase_rel * 100}% with p &lt; ${r.guardrails.p_value}, or if more than ${r.guardrails.max_failure_rate * 100}% fail to apply.</p>` : ""}
+    <ul class="timeline">${r.decisions.slice().reverse().map(x => `<li><time>${clock(x.t)}</time><span class="k">${esc(x.action)}</span><span>${x.why ? esc(x.why.join("; ")) : x.eval ? `stage ${x.stage + 1}: ${x.eval.canary_n} updated vs ${x.eval.control_n} others, ${x.eval.canary_p95?.toFixed?.(1) ?? "–"} vs ${x.eval.control_p95?.toFixed?.(1) ?? "–"} ms` : esc(x.by ? `by ${x.by}` : "")}</span></li>`).join("")}</ul>
+    ${can("rollouts") && ["running", "paused", "halted"].includes(r.status) ? `<div class="hstack" style="margin-top:10px">${r.status === "running" ? `<button class="btn small" data-ro="halt" data-id="${r.id}">Pause</button><button class="btn small" data-ro="advance" data-id="${r.id}">Advance now</button>` : `<button class="btn small" data-ro="resume" data-id="${r.id}">Resume</button>`}<button class="btn small danger" data-ro="rollback" data-id="${r.id}">Roll back</button></div>` : ""}</div>`; };
+  $("content").innerHTML = `${cur ? rcard(cur) : ""}
+  <section class="cols">
+    <div class="panel"><h2>Classifier models</h2><p class="sub">Each model file is signed with the operator release key; routers refuse anything else.</p>
+      <table><thead><tr><th>Release</th><th>Note</th><th class="n">Homes</th><th class="n">Accuracy</th></tr></thead><tbody>${models.map(m => `<tr><td><code>${esc(m.version)}</code></td><td>${esc(m.note)}</td><td class="n">${m.homes}</td><td class="n">${(m.metrics.tin_accuracy_hybrid * 100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div>
+    <div class="panel"><h2>Config profiles</h2><p class="sub">Only allow-listed keys can be managed remotely; plan rates come from billing.</p>
+      <table><thead><tr><th>Profile</th><th>Settings</th><th class="n">Homes</th></tr></thead><tbody>${pr.profiles.map(p => `<tr><td><b>${esc(p.name)}</b> v${p.version}<br><span class="sub" style="margin:0">${esc(p.description)}</span></td><td><code>${esc(Object.entries(p.settings).map(([k, v]) => `${k}=${v}`).join(" "))}</code></td><td class="n">${p.homes}</td></tr>`).join("")}</tbody></table></div>
+  </section>
+  ${can("rollouts") ? `<section class="panel"><h2>Start a rollout</h2><form class="form" id="ro-f"><div class="row">
+    <label class="f" for="ro-k">What<select class="t" id="ro-k"><option value="model">Classifier model</option><option value="profile">Config profile</option></select></label>
+    <label class="f" for="ro-t">Target<select class="t" id="ro-t"></select></label>
+    <label class="f" for="ro-s">Stages<select class="t" id="ro-s"><option value="5,25,100">5% → 25% → 100%</option><option value="10,50,100">10% → 50% → 100%</option><option value="1,10,100">1% → 10% → 100%</option></select></label>
+    <label class="f" for="ro-m">Minutes per stage<input class="t" id="ro-m" type="number" min="1" max="1440" value="3"></label></div>
+    <div><button class="btn primary" type="submit" ${cur ? "disabled" : ""}>Start rollout</button> ${cur ? '<span class="sub">Finish or roll back the current rollout first.</span>' : ""}</div></form></section>` : ""}
+  ${ro.filter(r => r !== cur).length ? `<section class="panel"><h2>Earlier rollouts</h2><table><tbody>${ro.filter(r => r !== cur).map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.kind)} → <code>${esc(r.target)}</code></td><td><span class="pill ${r.status === "completed" ? "ok" : "warn"}">${esc(r.status)}</span></td><td>${dt(r.created)}</td></tr>`).join("")}</tbody></table></section>` : ""}`;
+  document.querySelectorAll("[data-ro]").forEach(b => b.onclick = async () => {
+    if (b.dataset.ro === "rollback" && !(await ask("Roll back this rollout?", "Every home that received it goes back to its previous model or profile.", "Roll back", true))) return;
+    await api("POST", `/v1/rollouts/${b.dataset.id}/${b.dataset.ro}`); toast("Done."); route();
+  });
+  if ($("ro-f")) {
+    const fill = () => { $("ro-t").innerHTML = $("ro-k").value === "model" ? models.map(m => `<option value="${esc(m.version)}">${esc(m.version)}</option>`).join("") : pr.profiles.map(p => `<option value="${p.id}">${esc(p.name)} v${p.version}</option>`).join(""); };
+    $("ro-k").onchange = fill; fill();
+    $("ro-f").onsubmit = async (e) => {
+      e.preventDefault();
+      const mins = +$("ro-m").value, stages = $("ro-s").value.split(",").map(p => ({pct: +p, min_minutes: mins}));
+      try { await api("POST", "/v1/rollouts", {kind: $("ro-k").value, target: $("ro-t").value, name: `${$("ro-k").value} ${$("ro-t").selectedOptions[0].text}`, stages}); toast("Rollout started."); route(); }
+      catch (err) { toast(err.message); }
+    };
+  }
+}};
+
+PAGES.reports = {title: () => "Reports", async render() {
+  $("ctx").textContent = "From 5-minute rollups of every home's telemetry";
+  $("content").innerHTML = `<section class="panel"><form class="hstack" id="rp-f"><label class="f" for="rp-by">Group by<select class="t" id="rp-by" style="width:auto"><option value="region">Region</option><option value="pop">PoP</option><option value="olt">OLT</option><option value="plan">Plan</option></select></label>
+    <label class="f" for="rp-h">Period<select class="t" id="rp-h" style="width:auto"><option value="1">Last hour</option><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option></select></label>
+    <span class="sp"></span><a class="btn quiet" id="rp-csv" href="#">Download CSV</a></form>
+    <p class="sub" style="margin-top:12px">TRAI's 2024 wireline benchmarks are latency below 50 ms and jitter below 40 ms. The gateway measures the delay it can control (added under load, at the access link), so these columns are a proxy, not the regulator's end-to-end test.</p>
+    <div class="tablewrap"><table><thead><tr><th>Group</th><th class="n">Homes</th><th class="n">Samples</th><th class="n">Delay added p95, mean</th><th class="n">Below 50 ms</th><th class="n">Jitter below 40 ms</th><th class="n">Grade C or worse</th><th class="n">Plan used at peak</th></tr></thead><tbody id="rp-b"></tbody></table></div></section>`;
+  const load = async () => {
+    const by = $("rp-by").value, h = $("rp-h").value;
+    $("rp-csv").href = `/v1/reports/qoe?by=${by}&hours=${h}&format=csv`;
+    const rows = await api("GET", `/v1/reports/qoe?by=${by}&hours=${h}`);
+    $("rp-b").innerHTML = rows.map(r => `<tr><td>${esc(r.grp)}</td><td class="n">${r.homes}</td><td class="n">${r.n}</td><td class="n">${r.p95_mean} ms</td><td class="n">${r.lat_ok_pct}%</td><td class="n">${r.jit_ok_pct}%</td><td class="n">${r.poor_pct}%</td><td class="n">${r.util}%</td></tr>`).join("") || `<tr><td colspan="8" class="empty">Not enough data yet: rollups are written every 5 minutes.</td></tr>`;
+  };
+  $("rp-by").onchange = load; $("rp-h").onchange = load; await load();
+}};
+
+PAGES.admin = {title: () => "Admin", async render() {
+  const [sys, audit, priv] = await Promise.all([api("GET", "/v1/admin/system"), api("GET", "/v1/audit?limit=120"), api("GET", "/v1/privacy/requests")]);
+  const users = can("users") ? await api("GET", "/v1/admin/users") : [];
+  const hooks = can("integrations") ? await api("GET", "/v1/admin/webhooks") : [];
+  $("ctx").textContent = "Access, audit, privacy and integrations";
+  $("content").innerHTML = `<section class="cols">
+    <div class="panel"><h2>Audit log</h2><p class="sub">Who did what, including who looked at which home. Subscribers can see entries about their own data in their app.</p>
+      <div style="max-height:420px;overflow:auto"><ul class="timeline">${audit.map(a => `<li><time>${clock(a.t)}</time><span class="k">${esc(a.actor_type)}</span><span><b>${esc(a.actor)}</b> ${esc(a.action.replace(/_/g, " "))} <code>${esc(a.target)}</code></span></li>`).join("")}</ul></div></div>
+    <div class="panel"><h2>Privacy requests</h2><p class="sub">DPDP Act 2023: answer within 30 days. Erasure, correction and grievances raised in the consumer app.</p>
+      <table><tbody>${priv.map(p => `<tr><td>#${p.id} ${esc(p.kind)}</td><td>${esc(p.account)}</td><td>due ${dt(p.due)}</td><td>${p.status === "open" && can("privacy") ? `<button class="btn small" data-close="${p.id}">Mark done</button>` : `<span class="pill ${p.status === "open" ? "warn" : "ok"}">${esc(p.status)}</span>`}</td></tr>`).join("") || `<tr><td class="empty">No requests.</td></tr>`}</tbody></table>
+      <h3 style="font-size:16px;margin:16px 0 6px">Controller</h3>
+      <table><tbody><tr><td>Release public key</td><td><code>${esc(sys.release_pubkey)}</code></td></tr><tr><td>Telemetry rows</td><td>${sys.telemetry_rows} (${(sys.db_bytes / 1e6).toFixed(1)} MB)</td></tr>
+      <tr><td>Retention</td><td>raw ${sys.retention.raw_hours} h · rollups ${sys.retention.rollup_days} d · events ${sys.retention.events_days} d</td></tr><tr><td>Uptime</td><td>${Math.round(sys.uptime_s / 60)} min</td></tr></tbody></table></div>
+  </section>
+  ${can("users") ? `<section class="cols"><div class="panel"><h2>Staff</h2><table><thead><tr><th>User</th><th>Name</th><th>Role</th></tr></thead><tbody>${users.map(u => `<tr><td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.role)}</td></tr>`).join("")}</tbody></table>
+      <form class="form" id="u-f" style="margin-top:10px"><div class="row"><input class="t" id="u-n" placeholder="username" required aria-label="Username"><select class="t" id="u-r" aria-label="Role"><option>support</option><option>noc</option><option>viewer</option><option>admin</option></select><input class="t" id="u-p" type="password" placeholder="password" required aria-label="Password"></div><div><button class="btn small" type="submit">Add user</button></div></form>
+      <p class="sub">Roles: viewer (read), support (home actions, live console read, devices and priorities), noc (all home actions, incidents, notifications), admin (rollouts, models, users, privacy, integrations).</p></div>
+    <div class="panel"><h2>Webhooks</h2><p class="sub">Events: alert.opened, incident.opened, incident.resolved, ticket.created, rollout.halted. Signed with HMAC-SHA256 (X-IQ-Webhook-Signature).</p>
+      <table><tbody>${hooks.map(w => `<tr><td><code>${esc(w.url)}</code></td><td>${esc(w.events)}</td><td>${esc(w.last_status || "")}</td></tr>`).join("") || `<tr><td class="empty">None.</td></tr>`}</tbody></table>
+      <form class="hstack" id="w-f" style="margin-top:10px"><input class="t" id="w-u" placeholder="https://crm.example/hooks/intentqos" style="flex:1" aria-label="Webhook URL"><button class="btn small" type="submit">Add</button></form></div></section>` : ""}`;
+  document.querySelectorAll("[data-close]").forEach(b => b.onclick = async () => { await api("POST", `/v1/privacy/requests/${b.dataset.close}/close`); route(); });
+  if ($("u-f")) $("u-f").onsubmit = async (e) => { e.preventDefault(); try { await api("POST", "/v1/admin/users", {username: $("u-n").value, role: $("u-r").value, password: $("u-p").value}); toast("User added."); route(); } catch (err) { toast(err.message); } };
+  if ($("w-f")) $("w-f").onsubmit = async (e) => { e.preventDefault(); await api("POST", "/v1/admin/webhooks", {url: $("w-u").value, events: "*"}); route(); };
+}};
+
+/* ------------------------------------------------------------------ sign-in */
+const ROLE_BLURB = {admin: "Everything, including users, rollouts and integrations", noc: "Fleet health, incidents, notifications and rollouts",
+  support: "Find a home, see what is wrong, act on it, answer tickets", viewer: "Read-only: look around without changing anything"};
+const ART = `<svg class="bg" width="420" height="420" viewBox="0 0 420 420" aria-hidden="true">${Array.from({length: 14 * 14}, (_, i) => { const x = i % 14, y = Math.floor(i / 14); const c = ["#2B3A75", "#33448A", "#4FA272", "#C9A227", "#E07B26"][(x * 7 + y * 3 + (x * y) % 5) % 5]; return `<rect x="${x * 30}" y="${y * 30}" width="24" height="24" rx="3" fill="${c}" opacity="${(0.25 + ((x + y) % 4) * .15).toFixed(2)}"/>`; }).join("")}</svg>`;
+async function renderLogin(msg) {
+  let q = {enabled: false, users: []};
+  try { q = await fetch("/v1/auth/quick-roles").then((r) => r.json()); } catch (e) {}
+  const art = `<div class="art">${ART}<div style="display:flex;align-items:center;gap:10px;position:relative"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#F2A93B"/><path d="M8 19c3-6 13-6 16 0 M11 15.5c2.5-3.5 7.5-3.5 10 0" stroke="#1D2B5E" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="16" cy="21.5" r="2.2" fill="#1D2B5E"/></svg><b style="font-size:17px">IntentQoS Fleet</b></div>
+    <div style="position:relative;display:grid;gap:12px"><h1>Every home's connection, and what to do when one goes wrong.</h1><p>Network operations and the support desk share one view of the gateways: live quality, alerts grouped into network incidents, a diagnosis for each home, and signed changes rolled out in stages.</p></div></div>`;
+  if (q.enabled) {
+    $("root").innerHTML = `<div class="login">${art}<div class="side"><h2>Choose a role</h2>
+      <p class="labnote">Lab sign-in, accepted only from this computer. A real deployment uses staff accounts with passwords or single sign-on.</p>
+      ${q.users.map((u) => `<button class="role" type="button" data-u="${esc(u.username)}"><span class="av">${esc(initials(u.name || u.username))}</span><b>${esc((u.name || u.username).replace(/\s*\(.*\)/, ""))}, ${esc(u.role)}</b><span>${esc(ROLE_BLURB[u.role] || "")}</span></button>`).join("")}
+      <p class="sub" id="lm" style="margin:0;color:var(--crit)" role="alert">${esc(msg || "")}</p></div></div>`;
+    document.querySelectorAll("[data-u]").forEach((b) => b.onclick = async () => {
+      try { await api("POST", "/v1/auth/quick", {username: b.dataset.u}); boot(); } catch (err) { $("lm").textContent = err.message; }
+    });
+    return;
+  }
+  $("root").innerHTML = `<div class="login">${art}<form class="side" id="lf"><h2>Sign in</h2>
+    <label class="f" for="lu">User name<input class="t" id="lu" autocomplete="username" required></label>
+    <label class="f" for="lp">Password<input class="t" id="lp" type="password" autocomplete="current-password" required></label>
+    <p class="sub" id="lm" style="margin:0;color:var(--crit)" role="alert">${esc(msg || "")}</p><button class="btn primary" type="submit" style="justify-content:center;height:34px">Sign in</button>
+    <p class="labnote">Lab accounts are in <code>controller/data/lab-credentials.txt</code>. Five wrong passwords lock the account for 15 minutes.</p></form></div>`;
+  $("lf").onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api("POST", "/v1/auth/login", {username: $("lu").value, password: $("lp").value}); boot(); }
+    catch (err) { $("lm").textContent = err.message; }
+  };
+}
+async function boot() {
+  try { const t = localStorage.getItem("iqf-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  try {
+    const me = await api("GET", "/v1/auth/me");
+    S.me = me.user; S.perms = new Set(me.perms); S.brand = me.brand || {}; S.lab = !!me.lab;
+    renderShell(); route();
+  } catch (e) { if (!S.me) renderLogin(); }
+}
+boot();
+</script>
+</body>
+</html>

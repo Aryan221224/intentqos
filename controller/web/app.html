@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D2B5E">
+<title>SampleNet</title>
+<style>
+/* SampleNet Fibre: the household app an Indian ISP gives its broadband customers.
+   Ink-indigo brand with a marigold accent, Mukta (an Indian typeface with Latin and Devanagari),
+   phone first. The memorable element is "the line": the plan's capacity drawn as a pipe that fills
+   with what each device is using right now. */
+@font-face{font-family:"Mukta";src:url(/fonts/mukta-400.woff) format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"Mukta";src:url(/fonts/mukta-500.woff) format("woff");font-weight:500;font-display:swap}
+@font-face{font-family:"Mukta";src:url(/fonts/mukta-600.woff) format("woff");font-weight:600;font-display:swap}
+@font-face{font-family:"Mukta";src:url(/fonts/mukta-700.woff) format("woff");font-weight:700;font-display:swap}
+:root{
+  --indigo:#1D2B5E; --indigo-2:#2A3B78; --indigo-ink:#FFFFFF; --indigo-soft:#C9D0EC;
+  --marigold:#F2A93B; --marigold-ink:#3A2500; --marigold-soft:#FDF0D9;
+  --paper:#F3F4F8; --card:#FFFFFF; --well:#EAECF3; --line:#DDE0EA;
+  --text:#191D2C; --muted:#585F75; --faint:#8A90A3;
+  --good:#1E8A5A; --good-soft:#E2F3EA; --watch:#A86A00; --watch-soft:#FBF0DA; --bad:#BD3B12; --bad-soft:#FBE6DE;
+  /* what devices are doing (same families as the router console) */
+  --a-call:#2FB37B; --a-video:#5B8DEF; --a-stream:#9C7BF2; --a-dl:#E46A8E; --a-web:#E0A33A; --a-idle:#B8BDCB;
+  --font:"Mukta",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Devanagari",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --indigo:#1A2552; --indigo-2:#26346A; --paper:#0F1326; --card:#181D35; --well:#212844; --line:#2A3253;
+    --text:#E9ECF6; --muted:#A5ACC4; --faint:#747C98; --marigold-soft:#3A2C12;
+    --good:#55C98E; --good-soft:#15301F; --watch:#E6B451; --watch-soft:#33270D; --bad:#F07E57; --bad-soft:#3A1B10; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --indigo:#1A2552; --indigo-2:#26346A; --paper:#0F1326; --card:#181D35; --well:#212844; --line:#2A3253;
+  --text:#E9ECF6; --muted:#A5ACC4; --faint:#747C98; --marigold-soft:#3A2C12;
+  --good:#55C98E; --good-soft:#15301F; --watch:#E6B451; --watch-soft:#33270D; --bad:#F07E57; --bad-soft:#3A1B10; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--paper);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.4;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2.5px solid var(--marigold);outline-offset:2px}
+[hidden]{display:none!important}
+h1,h2,h3,p{margin:0}
+h1{font-size:26px;line-height:1.15;font-weight:700;letter-spacing:-.01em}
+h2{font-size:19px;line-height:1.2;font-weight:700}
+h3{font-size:16px;font-weight:600}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+.shell{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--paper)}
+@media (min-width:600px){body{background:var(--well)} .shell{box-shadow:0 0 0 1px var(--line)}}
+
+/* top bar */
+.top{background:var(--indigo);color:var(--indigo-ink);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+.mark{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit}
+.mark b{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.mark small{font-size:13px;color:var(--indigo-soft);font-weight:500;margin-left:-3px}
+.top .sp{flex:1}
+.iconbtn{position:relative;background:transparent;border:0;color:inherit;cursor:pointer;padding:7px;border-radius:12px;display:grid;place-items:center}
+.iconbtn:hover{background:rgba(255,255,255,.08)}
+.lang{border:1px solid rgba(255,255,255,.35);background:transparent;color:inherit;border-radius:999px;padding:2px 11px;font-weight:600;font-size:14px;cursor:pointer}
+.badge{position:absolute;top:2px;right:2px;background:var(--marigold);color:var(--marigold-ink);border-radius:999px;font-size:11px;font-weight:700;min-width:17px;height:17px;display:grid;place-items:center;padding:0 4px}
+
+main{flex:1;padding:16px 16px calc(100px + env(safe-area-inset-bottom,0px));display:grid;gap:16px;align-content:start}
+.hello{display:flex;align-items:end;gap:12px}
+.hello h1{font-size:24px}
+.hello p{color:var(--muted);font-size:14.5px}
+
+/* the line (hero) */
+.linecard{background:var(--indigo);color:var(--indigo-ink);border-radius:22px;padding:18px 18px 16px;display:grid;gap:12px}
+.state{display:flex;align-items:center;gap:10px}
+.state .dot{width:12px;height:12px;border-radius:50%;background:var(--sc,var(--a-call));box-shadow:0 0 0 4px color-mix(in srgb,var(--sc,var(--a-call)) 30%,transparent);flex:none}
+.linecard h2{font-size:23px}
+.linecard p{color:var(--indigo-soft);font-size:15px}
+.pipe{height:26px;border-radius:13px;background:rgba(255,255,255,.12);display:flex;overflow:hidden;gap:2px;padding:3px}
+.pipe i{display:block;height:100%;border-radius:9px;min-width:6px;transition:flex-basis .6s ease}
+.pipe-scale{display:flex;justify-content:space-between;font-size:13px;color:var(--indigo-soft);margin-top:-6px}
+.legend{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px}
+.legend li{display:flex;align-items:center;gap:7px;font-size:14px;min-width:0}
+.legend li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.legend li em{font-style:normal;color:var(--indigo-soft);margin-left:auto;white-space:nowrap}
+.sw{width:10px;height:10px;border-radius:3px;flex:none}
+.linefoot{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;color:var(--indigo-soft);border-top:1px solid rgba(255,255,255,.14);padding-top:10px}
+
+/* quick actions */
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.quick button,.quick a{background:none;border:0;display:grid;justify-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;color:var(--text);padding:2px;text-align:center;line-height:1.2}
+.quick .ic{width:54px;height:54px;border-radius:18px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;color:var(--indigo)}
+:root[data-theme="dark"] .quick .ic{color:var(--marigold)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .quick .ic{color:var(--marigold)}}
+.quick button:hover .ic,.quick a:hover .ic{border-color:var(--marigold)}
+
+/* panels */
+.panel{background:var(--card);border-radius:18px;border:1px solid var(--line);padding:16px;display:grid;gap:12px;min-width:0}
+.panel-head{display:flex;align-items:center;gap:10px}
+.panel-head .sp{flex:1}
+.muted{color:var(--muted);font-size:14.5px}
+.faint{color:var(--faint);font-size:13px}
+.notice{border-radius:16px;padding:14px;display:grid;gap:4px;font-size:15px}
+.notice b{font-size:16px}
+.notice.bad{background:var(--bad-soft);color:var(--bad)} .notice.watch{background:var(--watch-soft);color:var(--watch)} .notice.good{background:var(--good-soft);color:var(--good)}
+.notice span{color:var(--text)}
+
+.btn{border:0;background:var(--indigo);color:#fff;border-radius:14px;padding:12px 18px;font-weight:600;cursor:pointer;font-size:16px;text-align:center;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.accent{background:var(--marigold);color:var(--marigold-ink)}
+.btn.quiet{background:var(--well);color:var(--text)}
+.btn.line{background:transparent;border:1.5px solid var(--line);color:var(--text)}
+.btn.warn{background:var(--bad-soft);color:var(--bad)}
+.btn.sm{padding:7px 13px;font-size:14.5px;border-radius:11px}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+:root[data-theme="dark"] .btn:not(.accent):not(.quiet):not(.line):not(.warn){background:var(--indigo-2)}
+
+/* plan */
+.plan{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:end}
+.plan .price{font-size:28px;font-weight:700;line-height:1}
+.plan .price small{font-size:14px;font-weight:500;color:var(--muted)}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.facts div{background:var(--well);border-radius:12px;padding:9px 11px}
+.facts b{display:block;font-size:17px}
+.facts span{font-size:13px;color:var(--muted)}
+
+/* boosts */
+.boost{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center}
+.ring{width:44px;height:44px}
+.boost b{display:block}
+.boost .clock{font-size:21px;font-weight:700;text-align:right}
+
+/* lists */
+.group h3{font-size:14px;font-weight:600;color:var(--muted);margin:0 0 4px}
+.row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border:0;border-bottom:1px solid var(--line);background:none;width:100%;text-align:left;cursor:pointer}
+.row:last-child{border-bottom:0}
+.tile{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--tc,var(--a-idle)) 16%,transparent);color:var(--tc,var(--muted))}
+.row b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{color:var(--muted);font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .num{text-align:right;font-size:14px;color:var(--muted);white-space:nowrap;line-height:1.3}
+.row .num b{color:var(--text);font-size:15px;display:inline}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:6px;padding:0 6px;margin-right:4px;vertical-align:1px}
+.tag.boost{background:var(--marigold);color:var(--marigold-ink)} .tag.paused{background:var(--watch-soft);color:var(--watch)}
+
+/* choices */
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--well);border-radius:14px;padding:4px;gap:4px}
+.seg button{border:0;background:transparent;border-radius:11px;padding:9px 6px;font-weight:600;cursor:pointer;font-size:15px;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(20,25,50,.12)}
+.step{display:grid;gap:8px}
+.step > b{font-size:15px}
+.step > b span{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--indigo);color:#fff;font-size:13px;margin-right:6px}
+.who{display:grid;gap:6px}
+.who button{display:grid;grid-template-columns:36px minmax(0,1fr) 22px;gap:10px;align-items:center;border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:8px 10px;cursor:pointer;text-align:left}
+.who button .tile{width:36px;height:36px;border-radius:11px}
+.who button b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who button small{font-size:13px;color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who button .tick{width:20px;height:20px;border-radius:50%;border:2px solid var(--line)}
+.who button[aria-pressed=true]{border-color:var(--indigo)}
+.who button[aria-pressed=true] .tick{border:6px solid var(--indigo)}
+:root[data-theme="dark"] .who button[aria-pressed=true]{border-color:var(--marigold)}
+:root[data-theme="dark"] .who button[aria-pressed=true] .tick{border-color:var(--marigold)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pills button{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-weight:500;cursor:pointer;font-size:15px}
+.pills button[aria-pressed=true]{border-color:var(--indigo);background:var(--indigo);color:#fff}
+
+/* forms */
+label.f{display:grid;gap:5px;font-size:14.5px;color:var(--muted);font-weight:500}
+.in{border:1.5px solid var(--line);border-radius:13px;padding:11px 13px;background:var(--card);color:var(--text);width:100%;font-size:16px}
+.in:focus{border-color:var(--indigo);outline:0}
+textarea.in{min-height:96px;resize:vertical}
+.phone{display:grid;grid-template-columns:auto minmax(0,1fr);border:1.5px solid var(--line);border-radius:13px;background:var(--card);overflow:hidden}
+.phone span{padding:11px 12px;background:var(--well);font-weight:600}
+.phone input{border:0;padding:11px 13px;background:transparent;font-size:17px;letter-spacing:.04em;width:100%}
+.phone input:focus{outline:0}
+.code{font-size:26px;letter-spacing:.5em;text-align:center;font-weight:600;padding:10px}
+
+.toggle{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.toggle:last-of-type{border-bottom:0}
+.toggle b{font-weight:600}
+.toggle small{color:var(--muted);font-size:14px;grid-column:1}
+.switch{width:50px;height:30px;border-radius:999px;background:var(--line);border:0;position:relative;cursor:pointer;grid-row:1/3;grid-column:2}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch[aria-checked=true]{background:var(--good)}
+.switch[aria-checked=true]::after{left:23px}
+.switch:disabled{opacity:.55}
+
+.bars{display:grid;gap:9px}
+.bars .u{display:grid;grid-template-columns:8.5em minmax(0,1fr) 4.6em;gap:10px;align-items:center;font-size:14.5px}
+.bars .u span:last-child{text-align:right}
+.bars .u span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bars .b{height:8px;border-radius:4px;background:var(--well);overflow:hidden}
+.bars .b i{display:block;height:100%;background:var(--indigo);border-radius:4px}
+:root[data-theme="dark"] .bars .b i{background:var(--marigold)}
+
+.thread{display:grid;gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}
+.thread:last-child{border-bottom:0}
+.msg{background:var(--well);border-radius:4px 14px 14px 14px;padding:8px 11px;font-size:15px;max-width:92%}
+.msg.us{background:var(--good-soft);justify-self:end;border-radius:14px 4px 14px 14px}
+.msg small{display:block;color:var(--muted);font-size:12.5px;font-weight:600}
+.status{font-size:12.5px;font-weight:600;border-radius:6px;padding:1px 7px;background:var(--well);color:var(--muted)}
+.status.open{background:var(--watch-soft);color:var(--watch)} .status.resolved,.status.closed{background:var(--good-soft);color:var(--good)}
+
+.speed{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.speed div{border-left:3px solid var(--indigo);padding:2px 0 2px 10px}
+:root[data-theme="dark"] .speed div{border-left-color:var(--marigold)}
+.speed b{display:block;font-size:24px;font-weight:700;line-height:1.1}
+.speed span{font-size:13px;color:var(--muted)}
+
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--marigold);color:var(--marigold-ink);display:grid;place-items:center;font-weight:700;font-size:20px;flex:none}
+
+/* bottom tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:4px 8px calc(4px + env(safe-area-inset-bottom,0px));z-index:6}
+.tabs-in{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tabs a{display:grid;justify-items:center;gap:1px;padding:7px 2px 5px;color:var(--faint);text-decoration:none;font-size:12.5px;font-weight:500;position:relative}
+.tabs a[aria-current=page]{color:var(--text);font-weight:600}
+.tabs a[aria-current=page]::before{content:"";position:absolute;top:-4px;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--marigold)}
+
+/* sheet, toast */
+.sheet{position:fixed;inset:0;background:rgba(10,14,34,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet-in{background:var(--card);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:90vh;overflow:auto;padding:10px 18px calc(20px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}}
+.grab{width:42px;height:5px;border-radius:3px;background:var(--line);justify-self:center}
+.toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--text);color:var(--paper);padding:11px 16px;border-radius:14px;z-index:30;max-width:calc(100% - 32px);font-size:15px}
+.spin{width:18px;height:18px;border-radius:50%;border:3px solid var(--well);border-top-color:var(--indigo);animation:sp 1s linear infinite;display:inline-block;vertical-align:-4px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{color:var(--muted);font-size:15px;padding:6px 0}
+
+/* sign-in */
+.signin{min-height:100vh;display:grid;grid-template-rows:auto 1fr;align-content:start;max-width:480px;margin:0 auto;background:var(--paper)}
+.signin .stack{display:grid;align-content:start}
+.signin header{background:var(--indigo);color:#fff;padding:48px 24px 30px;display:grid;gap:14px;border-radius:0 0 28px 28px}
+.signin header h1{font-size:30px}
+.signin header p{color:var(--indigo-soft)}
+.signin form,.signin .body{padding:24px;display:grid;gap:14px;align-content:start}
+.labnote{background:var(--marigold-soft);border-radius:14px;padding:12px 14px;font-size:14.5px;display:grid;gap:8px}
+@media (max-width:370px){.quick{gap:4px}.quick .ic{width:48px;height:48px}.legend{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="layer"></div>
+<script>
+"use strict";
+/* Everything goes through the operator's controller (/v1/app/*). Live views and actions are relayed
+   to the subscriber's own router and are not stored by the controller. */
+const S = {view: "home", home: null, live: null, brand: {}, picked: null, goal: "low_latency", dur: 3600, timers: [], lang: "en", usage: null};
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+
+/* ------------------------------------------------------------------ words (English / हिन्दी) */
+const STR = {
+  en: {
+    home: "Home", devices: "Devices", boost: "Boost", help: "Help", account: "Account",
+    hello: "Namaste, {name}", acct: "Account {acct}, {area}",
+    s_good: "Smooth for everyone", s_busy: "Busy, still smooth", s_slowish: "A little slow right now", s_slow: "Slow right now", s_off: "Your router is offline", s_check: "Checking your connection",
+    d_dl: "Calls and games stay smooth while {n} streaming or downloading.", d_quiet: "Nothing heavy is running. Everything gets full speed.", d_slow: "We're keeping calls first. Downloads may slow down for a while.",
+    d_off: "Last seen {ago}. Check that it has power and the fibre light is green.",
+    one_device: "1 device is", n_devices: "{n} devices are",
+    in_use: "{used} of {plan} Mbps in use", plan_scale: "{plan} Mbps plan", online: "{n} devices online", checked: "Checked {ago}",
+    q_speed: "Speed test", q_boost: "Boost a device", q_pause: "Pause a device", q_help: "Get help",
+    boosted_now: "Boosted now", nothing_boosted: "Nothing is boosted. Boost a device for a call, a game or a film and it ends by itself.", end: "End", boost_ended: "Boost ended.",
+    a_ok: "Working", a_wait: "Waiting for traffic", a_deg: "Not quite keeping up", a_inf: "Your line is too busy for this",
+    plan_month: "a month", renews: "Renews {date}", since: "Customer since {date}", unlimited: "Unlimited data", used30: "{gb} used in 30 days", change_plan: "Change plan",
+    upload_down: "{d} Mbps down, {u} Mbps up",
+    speed: "Speed test", speed_sub: "Measured from your router, so Wi-Fi doesn't change the result.", run: "Run test", run_again: "Test again", testing: "Testing your line", testing_sub: "About 10 seconds. Your router downloads from our test server.",
+    sp_down: "Mbps download", sp_delay: "ms extra delay when busy", sp_plan: "Mbps plan",
+    sp_ok: "Your line delivers your plan.", sp_low: "Below your plan right now. If it keeps happening, tell us in Help.", sp_home: "Your devices were using {m} Mbps of it during the test.",
+    out_area: "Outage in your area", issue_area: "Network issue in your area", out_body: "We know about it and engineers are working on it. You don't need to restart your router.",
+    out_rebate: "Outages longer than 4 hours qualify for a rebate under TRAI rules. It's applied to your next bill automatically.",
+    your_devices: "Your devices", dev_sub: "Tap a device to rename, pause or boost it.", now_online: "Using the internet now", idle_g: "Connected, not busy", today: "{gb} today", none_dev: "No devices have connected yet.",
+    paused: "Paused", boosted: "Boosted", name: "Name", type: "Type", save_name: "Save", saved: "Saved.",
+    pause_title: "Pause internet for this device", paused_title: "Paused", resume: "Resume now", resumed: "Resumed.", paused_toast: "{name} is paused.",
+    p15: "15 min", p60: "1 hour", p180: "3 hours", p0: "Until I resume", boost_this: "Boost this device",
+    b_title: "Boost a device", b_sub: "It gets a reserved share of your line for a while, then everything goes back to normal by itself.",
+    b_who: "Which device?", b_what: "For what?", b_long: "For how long?", g_ll: "Calls and games", g_tp: "Streaming and uploads",
+    m30: "30 min", h1: "1 hour", h2: "2 hours", h4: "4 hours",
+    b_go: "Boost {name} for {dur}", b_pick: "Choose a device", b_done: "Boosted. It ends by itself.",
+    b_res: "{mbps} Mbps kept for {name}", b_others: "{list} will share what's left meanwhile.", b_nobody: "Nothing else is busy, so nobody will notice.", b_cant: "Can't boost right now",
+    modes: "Quick modes", modes_sub: "One tap for the usual moments.", start: "Start", started: "Started.",
+    sched: "Schedules", sched_sub: "Boost automatically, for example for weekday work calls.", add: "Add", remove: "Remove", no_sched: "No schedules yet.",
+    new_sched: "New schedule", device: "Device", from: "From", until: "Until", sched_name: "Name", save_sched: "Save schedule", sched_saved: "Schedule saved.", work_calls: "Work calls",
+    report: "Tell us what's wrong", report_sub: "We check your connection the moment you send this.",
+    c_slow: "Slow", c_calls: "Calls break up", c_gaming: "Games lag", c_none: "No internet", c_other: "Something else",
+    whats: "What's happening?", whats_ph: "For example: video calls freeze every evening around 9",
+    incl: "Include a check of my router", incl_sub: "Shares a one-time status snapshot with support. App names are not included.",
+    send: "Send", checking: "Checking your connection…", received: "Report #{id} received", your_reports: "Your reports", no_reports: "No reports yet.",
+    call_us: "Call us", call_sub: "{phone}, free, any time", you: "You",
+    usage30: "Data used, last 30 days", no_cap: "Total {gb}. No data cap on your plan.", no_usage: "No usage yet.",
+    privacy: "Privacy", privacy_sub: "Your router looks only at packet sizes and timing, never at what you browse or say. You choose what it shares with us.",
+    pv_service: "Keep my internet running", pv_service_s: "Router health, speed and delay. Needed to provide the service.",
+    pv_quality: "Help improve quality", pv_quality_s: "Share which devices are busy (not what they do) so we can find problems before you call.",
+    pv_diag: "Let support ask for diagnostics", pv_diag_s: "Support can ask you for 60 minutes of detailed diagnostics. Nothing is shared until you tap Allow.",
+    pv_offers: "Offers and tips", pv_offers_s: "Plan suggestions based on how your home uses the internet.",
+    pv_saved: "Saved. Your router has been updated.", see_data: "See my data", del_data: "Delete my data", griev: "Raise a privacy concern",
+    griev_line: "Grievance officer: {mail}. We reply within 30 days (DPDP Act 2023).", due: "due {date}",
+    your_data: "Your data", your_data_sub: "What we hold about you and your router, and every time someone looked at it.", nobody: "Nobody has looked at your data.",
+    records: "{q} quality records, {t} reports, {n} messages.", download: "Download everything (JSON)",
+    del_sent: "Request #{id} sent. We'll reply within 30 days.", griev_sent: "Concern #{id} logged.",
+    language: "Language", theme: "Appearance", t_light: "Light", t_dark: "Dark", t_auto: "Automatic", signout: "Sign out",
+    messages: "Messages", no_msgs: "No messages.", allow60: "Allow for 60 minutes", not_now: "Not now",
+    allow_ok: "Thanks. Support can see more detail for the next 60 minutes.", allow_no: "OK, nothing extra is shared.",
+    plans: "Plans", plans_sub: "Pick a plan and we'll call you to confirm. Nothing changes until you agree.", current: "Your plan", request: "Request {name}", requested: "Request #{id} sent. We'll call you.",
+    si_title: "Sign in", si_sub: "Use the mobile number on your broadband account.", mobile: "Mobile number", send_code: "Send code", code6: "6-digit code", verify: "Sign in",
+    demo_code: "There is no SMS gateway in this lab, so your code is {code}.", lab_home: "Open Asha Verma's home (lab)", lab_note: "Lab sign-in: this computer only. A real app asks for the mobile number and a code.",
+    unreachable: "Your router can't be reached right now.", wrong: "Something went wrong ({code})",
+  },
+  hi: {
+    home: "होम", devices: "डिवाइस", boost: "बूस्ट", help: "मदद", account: "खाता",
+    hello: "नमस्ते, {name}", acct: "खाता {acct}, {area}",
+    s_good: "सबके लिए बढ़िया चल रहा है", s_busy: "व्यस्त है, फिर भी स्मूद", s_slowish: "अभी थोड़ा धीमा है", s_slow: "अभी धीमा है", s_off: "आपका राउटर ऑफ़लाइन है", s_check: "कनेक्शन जाँच रहे हैं",
+    d_dl: "{n} स्ट्रीम या डाउनलोड कर रहे हैं, फिर भी कॉल और गेम स्मूद हैं।", d_quiet: "अभी कुछ भारी नहीं चल रहा। सबको पूरी स्पीड मिल रही है।", d_slow: "हम कॉल को पहले रख रहे हैं। डाउनलोड कुछ देर धीमे हो सकते हैं।",
+    d_off: "आख़िरी बार {ago} दिखा। देखें कि बिजली आ रही है और फ़ाइबर लाइट हरी है।",
+    one_device: "1 डिवाइस", n_devices: "{n} डिवाइस",
+    in_use: "{plan} में से {used} Mbps इस्तेमाल में", plan_scale: "{plan} Mbps प्लान", online: "{n} डिवाइस ऑनलाइन", checked: "{ago} जाँचा",
+    q_speed: "स्पीड टेस्ट", q_boost: "डिवाइस बूस्ट करें", q_pause: "डिवाइस रोकें", q_help: "मदद लें",
+    boosted_now: "अभी बूस्ट", nothing_boosted: "अभी कुछ बूस्ट नहीं है। कॉल, गेम या फ़िल्म के लिए डिवाइस बूस्ट करें, यह अपने-आप ख़त्म हो जाता है।", end: "बंद करें", boost_ended: "बूस्ट बंद हुआ।",
+    a_ok: "चल रहा है", a_wait: "ट्रैफ़िक का इंतज़ार", a_deg: "पूरा नहीं हो पा रहा", a_inf: "इसके लिए लाइन बहुत व्यस्त है",
+    plan_month: "प्रति माह", renews: "{date} को रिन्यू", since: "{date} से ग्राहक", unlimited: "अनलिमिटेड डेटा", used30: "30 दिनों में {gb} इस्तेमाल", change_plan: "प्लान बदलें",
+    upload_down: "{d} Mbps डाउन, {u} Mbps अप",
+    speed: "स्पीड टेस्ट", speed_sub: "राउटर से मापा जाता है, इसलिए वाई-फ़ाई से नतीजा नहीं बदलता।", run: "टेस्ट करें", run_again: "फिर से टेस्ट करें", testing: "लाइन टेस्ट हो रही है", testing_sub: "लगभग 10 सेकंड। राउटर हमारे टेस्ट सर्वर से डाउनलोड करता है।",
+    sp_down: "Mbps डाउनलोड", sp_delay: "ms व्यस्त होने पर देरी", sp_plan: "Mbps प्लान",
+    sp_ok: "आपकी लाइन पूरी प्लान स्पीड दे रही है।", sp_low: "अभी प्लान से कम है। बार-बार हो तो मदद में बताएँ।", sp_home: "टेस्ट के दौरान आपके डिवाइस {m} Mbps इस्तेमाल कर रहे थे।",
+    out_area: "आपके इलाके में आउटेज", issue_area: "आपके इलाके में नेटवर्क समस्या", out_body: "हमें पता है और इंजीनियर काम कर रहे हैं। राउटर रीस्टार्ट करने की ज़रूरत नहीं है।",
+    out_rebate: "TRAI नियमों के तहत 4 घंटे से लंबे आउटेज पर छूट मिलती है। यह अगले बिल में अपने-आप लगेगी।",
+    your_devices: "आपके डिवाइस", dev_sub: "नाम बदलने, रोकने या बूस्ट करने के लिए डिवाइस पर टैप करें।", now_online: "अभी इंटरनेट इस्तेमाल कर रहे हैं", idle_g: "जुड़े हैं, व्यस्त नहीं", today: "आज {gb}", none_dev: "अभी कोई डिवाइस नहीं जुड़ा।",
+    paused: "रुका हुआ", boosted: "बूस्ट", name: "नाम", type: "प्रकार", save_name: "सेव करें", saved: "सेव हो गया।",
+    pause_title: "इस डिवाइस का इंटरनेट रोकें", paused_title: "रुका हुआ", resume: "अभी चालू करें", resumed: "चालू हो गया।", paused_toast: "{name} रोक दिया गया।",
+    p15: "15 मिनट", p60: "1 घंटा", p180: "3 घंटे", p0: "जब तक मैं चालू न करूँ", boost_this: "यह डिवाइस बूस्ट करें",
+    b_title: "डिवाइस बूस्ट करें", b_sub: "कुछ देर के लिए लाइन का एक हिस्सा इसके लिए रखा जाता है, फिर सब अपने-आप सामान्य हो जाता है।",
+    b_who: "कौन-सा डिवाइस?", b_what: "किसलिए?", b_long: "कितनी देर?", g_ll: "कॉल और गेम", g_tp: "स्ट्रीमिंग और अपलोड",
+    m30: "30 मिनट", h1: "1 घंटा", h2: "2 घंटे", h4: "4 घंटे",
+    b_go: "{name} को {dur} के लिए बूस्ट करें", b_pick: "डिवाइस चुनें", b_done: "बूस्ट हो गया। यह अपने-आप ख़त्म होगा।",
+    b_res: "{name} के लिए {mbps} Mbps रखे गए", b_others: "इस दौरान {list} बाकी लाइन बाँटेंगे।", b_nobody: "और कुछ व्यस्त नहीं है, किसी को फ़र्क नहीं पड़ेगा।", b_cant: "अभी बूस्ट नहीं हो सकता",
+    modes: "क्विक मोड", modes_sub: "रोज़ के मौकों के लिए एक टैप।", start: "शुरू करें", started: "शुरू हो गया।",
+    sched: "शेड्यूल", sched_sub: "अपने-आप बूस्ट, जैसे हफ़्ते के दिनों में ऑफ़िस कॉल के लिए।", add: "जोड़ें", remove: "हटाएँ", no_sched: "अभी कोई शेड्यूल नहीं।",
+    new_sched: "नया शेड्यूल", device: "डिवाइस", from: "से", until: "तक", sched_name: "नाम", save_sched: "शेड्यूल सेव करें", sched_saved: "शेड्यूल सेव हो गया।", work_calls: "ऑफ़िस कॉल",
+    report: "बताइए क्या दिक्कत है", report_sub: "भेजते ही हम आपका कनेक्शन जाँचते हैं।",
+    c_slow: "धीमा", c_calls: "कॉल टूटती है", c_gaming: "गेम अटकता है", c_none: "इंटरनेट नहीं", c_other: "कुछ और",
+    whats: "क्या हो रहा है?", whats_ph: "जैसे: रोज़ रात 9 बजे वीडियो कॉल अटकती है",
+    incl: "मेरे राउटर की जाँच शामिल करें", incl_sub: "सपोर्ट के साथ एक बार का स्टेटस स्नैपशॉट साझा होता है। ऐप के नाम शामिल नहीं होते।",
+    send: "भेजें", checking: "कनेक्शन जाँच रहे हैं…", received: "रिपोर्ट #{id} मिल गई", your_reports: "आपकी रिपोर्ट", no_reports: "अभी कोई रिपोर्ट नहीं।",
+    call_us: "हमें कॉल करें", call_sub: "{phone}, मुफ़्त, कभी भी", you: "आप",
+    usage30: "पिछले 30 दिनों का डेटा", no_cap: "कुल {gb}। आपके प्लान में कोई डेटा सीमा नहीं।", no_usage: "अभी कोई इस्तेमाल नहीं।",
+    privacy: "निजता", privacy_sub: "आपका राउटर सिर्फ़ पैकेट के आकार और समय देखता है, कभी नहीं कि आप क्या देखते या कहते हैं। आप तय करते हैं कि वह हमसे क्या साझा करे।",
+    pv_service: "इंटरनेट चालू रखें", pv_service_s: "राउटर की सेहत, स्पीड और देरी। सेवा देने के लिए ज़रूरी।",
+    pv_quality: "क्वालिटी सुधारने में मदद करें", pv_quality_s: "कौन-से डिवाइस व्यस्त हैं (क्या कर रहे हैं, यह नहीं) ताकि हम पहले ही समस्या पकड़ सकें।",
+    pv_diag: "सपोर्ट को डायग्नोस्टिक्स माँगने दें", pv_diag_s: "सपोर्ट 60 मिनट के विस्तृत डायग्नोस्टिक्स माँग सकता है। आपके अनुमति देने तक कुछ साझा नहीं होता।",
+    pv_offers: "ऑफ़र और सुझाव", pv_offers_s: "आपके घर के इस्तेमाल के हिसाब से प्लान सुझाव।",
+    pv_saved: "सेव हो गया। आपका राउटर अपडेट हो गया।", see_data: "मेरा डेटा देखें", del_data: "मेरा डेटा मिटाएँ", griev: "निजता की शिकायत",
+    griev_line: "शिकायत अधिकारी: {mail}। हम 30 दिनों में जवाब देते हैं (DPDP अधिनियम 2023)।", due: "{date} तक",
+    your_data: "आपका डेटा", your_data_sub: "हमारे पास आपके और आपके राउटर के बारे में क्या है, और किसने कब देखा।", nobody: "किसी ने आपका डेटा नहीं देखा।",
+    records: "{q} क्वालिटी रिकॉर्ड, {t} रिपोर्ट, {n} संदेश।", download: "सब डाउनलोड करें (JSON)",
+    del_sent: "अनुरोध #{id} भेजा गया। हम 30 दिनों में जवाब देंगे।", griev_sent: "शिकायत #{id} दर्ज हुई।",
+    language: "भाषा", theme: "रूप", t_light: "लाइट", t_dark: "डार्क", t_auto: "अपने-आप", signout: "साइन आउट",
+    messages: "संदेश", no_msgs: "कोई संदेश नहीं।", allow60: "60 मिनट के लिए अनुमति दें", not_now: "अभी नहीं",
+    allow_ok: "धन्यवाद। अगले 60 मिनट सपोर्ट ज़्यादा जानकारी देख सकता है।", allow_no: "ठीक है, कुछ अतिरिक्त साझा नहीं होगा।",
+    plans: "प्लान", plans_sub: "प्लान चुनें, हम पुष्टि के लिए कॉल करेंगे। आपकी सहमति तक कुछ नहीं बदलता।", current: "आपका प्लान", request: "{name} का अनुरोध", requested: "अनुरोध #{id} भेजा गया। हम कॉल करेंगे।",
+    si_title: "साइन इन", si_sub: "ब्रॉडबैंड खाते वाला मोबाइल नंबर डालें।", mobile: "मोबाइल नंबर", send_code: "कोड भेजें", code6: "6 अंकों का कोड", verify: "साइन इन करें",
+    demo_code: "इस लैब में SMS गेटवे नहीं है, इसलिए आपका कोड {code} है।", lab_home: "आशा वर्मा का घर खोलें (लैब)", lab_note: "लैब साइन-इन: सिर्फ़ इस कंप्यूटर पर। असली ऐप मोबाइल नंबर और कोड माँगता है।",
+    unreachable: "अभी आपके राउटर से संपर्क नहीं हो पा रहा।", wrong: "कुछ गड़बड़ हुई ({code})",
+  }
+};
+const ACT_HI = {"Idle": "खाली", "On a voice call": "वॉइस कॉल पर", "Gaming": "गेम खेल रहा है", "On a video call": "वीडियो कॉल पर", "Streaming video": "वीडियो स्ट्रीमिंग", "Browsing": "ब्राउज़िंग", "Downloading or backing up": "डाउनलोड या बैकअप"};
+const TYPE_NAME = {en: {phone: "Phone", laptop: "Laptop", tv: "TV", console: "Game console", desktop: "Computer", tablet: "Tablet", speaker: "Speaker", camera: "Camera", nas: "Storage (NAS)", other: "Other"},
+  hi: {phone: "फ़ोन", laptop: "लैपटॉप", tv: "टीवी", console: "गेम कंसोल", desktop: "कंप्यूटर", tablet: "टैबलेट", speaker: "स्पीकर", camera: "कैमरा", nas: "स्टोरेज (NAS)", other: "अन्य"}};
+function t(k, v) { let s = (STR[S.lang] && STR[S.lang][k]) || STR.en[k] || k; for (const [a, b] of Object.entries(v || {})) s = s.split(`{${a}}`).join(b); return s; }
+const act = (a) => S.lang === "hi" ? (ACT_HI[a] || a) : a;
+const nf = (x, d = 0) => Number(x).toLocaleString(S.lang === "hi" ? "hi-IN" : "en-IN", {maximumFractionDigits: d, minimumFractionDigits: d});
+const mbps = (k) => k == null ? "–" : nf(k / 1000, k >= 10000 ? 0 : 1);
+const gb = (b) => b >= 1e9 ? `${nf(b / 1e9, 1)} GB` : `${nf(Math.round((b || 0) / 1e6))} MB`;
+const hm = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+const day = (ts) => new Date(ts * 1000).toLocaleDateString(S.lang === "hi" ? "hi-IN" : "en-IN", {day: "numeric", month: "short"});
+const dayY = (ts) => new Date(ts * 1000).toLocaleDateString(S.lang === "hi" ? "hi-IN" : "en-IN", {month: "short", year: "numeric"});
+function ago(ts) {
+  if (!ts) return "";
+  const s = Date.now() / 1000 - ts;
+  const rtf = new Intl.RelativeTimeFormat(S.lang === "hi" ? "hi" : "en", {numeric: "auto"});
+  if (s < 45) return rtf.format(-Math.max(1, Math.round(s)), "second");
+  if (s < 3600) return rtf.format(-Math.round(s / 60), "minute");
+  if (s < 86400) return rtf.format(-Math.round(s / 3600), "hour");
+  return day(ts);
+}
+
+/* what a device is doing -> colour family */
+const FAM = {"On a voice call": "call", "Gaming": "call", "On a video call": "video", "Streaming video": "stream", "Downloading or backing up": "dl", "Browsing": "web", "Idle": "idle"};
+const famVar = (a) => `var(--a-${FAM[a] || "idle"})`;
+
+const ICON = {laptop: '<path d="M5 6.5h14v8.5H5z M3 18h18"/>', desktop: '<path d="M4 5h16v11H4z M9 20h6 M12 16v4"/>', phone: '<path d="M8 3h8v18H8z M11 18h2"/>',
+  tablet: '<path d="M6 3h12v18H6z M11 18h2"/>', tv: '<path d="M3 6h18v11H3z M8 21h8 M10 17v4 M14 17v4"/>', console: '<path d="M4 9a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5a3 3 0 0 1-5 2l-1-1h-4l-1 1a3 3 0 0 1-5-2z M8 10v3 M6.5 11.5h3 M15.5 10.5h.01 M17 12.5h.01"/>',
+  speaker: '<path d="M7 3h10v18H7z M12 14m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0 M12 7h.01"/>', camera: '<path d="M4 8h12v8H4z M16 11l4-2v6l-4-2"/>', nas: '<path d="M5 4h14v7H5z M5 13h14v7H5z M8 7.5h.01 M8 16.5h.01"/>',
+  other: '<path d="M12 12m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0"/>', home: '<path d="M4 11l8-7 8 7v9H4z M10 20v-6h4v6"/>', bolt: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  help: '<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7 M12 17h.01"/>',
+  user: '<path d="M12 8m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0 M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/>', devices: '<path d="M3 5h13v9H3z M1 17h17 M19 9h4v11h-4z"/>',
+  bell: '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z M10 20a2 2 0 0 0 4 0"/>', speed: '<path d="M4 17a8 8 0 1 1 16 0 M12 17l4.5-5.5 M12 17h.01"/>', pause: '<path d="M9 5v14 M15 5v14"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>', phonecall: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>'};
+const icon = (n, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ICON.other}</svg>`;
+const MARK = `<svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#F2A93B"/><path d="M8 19c3-6 13-6 16 0 M11 15.5c2.5-3.5 7.5-3.5 10 0" stroke="#1D2B5E" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="16" cy="21.5" r="2.2" fill="#1D2B5E"/></svg>`;
+
+function toast(m) { const e = document.createElement("div"); e.className = "toast"; e.setAttribute("role", "status"); e.textContent = m; document.body.appendChild(e); setTimeout(() => e.remove(), 3500); }
+async function api(method, path, body) {
+  const r = await fetch(path, {method, headers: {"Content-Type": "application/json"}, credentials: "same-origin", body: body ? JSON.stringify(body) : undefined});
+  let d = null; try { d = await r.json(); } catch (e) {}
+  if (r.status === 401 && !/\/(otp|login|quick)$/.test(path)) { renderLogin(); throw new Error("signed out"); }
+  if (!r.ok) throw new Error((d && (d.error || d.reason)) || t("wrong", {code: r.status}));
+  return d;
+}
+function sheet(html, onmount) {
+  $("layer").innerHTML = `<div class="sheet" id="sh"><div class="sheet-in" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+  $("sh").onclick = (e) => { if (e.target.id === "sh") closeSheet(); };
+  document.addEventListener("keydown", escClose);
+  if (onmount) onmount();
+}
+const escClose = (e) => { if (e.key === "Escape") closeSheet(); };
+const closeSheet = () => { $("layer").innerHTML = ""; document.removeEventListener("keydown", escClose); };
+
+/* ------------------------------------------------------------------ shell */
+const TABS = [["home", "home"], ["devices", "devices"], ["boost", "bolt"], ["help", "help"], ["account", "user"]];
+function renderShell() {
+  document.documentElement.lang = S.lang;
+  $("root").innerHTML = `<div class="shell"><header class="top"><a class="mark" href="#home" aria-label="${esc(S.brand.name || "SampleNet")}">${MARK}<b>${esc(S.brand.short || "SampleNet")}</b><small>Fibre</small></a><span class="sp"></span>
+    <button class="lang" id="lang" type="button" aria-label="Language">${S.lang === "hi" ? "English" : "हिन्दी"}</button>
+    <button class="iconbtn" id="bell" type="button" aria-label="${t("messages")}">${icon("bell", 24)}<span class="badge" id="unread" hidden>0</span></button></header>
+    <main id="main" tabindex="-1"></main>
+    <nav class="tabs" aria-label="Sections"><div class="tabs-in">${TABS.map(([id, ic]) => `<a href="#${id}" id="tab-${id}">${icon(ic, 23)}${t(id)}</a>`).join("")}</div></nav></div>`;
+  $("bell").onclick = openNotifs;
+  $("lang").onclick = () => { S.lang = S.lang === "hi" ? "en" : "hi"; try { localStorage.setItem("iqa-lang", S.lang); } catch (e) {} renderShell(); route(); };
+}
+function route() {
+  S.view = (location.hash.slice(1) || "home").split("/")[0];
+  if (!VIEWS[S.view]) S.view = "home";
+  TABS.forEach(([id]) => $(`tab-${id}`)?.setAttribute("aria-current", id === S.view ? "page" : "false"));
+  S.timers.forEach(clearInterval); S.timers = [];
+  window.scrollTo(0, 0);
+  VIEWS[S.view]();
+}
+window.addEventListener("hashchange", () => { if ($("main")) route(); });
+async function refreshHome() { S.home = await api("GET", "/v1/app/home"); const n = S.home.unread || 0; if ($("unread")) { $("unread").hidden = !n; $("unread").textContent = n; } return S.home; }
+async function refreshLive() { try { S.live = await api("GET", "/v1/app/live/state"); S.liveErr = null; } catch (e) { S.live = null; S.liveErr = e.message; } return S.live; }
+const devs = () => (S.live?.devices || []);
+const devName = (ip) => devs().find(d => d.ip === ip)?.name || ip;
+
+/* ------------------------------------------------------------------ home */
+const VIEWS = {};
+function lineState(h) {
+  const g = (S.live?.grade?.overall?.grade) || h.status?.grade;
+  if (!h.gateway.online) return ["s_off", "--bad"];
+  if (!g) return ["s_check", "--a-idle"];
+  return {"A+": ["s_good", "--a-call"], A: ["s_good", "--a-call"], B: ["s_busy", "--a-web"], C: ["s_slowish", "--a-web"], D: ["s_slow", "--bad"], F: ["s_slow", "--bad"]}[g] || ["s_check", "--a-idle"];
+}
+function lineHTML(h) {
+  const [k, col] = lineState(h);
+  const plan = h.subscriber.down_mbit || S.live?.config?.nominal_down_mbit || 100;
+  const busy = devs().filter(d => d.flows && d.kbps_dn > 50).sort((a, b) => b.kbps_dn - a.kbps_dn);
+  const used = busy.reduce((s, d) => s + d.kbps_dn, 0) / 1000;
+  const dl = busy.filter(d => FAM[d.activity] === "dl" || FAM[d.activity] === "stream").length;
+  const g = S.live?.grade?.overall?.grade || h.status?.grade;
+  const desc = !h.gateway.online ? t("d_off", {ago: ago(h.gateway.last_seen)}) : (g === "D" || g === "F" || g === "C") ? t("d_slow")
+    : dl ? t("d_dl", {n: dl === 1 ? t("one_device") : t("n_devices", {n: dl})}) : t("d_quiet");
+  const segs = busy.map(d => `<i style="flex:0 0 ${Math.max(2, d.kbps_dn / 1000 / plan * 100).toFixed(2)}%;background:${famVar(d.activity)}" title="${esc(d.name || d.ip)}: ${mbps(d.kbps_dn)} Mbps"></i>`).join("");
+  const online = devs().filter(d => d.flows || d.today_bytes).length || h.status?.devices || 0;
+  return `<div class="state" style="--sc:var(${col})"><span class="dot"></span><h2>${t(k)}</h2></div>
+    <p>${esc(desc)}</p>
+    ${h.gateway.online ? `<div class="pipe" role="img" aria-label="${esc(t("in_use", {used: nf(used), plan: nf(plan)}))}">${segs}</div>
+    <div class="pipe-scale"><span>${t("in_use", {used: nf(used), plan: nf(plan)})}</span><span>${t("plan_scale", {plan: nf(plan)})}</span></div>
+    ${busy.length ? `<ul class="legend">${busy.slice(0, 6).map(d => `<li><span class="sw" style="background:${famVar(d.activity)}"></span><span>${esc(d.name || d.ip)}</span><em>${mbps(d.kbps_dn)}</em></li>`).join("")}</ul>` : ""}` : ""}
+    <div class="linefoot"><span>${t("online", {n: nf(online)})}</span><span>${t("checked", {ago: ago(S.live?.t || h.status?.t)})}</span></div>`;
+}
+VIEWS.home = async () => {
+  $("main").innerHTML = `<div class="hello" id="hello"></div><div id="outage"></div><section class="linecard" id="line" aria-live="polite"><div class="state"><span class="spin"></span><h2>${t("s_check")}</h2></div></section>
+    <div class="quick">
+      <button type="button" id="q-speed"><span class="ic">${icon("speed", 26)}</span>${t("q_speed")}</button>
+      <a href="#boost"><span class="ic">${icon("bolt", 26)}</span>${t("q_boost")}</a>
+      <a href="#devices"><span class="ic">${icon("pause", 26)}</span>${t("q_pause")}</a>
+      <a href="#help"><span class="ic">${icon("chat", 26)}</span>${t("q_help")}</a></div>
+    <section class="panel" id="boosts"></section><section class="panel" id="speed-card"></section><section class="panel" id="plan"></section>`;
+  const draw = async () => {
+    const h = await refreshHome();
+    $("hello").innerHTML = `<div><h1>${t("hello", {name: esc(h.subscriber.name.split(" ")[0])})}</h1><p>${t("acct", {acct: esc(h.subscriber.account), area: esc(h.subscriber.area)})}</p></div>`;
+    $("outage").innerHTML = h.incident ? `<div class="notice ${h.incident.kind === "outage" ? "bad" : "watch"}"><b>${t(h.incident.kind === "outage" ? "out_area" : "issue_area")}</b><span>${t("out_body")}</span></div>` : "";
+    $("line").innerHTML = lineHTML(h);
+    const leases = (S.live?.intents || []).filter(i => i.status === "active");
+    $("boosts").innerHTML = `<div class="panel-head"><h2>${t("boosted_now")}</h2><span class="sp"></span><a class="btn sm quiet" href="#boost">${t("boost")}</a></div>
+      ${leases.length ? leases.map(leaseHTML).join("") : `<p class="muted">${t("nothing_boosted")}</p>`}`;
+    bindLeases();
+    if (!$("speed-card")._busy) { $("speed-card").innerHTML = speedHTML(h.line_test); }
+    const s = h.subscriber;
+    const usedB = S.usage ? (S.usage.total.up_bytes + S.usage.total.down_bytes) : null;
+    $("plan").innerHTML = `<div class="plan"><div><h2>${esc(s.plan)}</h2><p class="muted">${t("upload_down", {d: nf(s.down_mbit), u: nf(s.up_mbit)})}</p></div>
+        <div class="price">₹${nf(s.price_inr || 0)}<small> ${t("plan_month")}</small></div></div>
+      <div class="facts"><div><b>${day(s.renews)}</b><span>${t("renews", {date: ""}).trim()}</span></div><div><b>${usedB != null ? gb(usedB) : "–"}</b><span>${t("unlimited")}</span></div></div>
+      <div class="panel-head"><span class="faint">${t("since", {date: dayY(s.since)})}</span><span class="sp"></span><button class="btn sm line" type="button" id="chg">${t("change_plan")}</button></div>`;
+    $("chg").onclick = plansSheet;
+  };
+  $("q-speed").onclick = runSpeed;
+  await refreshLive();
+  await draw();
+  if (!S.usage) api("GET", "/v1/app/live/usage").then(u => { S.usage = u; if (S.view === "home") draw(); }).catch(() => {});
+  S.timers.push(setInterval(async () => { await refreshLive(); await draw(); }, 8000));
+};
+function speedHTML(tst) {
+  if (!tst) return `<div class="panel-head"><div><h2>${t("speed")}</h2><p class="muted">${t("speed_sub")}</p></div><span class="sp"></span><button class="btn sm" id="run-speed" type="button">${t("run")}</button></div>`;
+  const line = tst.line_mbps ?? tst.mbps;
+  return `<div class="panel-head"><div><h2>${t("speed")}</h2><p class="faint">${ago(tst.t)}</p></div><span class="sp"></span><button class="btn sm quiet" id="run-speed" type="button">${t("run_again")}</button></div>
+    <div class="speed"><div><b>${nf(line, line < 10 ? 1 : 0)}</b><span>${t("sp_down")}</span></div><div><b>${tst.loaded_added_ms_p95 != null ? nf(tst.loaded_added_ms_p95) : "–"}</b><span>${t("sp_delay")}</span></div><div><b>${nf(tst.plan_down_mbit || 0)}</b><span>${t("sp_plan")}</span></div></div>
+    <p class="muted">${line >= 0.8 * (tst.plan_down_mbit || 0) ? t("sp_ok") : t("sp_low")}${tst.household_mbps >= 1 ? " " + t("sp_home", {m: nf(tst.household_mbps)}) : ""}</p>`;
+}
+async function runSpeed() {
+  const c = $("speed-card"); if (!c) { location.hash = "home"; return; }
+  c._busy = true;
+  c.innerHTML = `<div class="panel-head"><span class="spin"></span><div><h2>${t("testing")}</h2><p class="muted">${t("testing_sub")}</p></div></div>`;
+  try { const r = await api("POST", "/v1/app/speedtest"); if (!r.ok) throw new Error(r.error || "The test did not finish"); c.innerHTML = speedHTML({...r, t: Date.now() / 1000}); }
+  catch (e) { c.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  c._busy = false;
+}
+document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#run-speed")) runSpeed(); });
+function ringSVG(frac) {
+  const r = 18, c = 2 * Math.PI * r;
+  return `<svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="${r}" fill="none" stroke="var(--well)" stroke-width="5"/><circle cx="22" cy="22" r="${r}" fill="none" stroke="var(--marigold)" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(c * frac).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 22 22)"/><path d="M23.5 13L17 23h5l-1 8 6.5-10h-5z" fill="var(--marigold)"/></svg>`;
+}
+function leaseHTML(i) {
+  const total = (i.expires - i.start) || 1;
+  const st = {satisfied: "a_ok", pending: "a_wait", degraded: "a_deg"}[i.assurance] || "a_inf";
+  return `<div class="boost">${ringSVG(Math.max(0, Math.min(1, i.remaining_s / total)))}<div><b>${esc(devName(i.target))}</b><small class="muted">${i.label ? esc(i.label) + ", " : ""}${t(st).toLowerCase()}</small></div>
+    <div style="display:grid;justify-items:end;gap:4px"><span class="clock">${hm(i.remaining_s)}</span><button class="btn sm quiet" type="button" data-end="${esc(i.id)}">${t("end")}</button></div></div>`;
+}
+function bindLeases() {
+  document.querySelectorAll("[data-end]").forEach(b => b.onclick = async () => { await api("DELETE", `/v1/app/live/api/intents/${b.dataset.end}`); toast(t("boost_ended")); route(); });
+}
+async function plansSheet() {
+  const ps = await api("GET", "/v1/app/plans");
+  sheet(`<h2>${t("plans")}</h2><p class="muted">${t("plans_sub")}</p><div>${ps.map(p => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto">
+      <span><b>${esc(p.name)}</b><small>${t("upload_down", {d: nf(p.down_mbit), u: nf(p.up_mbit)})}</small></span>
+      <span class="num"><b>₹${nf(p.price_inr)}</b><br>${p.current ? `<span class="status resolved">${t("current")}</span>` : `<button class="btn sm line" type="button" data-plan="${esc(p.code)}">${t("request", {name: esc(p.name)})}</button>`}</span></div>`).join("")}</div>`, () => {
+    document.querySelectorAll("[data-plan]").forEach(b => b.onclick = async () => { const r = await api("POST", "/v1/app/plans", {code: b.dataset.plan}); toast(t("requested", {id: r.id})); closeSheet(); refreshHome().catch(() => {}); });
+  });
+}
+
+/* ------------------------------------------------------------------ devices */
+const TYPES = ["phone", "laptop", "tv", "console", "desktop", "tablet", "speaker", "camera", "nas", "other"];
+function devRow(d) {
+  return `<button class="row" type="button" data-dev="${esc(d.ip)}"><span class="tile" style="--tc:${famVar(d.activity)}">${icon(d.type)}</span>
+    <span><b>${esc(d.name || d.ip)}</b><small>${d.paused ? `<span class="tag paused">${t("paused")}</span>` : ""}${d.intent ? `<span class="tag boost">${t("boosted")}</span>` : ""}${esc(act(d.activity || "Idle"))}</small></span>
+    <span class="num">${d.flows && d.kbps_dn > 50 ? `<b>${mbps(d.kbps_dn)}</b> Mbps<br>` : ""}${t("today", {gb: gb(d.today_bytes)})}</span></button>`;
+}
+VIEWS.devices = async () => {
+  $("main").innerHTML = `<div><h1>${t("your_devices")}</h1><p class="muted">${t("dev_sub")}</p></div><section class="panel" id="dl"><p class="empty"><span class="spin"></span></p></section>`;
+  const draw = async () => {
+    const l = await refreshLive();
+    if (!l) { $("dl").innerHTML = `<p class="empty">${esc(S.liveErr || t("unreachable"))}</p>`; return; }
+    const all = [...(l.devices || [])];
+    const busy = all.filter(d => d.flows && d.kbps_dn + d.kbps_up > 50).sort((a, b) => b.kbps_dn - a.kbps_dn);
+    const rest = all.filter(d => !busy.includes(d)).sort((a, b) => (a.name || a.ip).localeCompare(b.name || b.ip));
+    $("dl").innerHTML = (busy.length ? `<div class="group"><h3>${t("now_online")}</h3>${busy.map(devRow).join("")}</div>` : "")
+      + (rest.length ? `<div class="group"><h3>${t("idle_g")}</h3>${rest.map(devRow).join("")}</div>` : "") || `<p class="empty">${t("none_dev")}</p>`;
+    document.querySelectorAll("[data-dev]").forEach(b => b.onclick = () => deviceSheet(b.dataset.dev));
+  };
+  await draw();
+  S.timers.push(setInterval(draw, 6000));
+};
+function deviceSheet(ip) {
+  const d = devs().find(x => x.ip === ip); if (!d) return;
+  sheet(`<div class="panel-head"><span class="tile" style="--tc:${famVar(d.activity)};width:52px;height:52px">${icon(d.type, 28)}</span><div><h2>${esc(d.name || d.ip)}</h2><p class="muted">${esc(act(d.activity || "Idle"))}, ${esc(d.ip)}</p></div></div>
+    <form id="rn" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end"><label class="f" for="rn-n">${t("name")}<input class="in" id="rn-n" value="${esc(d.name || "")}" maxlength="40"></label>
+      <label class="f" for="rn-t">${t("type")}<select class="in" id="rn-t">${TYPES.map(x => `<option value="${x}" ${x === d.type ? "selected" : ""}>${esc(TYPE_NAME[S.lang][x])}</option>`).join("")}</select></label>
+      <button class="btn quiet" type="submit" style="grid-column:1/-1">${t("save_name")}</button></form>
+    <div style="display:grid;gap:10px"><h3>${d.paused ? t("paused_title") : t("pause_title")}</h3>
+      ${d.paused ? `<button class="btn" type="button" id="resume">${t("resume")}</button>` : `<div class="pills">${[[15, "p15"], [60, "p60"], [180, "p180"], [0, "p0"]].map(([m, l]) => `<button type="button" data-pause="${m}">${t(l)}</button>`).join("")}</div>`}</div>
+    <button class="btn accent wide" type="button" id="boost-this">${icon("bolt", 20)} ${t("boost_this")}</button>`, () => {
+    $("rn").onsubmit = async (e) => { e.preventDefault(); await api("PUT", `/v1/app/live/api/devices/${ip}`, {name: $("rn-n").value, type: $("rn-t").value}); toast(t("saved")); closeSheet(); route(); };
+    document.querySelectorAll("[data-pause]").forEach(b => b.onclick = async () => { await api("POST", `/v1/app/live/api/devices/${ip}/pause`, {minutes: +b.dataset.pause || null}); toast(t("paused_toast", {name: d.name || d.ip})); closeSheet(); route(); });
+    if ($("resume")) $("resume").onclick = async () => { await api("POST", `/v1/app/live/api/devices/${ip}/resume`, {}); toast(t("resumed")); closeSheet(); route(); };
+    $("boost-this").onclick = () => { S.picked = ip; closeSheet(); location.hash = "boost"; };
+  });
+}
+
+/* ------------------------------------------------------------------ boost */
+const DUR = [[1800, "m30"], [3600, "h1"], [7200, "h2"], [14400, "h4"]];
+VIEWS.boost = async () => {
+  $("main").innerHTML = `<div><h1>${t("b_title")}</h1><p class="muted">${t("b_sub")}</p></div>
+    <section class="panel"><div class="step"><b><span>1</span>${t("b_who")}</b><div class="who" id="bp"><p class="empty"><span class="spin"></span></p></div></div>
+      <div class="step"><b><span>2</span>${t("b_what")}</b><div class="seg" id="bg"><button type="button" data-g="low_latency">${t("g_ll")}</button><button type="button" data-g="throughput">${t("g_tp")}</button></div></div>
+      <div class="step"><b><span>3</span>${t("b_long")}</b><div class="seg" id="bd">${DUR.map(([v, l]) => `<button type="button" data-d="${v}">${t(l)}</button>`).join("")}</div></div>
+      <div class="notice good" id="bpv" hidden></div>
+      <button class="btn accent wide" type="button" id="bgo" disabled>${t("b_pick")}</button></section>
+    <section class="panel"><div><h2>${t("modes")}</h2><p class="muted">${t("modes_sub")}</p></div><div id="bm"></div></section>
+    <section class="panel"><div class="panel-head"><div><h2>${t("sched")}</h2><p class="muted">${t("sched_sub")}</p></div><span class="sp"></span><button class="btn sm quiet" type="button" id="sc-add">${t("add")}</button></div><div id="bs"></div></section>`;
+  const l = await refreshLive();
+  if (!l) { $("bp").innerHTML = `<p class="empty">${esc(S.liveErr || t("unreachable"))}</p>`; return; }
+  const ds = (l.devices || []).slice().sort((a, b) => (b.kbps_dn || 0) - (a.kbps_dn || 0));
+  const durName = () => t(DUR.find(([v]) => v === S.dur)?.[1] || "h1");
+  const sync = () => {
+    $("bp").innerHTML = ds.map(d => `<button type="button" data-ip="${esc(d.ip)}" aria-pressed="${S.picked === d.ip}"><span class="tile" style="--tc:${famVar(d.activity)}">${icon(d.type, 20)}</span><span><b>${esc(d.name || d.ip)}</b><small>${esc(act(d.activity || "Idle"))}</small></span><span class="tick"></span></button>`).join("");
+    document.querySelectorAll("#bg [data-g]").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === S.goal));
+    document.querySelectorAll("#bd [data-d]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.d === S.dur));
+    $("bgo").disabled = !S.picked;
+    $("bgo").innerHTML = S.picked ? `${icon("bolt", 20)} ${esc(t("b_go", {name: devName(S.picked), dur: durName()}))}` : t("b_pick");
+    document.querySelectorAll("#bp [data-ip]").forEach(b => b.onclick = () => { S.picked = b.dataset.ip; sync(); preview(); });
+  };
+  const body = () => ({target: S.picked, goal: S.goal, duration_s: S.dur, priority: 2, demand_down_kbit: S.goal === "throughput" ? 16000 : 3000, demand_up_kbit: S.goal === "throughput" ? 4000 : 2000});
+  const preview = async () => {
+    if (!S.picked) return;
+    try {
+      const r = await api("POST", "/v1/app/live/api/intents?dry_run=1", body());
+      const c = r.preview?.candidate; const others = (r.impact || []).map(x => x.device);
+      $("bpv").hidden = false; $("bpv").className = "notice good";
+      $("bpv").innerHTML = `<b>${esc(t("b_res", {mbps: mbps(c.granted_down_kbit), name: devName(S.picked)}))}</b><span>${esc(others.length ? t("b_others", {list: others.join(", ")}) : t("b_nobody"))}</span>`;
+    } catch (e) { $("bpv").hidden = false; $("bpv").className = "notice watch"; $("bpv").innerHTML = `<b>${t("b_cant")}</b><span>${esc(e.message)}</span>`; }
+  };
+  document.querySelectorAll("#bg [data-g]").forEach(b => b.onclick = () => { S.goal = b.dataset.g; sync(); preview(); });
+  document.querySelectorAll("#bd [data-d]").forEach(b => b.onclick = () => { S.dur = +b.dataset.d; sync(); preview(); });
+  $("bgo").onclick = async () => {
+    try { await api("POST", "/v1/app/live/api/intents", body()); toast(t("b_done")); S.picked = null; location.hash = "home"; }
+    catch (e) { toast(e.message); }
+  };
+  sync(); if (S.picked) preview();
+  const modes = await api("GET", "/v1/app/live/modes").catch(() => []);
+  $("bm").innerHTML = (modes || []).map(m => `<div class="row" style="cursor:default"><span class="tile" style="--tc:var(--marigold)">${icon("bolt")}</span><span><b>${esc(m.name)}</b><small style="white-space:normal">${esc(m.text)}</small></span>
+    <span class="num"><select class="in" id="mm-${m.id}" aria-label="${t("device")}" style="padding:6px 8px;width:128px;font-size:14px">${ds.map(d => `<option value="${esc(d.ip)}">${esc(d.name || d.ip)}</option>`).join("")}</select><br><button class="btn sm" type="button" data-mode="${m.id}" style="margin-top:6px">${t("start")}</button></span></div>`).join("");
+  document.querySelectorAll("[data-mode]").forEach(b => b.onclick = async () => {
+    try { await api("POST", `/v1/app/live/api/modes/${b.dataset.mode}/activate`, {target: $(`mm-${b.dataset.mode}`).value}); toast(t("started")); location.hash = "home"; } catch (e) { toast(e.message); }
+  });
+  const scs = await api("GET", "/v1/app/live/schedules").catch(() => []);
+  const days = S.lang === "hi" ? ["सोम", "मंगल", "बुध", "गुरु", "शुक्र", "शनि", "रवि"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  $("bs").innerHTML = (scs || []).map(s => `<div class="row" style="cursor:default"><span class="tile" style="--tc:var(--a-video)">${icon("bolt")}</span><span><b>${esc(s.label || t("boost"))}</b><small>${esc(devName(s.target))}, ${s.days.map(d => days[d]).join(" ")} ${esc(s.start)}–${esc(s.end)}</small></span><span class="num"><button class="btn sm quiet" type="button" data-unsch="${esc(s.id)}">${t("remove")}</button></span></div>`).join("") || `<p class="empty">${t("no_sched")}</p>`;
+  document.querySelectorAll("[data-unsch]").forEach(b => b.onclick = async () => { await api("DELETE", `/v1/app/live/api/schedules/${b.dataset.unsch}`); route(); });
+  $("sc-add").onclick = () => {
+    let dsel = [0, 1, 2, 3, 4];
+    sheet(`<h2>${t("new_sched")}</h2><form id="scf" style="display:grid;gap:12px"><label class="f" for="sc-d">${t("device")}<select class="in" id="sc-d">${ds.map(d => `<option value="${esc(d.ip)}">${esc(d.name || d.ip)}</option>`).join("")}</select></label>
+      <div class="pills" id="sc-days">${days.map((d, i) => `<button type="button" data-day="${i}" aria-pressed="${dsel.includes(i)}">${d}</button>`).join("")}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="f" for="sc-s">${t("from")}<input class="in" type="time" id="sc-s" value="09:00"></label><label class="f" for="sc-e">${t("until")}<input class="in" type="time" id="sc-e" value="17:30"></label></div>
+      <label class="f" for="sc-l">${t("sched_name")}<input class="in" id="sc-l" value="${esc(t("work_calls"))}" maxlength="60"></label><button class="btn accent" type="submit">${t("save_sched")}</button></form>`, () => {
+      $("sc-days").onclick = (e) => { const b = e.target.closest("[data-day]"); if (!b) return; const i = +b.dataset.day; dsel = dsel.includes(i) ? dsel.filter(x => x !== i) : [...dsel, i]; b.setAttribute("aria-pressed", dsel.includes(i)); };
+      $("scf").onsubmit = async (e) => { e.preventDefault(); try { await api("POST", "/v1/app/live/api/schedules", {target: $("sc-d").value, days: dsel.sort(), start: $("sc-s").value, end: $("sc-e").value, label: $("sc-l").value, goal: "low_latency"}); toast(t("sched_saved")); closeSheet(); route(); } catch (err) { toast(err.message); } };
+    });
+  };
+};
+
+/* ------------------------------------------------------------------ help */
+const VERDICT = {en: {network: "We found a problem in our network in your area. Engineers are working on it; you don't need to restart your router.",
+  "home-line": "Your line is not delivering your plan's speed. We'll check it remotely and call you if a technician needs to visit.",
+  "gateway-software": "Your router's smart sharing had a problem and was restarted safely. We're watching it.",
+  "upstream-or-usage": "Your connection gets congested at busy times. We're looking into it and will update you here.",
+  "in-home-wifi-or-device": "Your internet connection is working well right now. If one device or room is slow, it may be Wi-Fi coverage. Our team will call you to help."},
+  hi: {network: "आपके इलाके में हमारे नेटवर्क में समस्या मिली है। इंजीनियर काम कर रहे हैं; राउटर रीस्टार्ट करने की ज़रूरत नहीं।",
+  "home-line": "आपकी लाइन प्लान की स्पीड नहीं दे रही। हम दूर से जाँचेंगे और टेक्नीशियन की ज़रूरत हुई तो कॉल करेंगे।",
+  "gateway-software": "राउटर की स्मार्ट शेयरिंग में दिक्कत थी, उसे सुरक्षित रूप से फिर शुरू किया गया। हम नज़र रख रहे हैं।",
+  "upstream-or-usage": "व्यस्त समय में आपका कनेक्शन भर जाता है। हम देख रहे हैं और यहीं बताएँगे।",
+  "in-home-wifi-or-device": "आपका इंटरनेट अभी ठीक चल रहा है। अगर एक डिवाइस या कमरे में धीमा है तो वाई-फ़ाई कवरेज हो सकता है। हमारी टीम कॉल करेगी।"}};
+const CATS = [["slow", "c_slow"], ["calls", "c_calls"], ["gaming", "c_gaming"], ["no_internet", "c_none"], ["other", "c_other"]];
+VIEWS.help = async () => {
+  const h = S.home || await refreshHome();
+  $("main").innerHTML = `${h.incident ? `<div class="notice ${h.incident.kind === "outage" ? "bad" : "watch"}"><b>${t(h.incident.kind === "outage" ? "out_area" : "issue_area")}</b><span>${t("out_body")} ${t("out_rebate")}</span></div>` : ""}
+    <section class="panel"><div><h2>${t("report")}</h2><p class="muted">${t("report_sub")}</p></div>
+    <form id="tf" style="display:grid;gap:12px"><div class="pills" id="tc">${CATS.map(([v, l], i) => `<button type="button" data-c="${v}" aria-pressed="${i === 0}">${t(l)}</button>`).join("")}</div>
+      <label class="f" for="td">${t("whats")}<textarea class="in" id="td" placeholder="${esc(t("whats_ph"))}"></textarea></label>
+      <div class="toggle" style="border:0;padding:0"><b>${t("incl")}</b><small>${t("incl_sub")}</small><button class="switch" type="button" role="switch" id="tdiag" aria-checked="true" aria-label="${esc(t("incl"))}"></button></div>
+      <button class="btn accent" type="submit">${t("send")}</button></form><div id="tres"></div></section>
+    <section class="panel"><h2>${t("your_reports")}</h2><div id="tl"><p class="empty"><span class="spin"></span></p></div></section>
+    <a class="panel" href="tel:${esc((h.brand?.support_phone || "").replace(/\D/g, ""))}" style="text-decoration:none;color:inherit;grid-template-columns:44px 1fr;align-items:center"><span class="tile" style="--tc:var(--good)">${icon("phonecall")}</span><span><b>${t("call_us")}</b><br><span class="muted">${t("call_sub", {phone: esc(h.brand?.support_phone || "")})}</span></span></a>`;
+  let cat = "slow";
+  $("tc").onclick = (e) => { const b = e.target.closest("[data-c]"); if (!b) return; cat = b.dataset.c; document.querySelectorAll("#tc [data-c]").forEach(x => x.setAttribute("aria-pressed", x === b)); };
+  $("tdiag").onclick = () => $("tdiag").setAttribute("aria-checked", $("tdiag").getAttribute("aria-checked") !== "true");
+  $("tf").onsubmit = async (e) => {
+    e.preventDefault(); const btn = e.submitter; btn.disabled = true; $("tres").innerHTML = `<p class="muted"><span class="spin"></span> ${t("checking")}</p>`;
+    try {
+      const r = await api("POST", "/v1/app/tickets", {category: cat, summary: $("td").value || t(CATS.find(c => c[0] === cat)[1]), diagnostics: $("tdiag").getAttribute("aria-checked") === "true"});
+      const v = VERDICT[S.lang][r.diagnosis?.where] || VERDICT.en[r.diagnosis?.where];
+      $("tres").innerHTML = `<div class="notice ${r.diagnosis?.where === "in-home-wifi-or-device" ? "good" : "watch"}"><b>${t("received", {id: r.id})}</b><span>${esc(v || "")}</span></div>`;
+      $("td").value = ""; loadT();
+    } catch (err) { $("tres").innerHTML = `<p class="muted">${esc(err.message)}</p>`; }
+    btn.disabled = false;
+  };
+  const loadT = async () => {
+    const ts = await api("GET", "/v1/app/tickets");
+    const me = h.subscriber.account;
+    $("tl").innerHTML = ts.map(tk => `<div class="thread"><div class="panel-head"><b>#${tk.id} ${esc((CATS.find(c => c[0] === tk.category) ? t(CATS.find(c => c[0] === tk.category)[1]) : tk.category.replace(/_/g, " ")))}</b><span class="sp"></span><span class="status ${esc(tk.status)}">${esc(tk.status)}</span></div>
+      ${tk.thread.map(m => `<div class="msg ${m.from === me ? "us" : ""}"><small>${m.from === me ? t("you") : esc(m.from)}</small>${esc(m.text)}</div>`).join("")}<span class="faint">${ago(tk.updated)}</span></div>`).join("") || `<p class="empty">${t("no_reports")}</p>`;
+  };
+  loadT();
+};
+
+/* ------------------------------------------------------------------ account */
+VIEWS.account = async () => {
+  const [h, pv] = await Promise.all([S.home ? Promise.resolve(S.home) : refreshHome(), api("GET", "/v1/app/privacy")]);
+  const c = pv.consent, s = h.subscriber;
+  const initials = s.name.split(" ").map(x => x[0]).slice(0, 2).join("");
+  const theme = document.documentElement.dataset.theme || "auto";
+  $("main").innerHTML = `<section class="panel" style="grid-template-columns:auto 1fr;align-items:center"><span class="avatar">${esc(initials)}</span><div><h2>${esc(s.name)}</h2><p class="muted">${esc(s.account)}, ${esc(s.plan)}</p></div></section>
+    <section class="panel"><h2>${t("usage30")}</h2><div class="bars" id="us"><p class="empty"><span class="spin"></span></p></div></section>
+    <section class="panel"><div><h2>${t("privacy")}</h2><p class="muted">${t("privacy_sub")}</p></div><div>
+      <div class="toggle"><b>${t("pv_service")}</b><small>${t("pv_service_s")}</small><button class="switch" type="button" role="switch" aria-checked="true" disabled aria-label="${esc(t("pv_service"))}"></button></div>
+      <div class="toggle"><b>${t("pv_quality")}</b><small>${t("pv_quality_s")}</small><button class="switch" type="button" role="switch" data-k="quality_improvement" aria-checked="${!!c.quality_improvement}" aria-label="${esc(t("pv_quality"))}"></button></div>
+      <div class="toggle"><b>${t("pv_diag")}</b><small>${t("pv_diag_s")}</small><button class="switch" type="button" role="switch" data-k="support_diagnostics" aria-checked="${!!c.support_diagnostics}" aria-label="${esc(t("pv_diag"))}"></button></div>
+      <div class="toggle"><b>${t("pv_offers")}</b><small>${t("pv_offers_s")}</small><button class="switch" type="button" role="switch" data-k="marketing" aria-checked="${!!c.marketing}" aria-label="${esc(t("pv_offers"))}"></button></div></div>
+      <div class="pills"><button type="button" id="exp">${t("see_data")}</button><button type="button" id="del">${t("del_data")}</button><button type="button" id="griev">${t("griev")}</button></div>
+      <p class="faint">${t("griev_line", {mail: esc(pv.grievance)})}</p>
+      ${pv.requests.length ? pv.requests.map(r => `<p class="faint">#${r.id} ${esc(r.kind)}, ${esc(r.status)}, ${t("due", {date: day(r.due)})}</p>`).join("") : ""}</section>
+    <section class="panel"><div class="step"><b>${t("language")}</b><div class="seg" id="lg"><button type="button" data-l="en" aria-pressed="${S.lang === "en"}">English</button><button type="button" data-l="hi" aria-pressed="${S.lang === "hi"}">हिन्दी</button></div></div>
+      <div class="step"><b>${t("theme")}</b><div class="seg" id="th">${[["light", "t_light"], ["dark", "t_dark"], ["auto", "t_auto"]].map(([v, l]) => `<button type="button" data-t="${v}" aria-pressed="${theme === v}">${t(l)}</button>`).join("")}</div></div>
+      <button class="btn warn" type="button" id="out">${t("signout")}</button></section>`;
+  document.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => {
+    const v = b.getAttribute("aria-checked") !== "true"; b.setAttribute("aria-checked", v);
+    try { await api("POST", "/v1/app/privacy", {[b.dataset.k]: v}); toast(t("pv_saved")); } catch (e) { toast(e.message); b.setAttribute("aria-checked", !v); }
+  });
+  $("lg").onclick = (e) => { const b = e.target.closest("[data-l]"); if (!b) return; S.lang = b.dataset.l; try { localStorage.setItem("iqa-lang", S.lang); } catch (x) {} renderShell(); route(); };
+  $("th").onclick = (e) => { const b = e.target.closest("[data-t]"); if (!b) return; const v = b.dataset.t; if (v === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; try { localStorage.setItem("iqa-theme", v); } catch (x) {} route(); };
+  $("exp").onclick = async () => {
+    const d = await api("GET", "/v1/app/privacy/export");
+    const blob = new Blob([JSON.stringify(d, null, 1)], {type: "application/json"}); const url = URL.createObjectURL(blob);
+    sheet(`<h2>${t("your_data")}</h2><p class="muted">${t("your_data_sub")}</p>
+      <div>${d.who_accessed_my_data.slice(0, 25).map(a => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><span><b>${esc(a.actor)}</b><small>${esc(a.action.replace(/_/g, " "))}</small></span><span class="num">${ago(a.t)}</span></div>`).join("") || `<p class="empty">${t("nobody")}</p>`}</div>
+      <p class="muted">${t("records", {q: d.quality_history_5min.length, t: d.tickets.length, n: d.notifications.length})}</p><a class="btn" href="${url}" download="my-data.json">${t("download")}</a>`);
+  };
+  $("del").onclick = async () => { const r = await api("POST", "/v1/app/privacy/request", {kind: "erasure", detail: "Requested in the app"}); toast(t("del_sent", {id: r.id})); route(); };
+  $("griev").onclick = async () => { const r = await api("POST", "/v1/app/privacy/request", {kind: "grievance", detail: "Raised in the app"}); toast(t("griev_sent", {id: r.id})); route(); };
+  $("out").onclick = async () => { await api("POST", "/v1/app/logout"); location.hash = ""; renderLogin(); };
+  try {
+    const u = S.usage = await api("GET", "/v1/app/live/usage"); const l = S.live || await refreshLive();
+    const names = Object.fromEntries((l?.devices || []).map(d => [d.ip, d.name || d.ip]));
+    const rows = Object.entries(u.devices).map(([ip, v]) => [names[ip] || ip, v.up_bytes + v.down_bytes]).sort((a, b) => b[1] - a[1]);
+    const mx = rows[0]?.[1] || 1;
+    $("us").innerHTML = rows.length ? rows.map(([n, b]) => `<div class="u"><span>${esc(n)}</span><span class="b"><i style="width:${(b / mx * 100).toFixed(1)}%"></i></span><span>${gb(b)}</span></div>`).join("") + `<p class="faint">${t("no_cap", {gb: gb(u.total.up_bytes + u.total.down_bytes)})}</p>` : `<p class="empty">${t("no_usage")}</p>`;
+  } catch (e) { $("us").innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+};
+
+/* ------------------------------------------------------------------ messages */
+async function openNotifs() {
+  const ns = await api("GET", "/v1/app/notifications");
+  sheet(`<h2>${t("messages")}</h2><div>${ns.map(n => `<div class="thread"><b>${esc(n.title)}</b><span class="muted">${esc(n.body)}</span>
+    ${n.kind === "consent" && !n.read ? `<div class="panel-head"><button class="btn sm accent" type="button" data-allow="1">${t("allow60")}</button><button class="btn sm quiet" type="button" data-allow="0">${t("not_now")}</button></div>` : ""}<span class="faint">${ago(n.t)}</span></div>`).join("") || `<p class="empty">${t("no_msgs")}</p>`}</div>`, () => {
+    document.querySelectorAll("[data-allow]").forEach(b => b.onclick = async () => {
+      await api("POST", "/v1/app/diagnostics/consent", {allow: b.dataset.allow === "1"});
+      await api("POST", "/v1/app/notifications"); toast(b.dataset.allow === "1" ? t("allow_ok") : t("allow_no")); closeSheet(); refreshHome();
+    });
+  });
+  if (!ns.some(n => n.kind === "consent" && !n.read)) { await api("POST", "/v1/app/notifications"); refreshHome().catch(() => {}); }
+}
+
+/* ------------------------------------------------------------------ sign-in */
+function renderLogin() {
+  S.timers.forEach(clearInterval); S.timers = [];
+  document.documentElement.lang = S.lang;
+  $("root").innerHTML = `<div class="signin"><header>${MARK.replace('width="30" height="30"', 'width="54" height="54"')}<div><h1>${esc(S.brand.name || "SampleNet Fibre")}</h1><p>${t("si_sub")}</p></div></header>
+    <div class="stack"><div class="body" id="quickbox" hidden style="padding-bottom:0"><div class="labnote"><span>${t("lab_note")}</span><button class="btn accent" id="quick" type="button">${t("lab_home")}</button></div></div>
+    <form id="lf"><label class="f" for="lp">${t("mobile")}<span class="phone"><span>+91</span><input id="lp" inputmode="numeric" autocomplete="tel-national" placeholder="98000 00001" maxlength="11" required></span></label>
+      <div id="otp" hidden style="display:grid;gap:12px"><label class="f" for="lc">${t("code6")}<input class="in code" id="lc" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></label><div id="demo"></div></div>
+      <p id="lm" style="color:var(--bad);margin:0;font-size:15px" role="alert"></p><button class="btn" type="submit" id="lb">${t("send_code")}</button>
+      <button class="lang" type="button" id="lang0" style="color:var(--text);border-color:var(--line);justify-self:start">${S.lang === "hi" ? "English" : "हिन्दी"}</button></form></div></div>`;
+  $("lang0").onclick = () => { S.lang = S.lang === "hi" ? "en" : "hi"; try { localStorage.setItem("iqa-lang", S.lang); } catch (e) {} renderLogin(); };
+  fetch("/v1/auth/quick-roles").then((r) => r.json()).then((q) => {
+    if (!q.enabled) return;
+    $("quickbox").hidden = false;
+    $("quick").onclick = async () => { try { await api("POST", "/v1/app/quick", {}); start(); } catch (err) { $("lm").textContent = err.message; } };
+  }).catch(() => {});
+  let sent = false;
+  $("lf").onsubmit = async (e) => {
+    e.preventDefault(); $("lm").textContent = "";
+    try {
+      if (!sent) {
+        const r = await api("POST", "/v1/app/otp", {phone: $("lp").value});
+        sent = true; $("otp").hidden = false; $("lb").textContent = t("verify"); $("lc").focus();
+        if (r.demo_code) $("demo").innerHTML = `<div class="labnote">${t("demo_code", {code: `<b>${esc(r.demo_code)}</b>`})}</div>`;
+      } else {
+        await api("POST", "/v1/app/login", {phone: $("lp").value, code: $("lc").value}); start();
+      }
+    } catch (err) { $("lm").textContent = err.message; }
+  };
+}
+async function start() {
+  try { const th = localStorage.getItem("iqa-theme"); if (th && th !== "auto") document.documentElement.dataset.theme = th; } catch (e) {}
+  try { const lg = localStorage.getItem("iqa-lang"); if (lg) S.lang = lg; } catch (e) {}
+  try { S.brand = await api("GET", "/v1/app/brand"); document.title = S.brand.short || "SampleNet"; } catch (e) {}
+  try { await refreshHome(); } catch (e) { if (e.message === "signed out") return; }
+  renderShell(); route();
+}
+start();
+</script>
+</body>
+</html>

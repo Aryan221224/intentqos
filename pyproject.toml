@@ -1,0 +1,22 @@
+[project]
+name = "intentqos"
+version = "1.0.0"
+description = "Intent-aware adaptive QoS engine for mixed home broadband traffic (Linux tc + nftables)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = []                      # rule mode needs only the standard library
+
+[project.optional-dependencies]
+ml = ["numpy>=2.0", "scikit-learn>=1.5", "joblib>=1.4"]
+eval = ["numpy>=2.0", "scipy>=1.12", "matplotlib>=3.8"]
+
+[project.scripts]
+intentqos = "intentqos.daemon:main"
+intentqos-watchdog = "intentqos.watchdog:main"
+
+[tool.setuptools]
+packages = ["intentqos"]
+
+[tool.setuptools.package-data]
+intentqos = ["web/*.html"]

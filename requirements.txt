@@ -1,0 +1,10 @@
+# The gateway, agent and controller need only the Python standard library (3.11+).
+# Training the classifier:
+numpy==2.4.4
+scikit-learn==1.8.0
+joblib==1.5.3
+# Evaluation report
+scipy==1.17.1
+matplotlib==3.10.9
+# Optional: rendering docs/deck images
+# playwright==1.55.0

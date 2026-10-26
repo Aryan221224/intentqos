@@ -1,0 +1,1470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home gateway</title>
+<style>
+/* The gateway's own console: what runs on the router at http://192.168.1.1:8080/.
+   An instrument panel for the QoS engine: graphite surfaces by default (light on request), Barlow
+   with Barlow Semi Condensed for readings, tabs across the top like router firmware. The memorable
+   element is the mixing desk on Monitor: one channel strip per traffic class and direction, its level
+   the class's throughput, the white mark its guaranteed floor, the reading under it the queue delay. */
+@font-face{font-family:"Barlow";src:url(/fonts/barlow-400.woff) format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"Barlow";src:url(/fonts/barlow-500.woff) format("woff");font-weight:500;font-display:swap}
+@font-face{font-family:"Barlow";src:url(/fonts/barlow-600.woff) format("woff");font-weight:600 700;font-display:swap}
+@font-face{font-family:"Barlow SC";src:url(/fonts/barlow-sc-500.woff) format("woff");font-weight:500;font-display:swap}
+@font-face{font-family:"Barlow SC";src:url(/fonts/barlow-sc-600.woff) format("woff");font-weight:600 700;font-display:swap}
+:root{
+  --paper:#121922; --panel:#19222D; --panel-2:#1E2935; --sunk:#0F151D; --ink:#E6ECF2; --ink2:#9AABBD; --ink3:#6C7D90;
+  --rule:#2A3644; --track:#243040; --road:#0D131A; --road-ink:#E6ECF2; --road-rule:#222D3A;
+  --intent:#A792FF; --voice:#34C98E; --video:#5AA2FF; --besteffort:#EDB04A; --bulk:#F06F9B;
+  --ok:#41CF8E; --ok-bg:#12301F; --warn:#EDB04A; --warn-bg:#33270F; --alert:#FF7059; --alert-bg:#3A1814;
+  --accent:#F2A93B; --accent-ink:#2B1C00; --focus:#F2A93B;
+  --sans:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"Barlow SC","Barlow",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --r:8px; color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --paper:#EEF1F5; --panel:#FFFFFF; --panel-2:#F6F8FA; --sunk:#E6EAF0; --ink:#17202B; --ink2:#556375; --ink3:#7F8C9C;
+  --rule:#D5DBE3; --track:#E3E8EF; --road:#16202B; --road-ink:#E6ECF2; --road-rule:#26313D;
+  --intent:#7D66E6; --voice:#12976A; --video:#2F78E0; --besteffort:#C98500; --bulk:#D24C7C;
+  --ok:#1F8550; --ok-bg:#E2F3E9; --warn:#9A6200; --warn-bg:#FBF0D8; --alert:#C2361D; --alert-bg:#FCE7E2;
+  --accent:#E8971F; --accent-ink:#2B1C00; --focus:#C77D00; color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+[hidden]{display:none!important}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
+.num,td.n,.tabular{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- shell: device bar, tabs, page title ---------- */
+.app{min-height:100%;display:flex;flex-direction:column}
+.devbar{display:flex;align-items:center;gap:14px 20px;flex-wrap:wrap;padding:10px 24px;background:var(--road);color:var(--road-ink);border-bottom:1px solid var(--road-rule)}
+.devid{display:flex;align-items:center;gap:11px}
+.devid b{font-family:var(--cond);font-size:19px;font-weight:600;letter-spacing:.01em}
+.devid small{display:block;color:#93A4B6;font-size:12.5px}
+.wan{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:#93A4B6;border-left:1px solid var(--road-rule);padding-left:18px}
+.wan b{display:block;font-family:var(--cond);font-size:16px;font-weight:600;color:var(--road-ink)}
+.devbar .sp{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:5px;padding:2px 9px;font-size:12.5px;font-weight:600;background:var(--sunk);color:var(--ink2);white-space:nowrap}
+.devbar .pill{background:rgba(255,255,255,.06);color:#B9C6D4}
+.pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.alert{background:var(--alert-bg);color:var(--alert)}
+.devbar .pill.ok{background:rgba(65,207,142,.14);color:#6EE0AB}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.live .dot{animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;flex:none;background:var(--panel)}
+.seg button{border:0;background:transparent;padding:4px 11px;cursor:pointer;font-weight:600;font-size:13px;color:var(--ink2);border-right:1px solid var(--rule)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.devbar .seg{border-color:var(--road-rule);background:transparent}
+.devbar .seg button{color:#B9C6D4;border-color:var(--road-rule)}
+.devbar .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.iconbtn{border:1px solid var(--road-rule);background:transparent;border-radius:6px;width:30px;height:30px;display:inline-grid;place-items:center;cursor:pointer;color:#B9C6D4}
+nav.views{display:flex;gap:2px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none;position:sticky;top:0;z-index:5}
+nav.views a{display:flex;align-items:center;gap:7px;padding:11px 12px 10px;color:var(--ink2);text-decoration:none;font-weight:600;font-size:14.5px;border-bottom:2.5px solid transparent;white-space:nowrap}
+nav.views a:hover{color:var(--ink)}
+nav.views a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.views a .k{font-family:var(--mono);font-size:10.5px;color:var(--ink3);border:1px solid var(--rule);border-radius:3px;padding:0 4px;line-height:1.4}
+nav.views .grp{width:1px;background:var(--rule);margin:10px 8px;flex:none}
+nav.views .grp:first-child{display:none}
+.pagebar{display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap;padding:18px 24px 0;max-width:1480px;width:100%}
+.pagebar h1{font-family:var(--cond);font-size:26px;font-weight:600}
+.pagebar .ctx{color:var(--ink2);font-size:13.5px;min-width:0}
+.content{padding:16px 24px 60px;display:grid;gap:18px;max-width:1480px;width:100%}
+.replaybar{background:var(--intent);color:#fff;padding:7px 24px;font-size:13.5px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.replaybar b{font-weight:700}
+.replaybar .scrub{flex:1;min-width:140px;accent-color:#fff}
+.replaybar button{border:1px solid rgba(255,255,255,.8);background:transparent;color:#fff;border-radius:5px;padding:2px 12px;cursor:pointer;font-weight:600}
+#m-banner:empty,.content>div:empty{display:none}
+#m-banner{display:grid;gap:8px}
+.gbanner:empty{display:none}
+.gbanner{margin:14px 24px 0;background:var(--alert-bg);color:var(--alert);border-radius:var(--r);padding:12px 16px;font-weight:500}
+.banner{border-radius:var(--r);padding:10px 14px;font-weight:500}
+.banner.warn{background:var(--warn-bg);color:var(--warn)} .banner.alert{background:var(--alert-bg);color:var(--alert)}
+.foot{color:var(--ink3);font-size:12px;padding:0 24px 20px;display:flex;gap:16px;flex-wrap:wrap}
+
+/* ---------- building blocks ---------- */
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);padding:16px 18px;min-width:0}
+.panel>h2,.sect>h2{font-size:17px}
+.sub{color:var(--ink2);font-size:13.5px;margin:2px 0 12px;max-width:85ch}
+.cols{display:grid;gap:18px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols.wide-l{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
+.cols.wide-r{grid-template-columns:minmax(0,1fr) minmax(0,1.55fr)}
+.hstack{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.hstack .sp{flex:1}
+a.btn{text-decoration:none;color:inherit;display:inline-flex}
+.btn{border:1px solid var(--rule);background:var(--panel-2);border-radius:6px;padding:5px 13px;font-weight:600;cursor:pointer;font-size:14px;white-space:nowrap;align-items:center;gap:6px}
+.btn:hover{border-color:var(--ink3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.danger{border-color:color-mix(in srgb,var(--alert) 55%,var(--rule));color:var(--alert)}
+.btn.quiet{background:transparent}
+.btn.small{padding:2px 9px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chipbtn{border:1px solid var(--rule);background:var(--panel-2);border-radius:6px;padding:4px 11px;cursor:pointer;font-weight:600;font-size:13.5px}
+.chipbtn[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--panel));color:var(--ink)}
+.chipbtn:disabled{opacity:.45;cursor:not-allowed}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink2);font-weight:500;min-width:0}
+input.t,select.t{border:1px solid var(--rule);border-radius:6px;padding:6px 9px;background:var(--sunk);color:var(--ink);min-width:0;width:100%}
+input.t:focus,select.t:focus{border-color:var(--accent);outline:0}
+.form{display:grid;gap:12px}
+.form .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.cls{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;white-space:nowrap}
+.cls::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--c)}
+.muted{color:var(--ink2)} .faint{color:var(--ink3)}
+.small{font-size:12.5px}
+.empty{color:var(--ink2);font-size:14px;padding:10px 0}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:600;color:var(--ink2);border-bottom:1px solid var(--rule);padding:6px 8px;white-space:nowrap;font-size:12.5px}
+td{border-bottom:1px solid var(--rule);padding:6px 8px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;white-space:nowrap;font-family:var(--cond);font-size:15px}
+th.n{font-family:var(--sans);font-size:12.5px}
+tr.best td.n.b{font-weight:700}
+.conf{display:inline-block;width:52px;height:6px;border-radius:3px;background:var(--track);vertical-align:middle;margin-right:6px;position:relative;overflow:hidden}
+.conf i{position:absolute;inset:0 auto 0 0;background:var(--ink2)}
+.conf.lo i{background:var(--warn)}
+.scroll{max-height:440px;overflow:auto}
+pre.mono{font-family:var(--mono);font-size:12px;line-height:1.5;background:var(--sunk);border-radius:6px;padding:12px;overflow:auto;max-height:440px;margin:0;white-space:pre}
+code{font-family:var(--mono);font-size:12.5px;background:var(--sunk);border-radius:4px;padding:1px 5px}
+canvas{width:100%;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink2);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;background:var(--c);vertical-align:middle;margin-right:5px}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--c) 0 4px,transparent 4px 7px)}
+
+/* ---------- monitor ---------- */
+.status-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center}
+.grade{width:64px;height:64px;border-radius:10px;display:grid;place-items:center;font-family:var(--cond);font-weight:600;font-size:34px;color:#0D131A;background:var(--c,var(--ok))}
+.status-strip h2{font-family:var(--cond);font-size:24px;font-weight:600}
+.status-strip .why{color:var(--ink2);font-size:14px;margin-top:2px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);overflow:hidden}
+.kpi{padding:11px 14px 8px;border-right:1px solid var(--rule);min-width:0}
+.kpi:last-child{border-right:0}
+.kpi .l{font-size:13px;color:var(--ink2);font-weight:500}
+.kpi .v{font-family:var(--cond);font-size:30px;font-weight:600;line-height:1.1;margin-top:2px;white-space:nowrap}
+.kpi .v small{font-size:14px;font-weight:500;color:var(--ink2);margin-left:3px}
+.kpi .d{font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi canvas{height:30px;margin-top:6px}
+.road{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.roadhead{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.roadhead h2{font-size:17px}
+/* mixing desk */
+.lanes{background:var(--road);border:1px solid var(--road-rule);border-radius:10px;padding:14px 12px 10px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.ch{display:grid;grid-template-rows:auto 150px auto auto;gap:6px;justify-items:center;text-align:center;color:var(--road-ink)}
+.ch .val{font-family:var(--cond);font-size:22px;font-weight:600;line-height:1}
+.ch .val small{display:block;font-size:11px;font-weight:500;color:#8496A8;font-family:var(--sans)}
+.meter{width:30px;height:150px;border-radius:5px;background:repeating-linear-gradient(to top,#1B2532 0 3px,#151E29 3px 6px);position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px var(--road-rule)}
+.meter .lvl{position:absolute;left:3px;right:3px;bottom:3px;border-radius:3px;background:var(--c);transition:height .6s ease;max-height:calc(100% - 6px)}
+.meter .fl{position:absolute;left:-2px;right:-2px;height:2px;background:#F4F7FA;box-shadow:0 0 0 1px #0D131A}
+.ch .q{font-size:12px;color:#93A4B6;white-space:nowrap;line-height:1.3}
+.ch .q b{color:var(--road-ink);font-family:var(--cond);font-weight:600;font-size:14px}
+.ch .q.hot b{color:#FFB199}
+.ch .nm{font-size:12.5px;font-weight:600;border-top:3px solid var(--c);padding-top:4px;width:100%;color:#C9D4DF}
+.chart{height:200px} .chart.sm{height:150px}
+.timeline{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.timeline li{display:grid;grid-template-columns:62px 92px minmax(0,1fr);gap:10px;padding:6px 0;border-bottom:1px solid var(--rule);font-size:13.5px;align-items:baseline}
+.timeline time{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.timeline .kind{font-size:12.5px;font-weight:600;color:var(--ink2)}
+.timeline .warn{color:var(--warn)} .timeline .error{color:var(--alert)}
+
+/* ---------- traffic ---------- */
+.devgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.dev{border:1px solid var(--rule);border-radius:var(--r);padding:12px;display:grid;grid-template-columns:40px minmax(0,1fr);gap:3px 12px;background:var(--panel-2)}
+.dev .ic{grid-row:span 3;width:40px;height:40px;border-radius:8px;background:var(--sunk);display:grid;place-items:center;color:var(--ink2)}
+.dev .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .act{font-size:13px;color:var(--ink2)}
+.dev .rt{font-family:var(--cond);font-size:14px;color:var(--ink2)}
+.dev .bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--track);overflow:hidden;display:flex;margin-top:6px}
+.dev .bar i{height:100%;background:var(--c)}
+.dev.boost{border-color:var(--intent);box-shadow:inset 0 0 0 1px var(--intent)}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:0 6px;border-radius:4px;background:var(--sunk);color:var(--ink2)}
+.tag.boost{background:var(--intent);color:#14102A}
+.tag.unsure{background:var(--warn-bg);color:var(--warn)}
+.tag.user{background:var(--ok-bg);color:var(--ok)}
+select.relabel{border:1px solid var(--rule);background:var(--sunk);border-radius:5px;padding:2px 4px;font-size:12.5px}
+.metric-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:14px}
+.metric{border-left:3px solid var(--c,var(--rule));padding:2px 0 2px 10px}
+.metric .v{font-family:var(--cond);font-size:24px;font-weight:600;line-height:1.1}
+.metric .l{font-size:12.5px;color:var(--ink2)}
+.f1bars{display:grid;gap:6px}
+.f1bars .r{display:grid;grid-template-columns:96px minmax(0,1fr) 46px;gap:8px;align-items:center;font-size:13px}
+.f1bars .b{height:14px;position:relative;background:var(--track);border-radius:3px}
+.f1bars .b i{position:absolute;left:0;height:6px;border-radius:2px}
+.f1bars .b i.ml{top:1px;background:var(--ink)} .f1bars .b i.ru{bottom:1px;background:var(--ink3)}
+table.cm td{text-align:center;font-family:var(--cond);font-size:13px;padding:5px 4px;border:1px solid var(--rule)}
+table.cm th{font-size:12px;border-bottom:0;text-align:center;white-space:nowrap}
+
+/* ---------- link ---------- */
+.dircard{display:grid;gap:10px}
+.bignums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.bignums div .v{font-family:var(--cond);font-size:30px;font-weight:600;line-height:1}
+.bignums div .l{font-size:12.5px;color:var(--ink2)}
+.range{position:relative;height:30px;margin:6px 0 14px}
+.range .bar{position:absolute;top:12px;left:0;right:0;height:6px;border-radius:3px;background:var(--track)}
+.range .ok{position:absolute;top:12px;height:6px;background:var(--rule);border-radius:3px}
+.range .mk{position:absolute;top:4px;width:3px;height:22px;border-radius:2px;transform:translateX(-50%)}
+.range .lbl{position:absolute;top:30px;font-size:11.5px;color:var(--ink2);transform:translateX(-50%);white-space:nowrap}
+.statepill{font-size:13px}
+.preset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.toggle{border:1px solid var(--rule);border-radius:8px;padding:9px 11px;text-align:left;background:var(--panel-2);cursor:pointer;display:grid;gap:2px}
+.toggle b{font-size:14px}
+.toggle span{font-size:12px;color:var(--ink2)}
+.toggle[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.toggle[aria-pressed=true] span{color:var(--ok)}
+
+/* ---------- policy ---------- */
+.gauge{height:10px;border-radius:5px;background:var(--track);overflow:hidden}
+.gauge i{display:block;height:100%;background:var(--ink2)}
+.ctrl{display:grid;gap:10px}
+.ctrl .item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)}
+.ctrl .item:last-child{border-bottom:0}
+.ctrl .item b{display:block}
+.ctrl .item span{font-size:13px;color:var(--ink2)}
+.log li{grid-template-columns:62px 78px minmax(0,1fr)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin-bottom:10px;overflow-x:auto}
+.tabs button{border:0;background:transparent;padding:6px 12px;font-weight:600;color:var(--ink2);border-bottom:2.5px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+
+/* ---------- prioritise ---------- */
+.devpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.devpick button{border:1px solid var(--rule);background:var(--panel-2);border-radius:8px;padding:8px 10px;display:flex;gap:9px;align-items:center;cursor:pointer;text-align:left;min-width:0}
+.devpick button span{min-width:0;display:grid}
+.devpick button b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devpick button small{font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devpick button[aria-pressed=true]{border-color:var(--intent);box-shadow:inset 0 0 0 1px var(--intent)}
+.preview{border-radius:var(--r);background:var(--sunk);padding:12px 14px;display:grid;gap:8px;font-size:14px}
+.preview .fit{height:10px;border-radius:5px;background:var(--track);overflow:hidden}
+.preview .fit i{display:block;height:100%;background:var(--intent)}
+.lease{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rule);align-items:center}
+.lease:last-child{border-bottom:0}
+.lease .who{font-weight:600}
+.lease .meta{font-size:13px;color:var(--ink2)}
+.lease .clock{font-family:var(--cond);font-size:24px;font-weight:600;text-align:right}
+.lease .tl{grid-column:1/-1;height:4px;border-radius:2px;background:var(--track);overflow:hidden}
+.lease .tl i{display:block;height:100%;background:var(--intent)}
+.as{font-size:12.5px;font-weight:600;padding:1px 8px;border-radius:4px;display:inline-block}
+.as.satisfied{background:var(--ok-bg);color:var(--ok)} .as.degraded{background:var(--warn-bg);color:var(--warn)}
+.as.infeasible{background:var(--alert-bg);color:var(--alert)} .as.pending{background:var(--sunk);color:var(--ink2)}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.mode{border:1px solid var(--rule);border-radius:var(--r);padding:12px;display:grid;gap:6px;align-content:start;background:var(--panel-2)}
+.mode b{font-family:var(--cond);font-size:18px;font-weight:600}
+.mode p{margin:0;font-size:13px;color:var(--ink2)}
+.mode .hstack{margin-top:4px}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days button{width:36px;padding:4px 0;border:1px solid var(--rule);background:var(--panel-2);border-radius:6px;cursor:pointer;font-weight:600;font-size:12.5px}
+.days button[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--panel))}
+
+/* ---------- experiments ---------- */
+.scen{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.sc{border:1px solid var(--rule);border-radius:var(--r);padding:14px;display:grid;gap:8px;align-content:start;background:var(--panel-2);cursor:pointer;text-align:left}
+.sc[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.sc .id{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.sc b{font-family:var(--cond);font-size:19px;font-weight:600;line-height:1.2}
+.sc p{margin:0;font-size:13px;color:var(--ink2)}
+.progress{height:10px;border-radius:5px;background:var(--track);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--video);transition:width .5s}
+.arm{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.arm::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--c)}
+.dots{position:relative;height:20px;min-width:120px}
+.dots i{position:absolute;top:7px;width:6px;height:6px;border-radius:50%;background:var(--c);opacity:.55;transform:translateX(-50%)}
+.dots b{position:absolute;top:2px;width:3px;height:16px;border-radius:2px;background:var(--c);transform:translateX(-50%)}
+.figs{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;max-width:1100px}
+.figs img{width:100%;border:1px solid var(--rule);border-radius:6px;background:#fff}
+.verdict{font-size:12.5px;font-weight:600}
+.verdict.good{color:var(--ok)} .verdict.bad{color:var(--alert)} .verdict.na{color:var(--ink3)}
+
+/* ---------- system ---------- */
+.arch{width:100%;height:auto;display:block}
+.arch text{font-family:var(--sans);fill:var(--ink)}
+.arch .layer{fill:var(--sunk)}
+.arch .lt{font-size:11.5px;font-weight:600;fill:var(--ink2)}
+.arch .node rect{fill:var(--panel-2);stroke:var(--rule);stroke-width:1.5}
+.arch .node.ok rect{stroke:var(--ok)} .arch .node.warn rect{stroke:var(--warn)} .arch .node.bad rect{stroke:var(--alert)}
+.arch .node .nt{font-size:13px;font-weight:600}
+.arch .node .ns{font-size:11px;fill:var(--ink2)}
+.arch .node circle{fill:var(--ink3)}
+.arch .node.ok circle{fill:var(--ok)} .arch .node.warn circle{fill:var(--warn)} .arch .node.bad circle{fill:var(--alert)}
+.arch .edge{stroke:var(--ink3);stroke-width:1.4;fill:none}
+.arch .flow{stroke:var(--video);stroke-width:2;fill:none;stroke-dasharray:4 6;animation:dash 1.2s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-20}}
+.checks{list-style:none;margin:0;padding:0}
+.checks li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:4px 10px;padding:9px 0;border-bottom:1px solid var(--rule)}
+.checks .ic{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-weight:700;font-size:13px;color:#0D131A;background:var(--ok)}
+.checks .ic.no{background:var(--alert)}
+.checks b{font-weight:600}
+.checks .det{grid-column:2;font-size:12.5px;color:var(--ink2);overflow-wrap:anywhere}
+.caps{display:flex;flex-wrap:wrap;gap:6px}
+.lim{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14px}
+.lim li{max-width:72ch}
+
+/* ---------- household ---------- */
+.hh-hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center;padding:22px;border-radius:12px;background:var(--road);color:var(--road-ink);border:1px solid var(--road-rule)}
+.hh-hero .grade{width:88px;height:88px;font-size:44px;border-radius:14px}
+.hh-hero h2{font-family:var(--cond);font-size:30px;line-height:1.1;font-weight:600}
+.hh-hero p{margin:6px 0 0;color:#9FB1C3;max-width:60ch}
+.hh-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.hh-edit{display:grid;grid-template-columns:40px minmax(0,1fr);gap:8px 12px;align-items:center;border:1px solid var(--rule);border-radius:var(--r);padding:12px;background:var(--panel-2)}
+.hh-edit .row2{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px}
+
+/* ---------- overlays ---------- */
+.scrim{position:fixed;inset:0;background:rgba(5,9,14,.6);display:grid;place-items:center;z-index:50;padding:16px}
+.dialog{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px;max-width:460px;width:100%;display:grid;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.dialog h3{font-family:var(--cond);font-size:21px;font-weight:600}
+.dialog p{margin:0;color:var(--ink2)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-weight:500;z-index:60;max-width:min(560px,calc(100% - 32px));box-shadow:0 10px 30px rgba(0,0,0,.3)}
+
+/* ---------- responsive ---------- */
+@media (max-width:1180px){
+  .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi:nth-child(3n){border-right:0} .kpi:nth-child(-n+3){border-bottom:1px solid var(--rule)}
+  .cols.c3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:920px){
+  .devbar,.pagebar,.content,.replaybar{padding-left:14px;padding-right:14px}
+  nav.views{padding:0 8px}
+  .wan{border-left:0;padding-left:0;order:5;width:100%}
+  .cols,.cols.c3,.cols.wide-l,.cols.wide-r,.road{grid-template-columns:minmax(0,1fr)}
+  nav.views a .k{display:none}
+}
+@media (max-width:560px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi{border-right:1px solid var(--rule)!important;border-bottom:1px solid var(--rule)}
+  .kpi:nth-child(2n){border-right:0!important}
+  .status-strip{grid-template-columns:auto minmax(0,1fr)}
+  .status-strip .act{grid-column:1/-1}
+  .lanes{gap:4px;padding:12px 6px 8px}
+  .ch .val{font-size:18px} .meter{width:22px}
+  .ch .nm{font-size:11px}
+  .bignums div .v{font-size:24px}
+  .timeline li{grid-template-columns:58px minmax(0,1fr)}
+  .timeline .kind{display:none}
+  .hh-hero{grid-template-columns:minmax(0,1fr)}
+  .hh-edit .row2{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="replaybar" id="replaybar" hidden>
+    <b>Replay of a recorded session</b><span id="rp-what">Recorded live on the namespace testbed.</span>
+    <span id="rp-ch" class="tabular" style="font-weight:600"></span><button id="rp-play" type="button">Pause</button>
+    <input class="scrub" id="rp-scrub" type="range" min="0" max="0" value="0" aria-label="Replay position">
+    <span id="rp-pos" class="tabular">0:00</span>
+  </div>
+  <header class="devbar">
+    <div class="devid"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#F2A93B"/><rect x="7" y="9" width="3" height="14" rx="1.5" fill="#0D131A"/><rect x="12.5" y="13" width="3" height="10" rx="1.5" fill="#0D131A"/><rect x="18" y="7" width="3" height="16" rx="1.5" fill="#0D131A"/><rect x="23.5" y="16" width="3" height="7" rx="1.5" fill="#0D131A"/></svg>
+      <div><b>Home gateway</b><small id="foot-ver">IntentQoS</small></div></div>
+    <div class="wan" id="wan"></div>
+    <span class="sp"></span>
+    <span class="pill" id="conn"><span class="dot"></span><span>Connecting</span></span>
+    <div class="seg" role="group" aria-label="Audience">
+      <button type="button" id="aud-op" aria-pressed="true">Engineer</button>
+      <button type="button" id="aud-hh" aria-pressed="false">Household</button>
+    </div>
+    <button type="button" class="iconbtn" id="theme" aria-label="Switch light or dark theme" title="Light or dark">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor"/><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+    </button>
+  </header>
+  <nav class="views" id="nav" aria-label="Views"></nav>
+  <div id="gbanner" class="gbanner" role="alert"></div>
+  <div class="pagebar"><h1 id="view-title">Monitor</h1><span class="ctx" id="ctx"></span></div>
+  <main class="content" id="content"></main>
+  <footer class="foot"><span id="foot-be"></span><span>Class colours: <span class="cls" style="--c:var(--intent)">Prioritised</span> <span class="cls" style="--c:var(--voice)">Voice and games</span> <span class="cls" style="--c:var(--video)">Video calls</span> <span class="cls" style="--c:var(--besteffort)">Best effort</span> <span class="cls" style="--c:var(--bulk)">Bulk</span></span></footer>
+</div>
+<div id="overlay"></div>
+<script>
+"use strict";
+/* IntentQoS console. Talks to the engine's REST API (and, when present, the lab server's /lab/* API).
+   With no engine reachable and a recording embedded (window.IQ_REPLAY), it plays the recording. */
+const R = window.IQ_REPLAY || null;
+const BASE = window.IQ_BASE || "";            // set when the console is opened remotely through the controller
+const REMOTE = window.IQ_REMOTE || null;
+const LANES = ["intent", "voice", "video", "besteffort", "bulk"];
+const LANE_NAME = {intent: "Intent", voice: "Voice", video: "Video", besteffort: "Best effort", bulk: "Bulk"};
+const LABELS = ["voip", "gaming", "video", "streaming", "web", "bulk"];
+const LABEL_NAME = {voip: "Voice call", gaming: "Gaming", video: "Video call", streaming: "Streaming", web: "Browsing", bulk: "Bulk transfer"};
+const LABEL_TIN = {voip: "voice", gaming: "voice", video: "video", streaming: "besteffort", web: "besteffort", bulk: "bulk"};
+const SOURCE_NAME = {ml: "model", "ml-hold": "model (unsure, kept its class)", rules: "rules", "rules-fallback": "rules (model unsure)", user: "your correction", override: "your correction"};
+const STATE_TEXT = {
+  bloat: "Queue building at the modem: rate cut", high: "Busy and delay is low: probing upward",
+  low: "Light load: drifting back toward the plan rate", idle: "Idle: at the plan rate", blind: "No delay samples: holding (blind mode)",
+  static: "Fixed rate (estimator off)"};
+const ASSURE = {satisfied: "Working", degraded: "Not meeting its goal", infeasible: "Link too slow for this", pending: "Waiting for traffic"};
+const DEVICE_TYPES = ["laptop", "phone", "tv", "console", "desktop", "tablet", "speaker", "camera", "nas", "other"];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const ARM_NAME = {noqos: "No QoS", static: "Static QoS", adaptive_rules: "IntentQoS (rules)", adaptive_ml: "IntentQoS (ML)", adaptive_ml_bulk: "IntentQoS (ML), bulk-friendly", adaptive_ml_intent: "IntentQoS + lease"};
+const ARM_COLOR = {noqos: "--bulk", static: "--besteffort", adaptive_rules: "--video", adaptive_ml: "--voice", adaptive_ml_bulk: "--video", adaptive_ml_intent: "--intent"};
+const DURS = [[1800, "30 min"], [3600, "1 hour"], [7200, "2 hours"], [14400, "4 hours"], [28800, "8 hours"]];
+
+const S = {replay: false, state: null, hist: [], lastT: 0, lab: null, sys: null, setup: null, model: null, inspect: null,
+  exps: null, job: null, view: null, household: false, span: 300, token: null, connected: false,
+  sim: {leases: [], names: {}, schedules: [], cancelled: new Set()}, rp: {i: 0, playing: true},
+  form: {target: null, goal: "low_latency", dur: 3600, prio: 2, requester: "", label: ""}, flowFilter: "all",
+  polDir: "down", inspTab: "down", scen: "s2_wan_drop", resSrc: "results", seeds: 1, arms: null, schedDays: [0, 1, 2, 3, 4]};
+try { S.token = sessionStorage.getItem("iq-token"); } catch (e) { /* storage unavailable */ }
+
+/* ------------------------------------------------------------------ helpers */
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const mbit = (k) => k == null ? "–" : (k / 1000).toFixed(Math.abs(k) >= 10000 ? 0 : 1);
+const f1 = (x) => Number.isFinite(x) ? Math.max(0, x).toFixed(1) : "–";
+const pct = (x, d = 0) => Number.isFinite(x) ? (x * 100).toFixed(d) + "%" : "–";
+const clock = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false});
+const hm = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+const durText = (s) => s >= 3600 ? `${+(s / 3600).toFixed(1)} h` : `${Math.round(s / 60)} min`;
+const nowT = () => S.state?.t || Date.now() / 1000;
+const devName = (ip) => S.sim.names[ip]?.name || (S.state?.devices || []).find(d => d.ip === ip)?.name || ip;
+function set(id, html) { const el = $(id); if (el && el._h !== html) { el.innerHTML = html; el._h = html; } }
+function txt(id, t) { const el = $(id); if (el && el.textContent !== t) el.textContent = t; }
+
+const ICON = {
+  laptop: '<path d="M5 6h14v9H5z M3 17h18" />', desktop: '<path d="M4 5h16v11H4z M9 20h6 M12 16v4" />',
+  phone: '<path d="M8 3h8v18H8z M11 18h2" />', tablet: '<path d="M6 3h12v18H6z M11 18h2" />',
+  tv: '<path d="M3 6h18v11H3z M8 21h8" />', console: '<path d="M4 9a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5a3 3 0 0 1-5 2l-1-1h-4l-1 1a3 3 0 0 1-5-2z M8 10v3 M6.5 11.5h3 M16 11h.01 M14.5 12.5h.01" />',
+  speaker: '<path d="M7 3h10v18H7z M12 15m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0 M12 7h.01" />',
+  camera: '<path d="M4 8h12v8H4z M16 11l4-2v6l-4-2" />', nas: '<path d="M5 4h14v7H5z M5 13h14v7H5z M8 7.5h.01 M8 16.5h.01" />',
+  other: '<path d="M12 12m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0 M12 8v5 M12 16h.01" />'};
+const icon = (t, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[t] || ICON.other}</svg>`;
+
+function toast(msg, ms = 3200) {
+  const el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); el.textContent = msg;
+  document.body.appendChild(el); setTimeout(() => el.remove(), ms);
+}
+/* In-page confirmation (browser dialogs are not available everywhere this page runs). */
+function ask(title, body, ok = "Confirm", danger = false) {
+  return new Promise(res => {
+    const o = $("overlay");
+    o.innerHTML = `<div class="scrim"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+      <h3 id="dlg-t">${esc(title)}</h3><p>${esc(body)}</p>
+      <div class="hstack"><span class="sp"></span><button class="btn quiet" id="dlg-no" type="button">Cancel</button>
+      <button class="btn ${danger ? "danger" : "primary"}" id="dlg-ok" type="button">${esc(ok)}</button></div></div></div>`;
+    const done = (v) => { o.innerHTML = ""; res(v); };
+    $("dlg-no").onclick = () => done(false); $("dlg-ok").onclick = () => done(true); $("dlg-ok").focus();
+    o.querySelector(".scrim").addEventListener("keydown", e => { if (e.key === "Escape") done(false); });
+  });
+}
+function askKey(msg) {
+  /* The router package turns on api.require_auth: the console then needs the router key, which is
+     printed on first start (cat /etc/intentqos/admin.key), like the admin password on a router label. */
+  if (S.signing) return S.signing;
+  S.signing = new Promise(res => {
+    const o = $("overlay");
+    o.innerHTML = `<div class="scrim"><form class="dialog" id="tok-f"><h3>Sign in to this gateway</h3>
+      <p>Enter the router key. On the router it is in <code>/etc/intentqos/admin.key</code>; the lab and the operator's remote console do not need it.</p>
+      <label class="f" for="tok-i">Router key<input class="t" id="tok-i" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" required style="font-family:var(--mono);letter-spacing:.06em"></label>
+      <p class="small" id="tok-m" style="color:var(--alert)" role="alert">${esc(msg || "")}</p>
+      <div class="hstack"><span class="sp"></span><button class="btn quiet" id="tok-no" type="button">Cancel</button>
+      <button class="btn primary" type="submit">Sign in</button></div></form></div>`;
+    $("tok-i").focus();
+    const done = (v) => { o.innerHTML = ""; S.signing = null; res(v); };
+    $("tok-no").onclick = () => done(false);
+    $("tok-f").onsubmit = async (e) => {
+      e.preventDefault();
+      const r = await fetch(BASE + "/api/session", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({key: $("tok-i").value.trim()})});
+      if (r.ok) done(true); else { const d = await r.json().catch(() => ({})); $("tok-m").textContent = d.error || "That key was not accepted."; }
+    };
+  });
+  return S.signing;
+}
+
+/* ------------------------------------------------------------------ data source */
+async function get(path) {
+  if (S.replay) return replayGet(path);
+  // A timeout, so a server that went away shows as unreachable instead of freezing the last view.
+  let r = await fetch(BASE + path, {cache: "no-store", signal: AbortSignal.timeout(8000)});
+  if (r.status === 401 && !REMOTE && await askKey()) r = await fetch(BASE + path, {cache: "no-store"});
+  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  return r.json();
+}
+async function send(method, path, body) {
+  if (S.replay) return replaySend(method, path, body);
+  const h = {"Content-Type": "application/json"};
+  let r;
+  try { r = await fetch(BASE + path, {method, headers: h, body: body ? JSON.stringify(body) : undefined}); }
+  catch (e) { toast("The gateway did not answer. Check that the engine is running."); return {status: 0, data: {}}; }
+  if (r.status === 403 && REMOTE) { const d = await r.json().catch(() => ({})); toast(d.error || "Your role cannot do this."); return {status: 403, data: d}; }
+  if (r.status === 401 && !REMOTE && await askKey()) return send(method, path, body);
+  return {status: r.status, data: await r.json().catch(() => ({}))};
+}
+
+/* Replay: the recorded engine snapshots are played back one per second. Actions that would change
+   the gateway are simulated locally for leases, names and schedules, and refused for everything else. */
+function frame() { return R.frames[S.rp.i]; }
+function replayGet(path) {
+  const f = frame();
+  if (path.startsWith("/api/state")) return Promise.resolve(f);
+  if (path.startsWith("/api/history")) return Promise.resolve(R.history.filter(r => r.t > S.lastT && r.t <= f.t));
+  if (path === "/api/system") return Promise.resolve({...R.system, proc: f.proc});
+  if (path === "/api/setup-check") return Promise.resolve(R.setup);
+  if (path === "/api/model") return Promise.resolve(R.model);
+  if (path === "/api/inspect") return Promise.resolve(R.inspect);
+  if (path === "/lab/experiments") return Promise.resolve(R.experiments);
+  if (path === "/lab/status") return Promise.resolve(R.lab_at ? R.lab_at[S.rp.i] : R.lab);
+  return Promise.reject(new Error("not in recording"));
+}
+function simPreview(body) {
+  const s = S.state, cap = {down: s.estimator.down.rate_kbit * 0.6, up: s.estimator.up.rate_kbit * 0.6};
+  const act = activeLeases();
+  const dd = +(body.demand_down_kbit || 3000), du = +(body.demand_up_kbit || 2000);
+  const useD = act.reduce((a, i) => a + i.granted_down_kbit, 0), useU = act.reduce((a, i) => a + i.granted_up_kbit, 0);
+  const gd = Math.min(dd, Math.max(cap.down / (act.length + 1), cap.down - useD)), gu = Math.min(du, Math.max(cap.up / (act.length + 1), cap.up - useU));
+  const frac = Math.min(gd / dd, gu / du);
+  return {candidate: {granted_down_kbit: Math.round(gd), granted_up_kbit: Math.round(gu), fraction_of_demand: frac},
+    others: {}, conflicts: [], boost_capacity_kbit: {down: Math.round(cap.down), up: Math.round(cap.up)}};
+}
+function simImpact(target) {
+  return (S.state.devices || []).filter(d => d.ip !== target && (d.kbps_dn > 1000 || /bulk|stream/.test(d.activity || "")))
+    .map(d => ({device: d.name || d.ip, ip: d.ip, kbps_dn: d.kbps_dn, class: Object.keys(d.labels)[0],
+      effect: "keeps its floor and borrows only leftover capacity while the lease is active"}));
+}
+async function replaySend(method, path, body) {
+  const refuse = () => { toast("This is a recording, so it cannot change a gateway. Run the engine to try this live."); return {status: 409, data: {replay: true}}; };
+  if (method === "POST" && (path.startsWith("/api/intents") || /\/api\/modes\/.+\/activate/.test(path))) {
+    let req = {...body};
+    if (path.startsWith("/api/modes/")) {
+      const m = (R.modes || []).find(x => path.includes("/" + x.id + "/"));
+      req = {...req, goal: m.goal, priority: m.priority, duration_s: body.duration_s || m.duration_s, demand_down_kbit: m.demand_down_kbit, demand_up_kbit: m.demand_up_kbit, label: m.name};
+    }
+    const preview = simPreview(req);
+    if (preview.candidate.fraction_of_demand < 0.5) return {status: 409, data: {ok: false, reason: "not enough boost capacity in this window", preview}};
+    if (path.includes("dry_run") || body.dry_run) return {status: 200, data: {ok: true, dry_run: true, preview, impact: simImpact(req.target)}};
+    const now = Date.now() / 1000, dur = +(req.duration_s || 3600);
+    const it = {id: "sim" + Math.random().toString(16).slice(2, 8), requester: req.requester || "household", target: req.target, goal: req.goal || "low_latency",
+      priority: +(req.priority || 2), label: req.label || "", status: "active", created: now, start: now, expires: now + dur,
+      granted_down_kbit: preview.candidate.granted_down_kbit, granted_up_kbit: preview.candidate.granted_up_kbit,
+      demand_down_kbit: +(req.demand_down_kbit || 3000), demand_up_kbit: +(req.demand_up_kbit || 2000), latency_ms: 100, sim: true};
+    S.sim.leases.push(it);
+    return {status: 200, data: {ok: true, intent: it, preview, impact: simImpact(req.target)}};
+  }
+  if (method === "DELETE" && path.startsWith("/api/intents/")) {
+    const id = path.split("/").pop(); S.sim.leases = S.sim.leases.filter(i => i.id !== id); S.sim.cancelled.add(id);
+    return {status: 200, data: {ok: true}};
+  }
+  if (method === "PUT" && path.startsWith("/api/devices/")) { const ip = path.split("/").pop(); S.sim.names[ip] = {name: body.name, type: body.type}; return {status: 200, data: body}; }
+  if (method === "POST" && path === "/api/schedules") { const it = {...body, id: "sim" + S.sim.schedules.length, enabled: true}; S.sim.schedules.push(it); return {status: 200, data: it}; }
+  if (method === "DELETE" && path.startsWith("/api/schedules/")) { const id = path.split("/").pop(); S.sim.schedules = S.sim.schedules.filter(x => x.id !== id); return {status: 200, data: {ok: true}}; }
+  return refuse();
+}
+function activeLeases() {
+  const s = S.state; if (!s) return [];
+  const now = Date.now() / 1000;
+  const rec = (s.intents || []).filter(i => (i.status === "active" || i.status === "scheduled") && !S.sim.cancelled.has(i.id));
+  const sim = S.sim.leases.filter(i => i.expires > now).map(i => {
+    const age = now - i.created, dev = (s.devices || []).find(d => d.ip === i.target);
+    const busy = dev && (dev.kbps_dn + dev.kbps_up) > 50;
+    return {...i, remaining_s: i.expires - now, assurance: age < 3 ? "pending" : (busy ? "satisfied" : "pending"),
+      assurance_detail: busy ? `reservation in place; ${mbit(dev.kbps_dn)} Mbit/s down` : "no traffic from this device yet"};
+  });
+  return rec.concat(sim);
+}
+const schedules = () => (S.state?.schedules || []).concat(S.sim.schedules);
+const devices = () => (S.state?.devices || []).map(d => S.sim.names[d.ip] ? {...d, ...S.sim.names[d.ip]} : d);
+
+/* ------------------------------------------------------------------ charts (canvas, drawn to one scale) */
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (!W || !H) return null;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+  return {x, W, H};
+}
+function niceMax(v) { if (!(v > 0)) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p; for (const k of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (n <= k + 1e-9) return k * p; return 10 * p; }
+function axes(c, o, ymax) {
+  const {x, W, H} = c, L = 38, Rm = 8, T = 10, B = 20, now = o.now, span = o.span;
+  const X = t => L + (t - (now - span)) / span * (W - L - Rm), Y = v => T + (1 - Math.min(v, ymax) / ymax) * (H - T - B);
+  x.font = `11px ${css("--cond")}`; x.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = ymax * i / 4, y = Math.round(Y(v)) + .5;
+    x.strokeStyle = css("--rule"); x.globalAlpha = i ? .7 : 1; x.beginPath(); x.moveTo(L, y); x.lineTo(W - Rm, y); x.stroke(); x.globalAlpha = 1;
+    x.fillStyle = css("--ink2"); x.textAlign = "right"; x.fillText(v >= 100 ? v.toFixed(0) : +v.toFixed(1), L - 5, y + 4);
+  }
+  const step = span <= 120 ? 30 : span <= 300 ? 60 : 300;
+  x.textAlign = "center";
+  for (let m = 0; m <= span; m += step) { const px = X(now - m); if (px < L + 14) break; x.fillText(m ? `−${m >= 60 ? m / 60 + " min" : m + " s"}` : "now", Math.min(px, W - Rm - 12), H - 5); }
+  x.textAlign = "left";
+  for (const ev of (o.events || [])) {
+    if (ev.t < now - span || ev.t > now) continue;
+    const px = Math.round(X(ev.t)) + .5;
+    x.strokeStyle = css(ev.level === "warn" || ev.level === "error" ? "--alert" : "--intent"); x.globalAlpha = .5;
+    x.setLineDash([2, 3]); x.beginPath(); x.moveTo(px, T); x.lineTo(px, H - B); x.stroke(); x.setLineDash([]); x.globalAlpha = 1;
+  }
+  if (o.threshold != null && o.threshold < ymax) {
+    const y = Math.round(Y(o.threshold)) + .5;
+    x.strokeStyle = css("--alert"); x.setLineDash([5, 4]); x.beginPath(); x.moveTo(L, y); x.lineTo(W - Rm, y); x.stroke(); x.setLineDash([]);
+    x.fillStyle = css("--alert"); x.textAlign = "right"; x.fillText(o.thresholdLabel || "threshold", W - Rm - 2, y - 4); x.textAlign = "left";
+  }
+  return {X, Y, L, Rm, T, B};
+}
+function lineChart(cv, series, o) {
+  const c = setupCanvas(cv); if (!c) return;
+  const vis = series.flatMap(s => s.pts.filter(p => p[0] >= o.now - o.span && p[0] <= o.now).map(p => p[1])).filter(Number.isFinite);
+  const ymax = niceMax(Math.max(o.min || 1, ...vis, o.threshold ? o.threshold * 1.4 : 0) * 1.08);
+  const {X, Y} = axes(c, o, ymax), x = c.x;
+  for (const s of series) {
+    const pts = s.pts.filter(p => Number.isFinite(p[1]) && p[0] >= o.now - o.span - 2 && p[0] <= o.now);
+    if (!pts.length) continue;
+    if (s.fill) {
+      x.beginPath(); x.moveTo(X(pts[0][0]), Y(0));
+      for (const [t, v] of pts) x.lineTo(X(t), Y(Math.max(0, v)));
+      x.lineTo(X(pts[pts.length - 1][0]), Y(0)); x.closePath(); x.fillStyle = s.color; x.globalAlpha = .14; x.fill(); x.globalAlpha = 1;
+    }
+    x.strokeStyle = s.color; x.lineWidth = s.width || 1.7; if (s.dash) x.setLineDash(s.dash);
+    x.beginPath(); let ly = null;
+    pts.forEach(([t, v], i) => { const px = X(t), py = Y(Math.max(0, v)); if (!i) x.moveTo(px, py); else if (s.step) { x.lineTo(px, ly); x.lineTo(px, py); } else x.lineTo(px, py); ly = py; });
+    x.stroke(); x.setLineDash([]);
+    const [lt, lv] = pts[pts.length - 1]; x.fillStyle = s.color; x.beginPath(); x.arc(X(lt), Y(Math.max(0, lv)), 2.6, 0, 7); x.fill();
+  }
+}
+function stackChart(cv, rows, key, o) {
+  const c = setupCanvas(cv); if (!c) return;
+  const r2 = rows.filter(r => r.t >= o.now - o.span - 2 && r.t <= o.now && r[key]);
+  const tot = r2.map(r => LANES.reduce((a, l) => a + (r[key][l] || 0), 0) / 1000);
+  const ymax = niceMax(Math.max(o.min || 1, ...tot, ...r2.map(r => (r[o.lineKey] || 0) / 1000)) * 1.08);
+  const {X, Y} = axes(c, o, ymax), x = c.x;
+  if (r2.length < 2) return;
+  const base = r2.map(() => 0);
+  for (const l of [...LANES].reverse()) {
+    const top = r2.map((r, i) => base[i] + (r[key][l] || 0) / 1000);
+    x.beginPath(); r2.forEach((r, i) => { const px = X(r.t), py = Y(top[i]); i ? x.lineTo(px, py) : x.moveTo(px, py); });
+    for (let i = r2.length - 1; i >= 0; i--) x.lineTo(X(r2[i].t), Y(base[i]));
+    x.closePath(); x.fillStyle = css("--" + l); x.globalAlpha = .85; x.fill(); x.globalAlpha = 1;
+    top.forEach((v, i) => base[i] = v);
+  }
+  if (o.lineKey) {
+    x.strokeStyle = css("--ink"); x.lineWidth = 1.6; x.beginPath(); let ly = null;
+    r2.forEach((r, i) => { const px = X(r.t), py = Y((r[o.lineKey] || 0) / 1000); if (!i) x.moveTo(px, py); else { x.lineTo(px, ly); x.lineTo(px, py); } ly = py; });
+    x.stroke();
+  }
+}
+function spark(cv, vals, color) {
+  const c = setupCanvas(cv); if (!c) return; const {x, W, H} = c;
+  const v = vals.filter(Number.isFinite); if (v.length < 2) return;
+  const mx = Math.max(...v) || 1, n = vals.length;
+  const X = i => i / (n - 1) * (W - 4) + 1, Y = val => H - 3 - (Math.max(0, val) / mx) * (H - 7);
+  x.beginPath(); let pen = false;
+  vals.forEach((val, i) => { if (!Number.isFinite(val)) { pen = false; return; } const y = Y(val); pen ? x.lineTo(X(i), y) : x.moveTo(X(i), y); pen = true; });
+  x.strokeStyle = color; x.lineWidth = 1.5; x.stroke();
+  const li = vals.length - 1 - [...vals].reverse().findIndex(Number.isFinite);
+  x.fillStyle = color; x.beginPath(); x.arc(X(li), Y(vals[li]), 2.4, 0, 7); x.fill();
+}
+const H = (k, span = S.span) => S.hist.filter(r => r.t >= nowT() - span).map(r => [r.t, r[k]]);
+const chartEvents = () => (S.state?.events || []).filter(e => ["estimator", "rollback", "intent", "watchdog", "engine"].includes(e.kind) && e.level !== "debug");
+const spanSeg = (id) => `<div class="seg" role="group" aria-label="Time window" id="${id}">${[[120, "2 min"], [300, "5 min"], [900, "15 min"]].map(([v, l]) => `<button type="button" data-span="${v}" aria-pressed="${S.span === v}">${l}</button>`).join("")}</div>`;
+
+/* ------------------------------------------------------------------ shared fragments */
+function gradeColor(g) { return g === "A+" || g === "A" ? "--ok" : g === "B" ? "--warn" : "--alert"; }
+function lanesHTML(dir) {
+  /* the mixing desk: one channel strip per class. Level = throughput on a square-root scale of the
+     shaper rate (so a 0.2 Mbit/s call is still visible next to an 80 Mbit/s download); the white
+     mark is the class's guaranteed floor; the reading below is the queue delay inside the gateway. */
+  const s = S.state, plan = s.plan?.[dir], tins = s.tins?.[dir] || {};
+  if (!plan) return "";
+  const R0 = plan.rate || 1, sc = (x) => Math.min(100, Math.sqrt(Math.max(0, x) / R0) * 100);
+  return LANES.map(t => {
+    const v = tins[t]?.kbit || 0, g = plan.guarantee?.[t] || 0, q = tins[t]?.queue_ms || 0, dr = tins[t]?.drops_per_s || 0;
+    return `<div class="ch" style="--c:var(--${t})" title="${LANE_NAME[t]}: ${mbit(v)} Mbit/s, floor ${mbit(g)} Mbit/s, queue ${q.toFixed(1)} ms, ${dr.toFixed(0)} drops/s">
+      <span class="val num">${mbit(v)}<small>Mbit/s</small></span>
+      <span class="meter"><span class="lvl" style="height:${sc(v).toFixed(1)}%"></span>${g > 10 ? `<span class="fl" style="bottom:${sc(g).toFixed(1)}%"></span>` : ""}</span>
+      <span class="q${q >= 15 ? " hot" : ""}">${q >= 0.5 ? `<b>${q.toFixed(0)}</b> ms queue` : "no queue"}${dr >= 1 ? `<br>${dr.toFixed(0)} drops/s` : "<br>&nbsp;"}</span>
+      <span class="nm">${LANE_NAME[t]}</span></div>`;
+  }).join("");
+}
+function eventsHTML(evs, n = 40) {
+  if (!evs.length) return `<li class="empty">Nothing has happened yet.</li>`;
+  return evs.slice().reverse().slice(0, n).map(e => `<li><time>${clock(e.t)}</time><span class="kind">${esc(e.kind)}</span><span class="${esc(e.level)}">${esc(e.msg)}</span></li>`).join("");
+}
+function deviceCard(d) {
+  const lease = activeLeases().find(i => i.target === d.ip);
+  const tot = (d.kbps_dn + d.kbps_up) || 1;
+  const parts = Object.entries(d.labels || {}).filter(([l]) => l !== "?").map(([l, n]) => `<i style="--c:var(--${LABEL_TIN[l] || "besteffort"});width:${(n / Object.values(d.labels).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%"></i>`).join("");
+  return `<div class="dev${lease ? " boost" : ""}"><span class="ic">${icon(d.type)}</span>
+    <span class="nm">${esc(d.name || d.ip)} ${lease ? '<span class="tag boost">prioritised</span>' : ""}</span>
+    <span class="act">${esc(d.activity || "Idle")}</span>
+    <span class="rt num">↓ ${mbit(d.kbps_dn)} · ↑ ${mbit(d.kbps_up)} Mbit/s · ${d.flows} flow${d.flows === 1 ? "" : "s"}</span>
+    <span class="bar">${parts}</span></div>`;
+}
+function leaseHTML(i, simple) {
+  const name = devName(i.target), total = (i.expires - i.start) || 1, left = i.remaining_s;
+  const goal = i.goal === "low_latency" ? "low delay" : "steady bandwidth";
+  return `<div class="lease"><div><div class="who">${esc(name)}${i.label ? " · " + esc(i.label) : ""}</div>
+    <div class="meta">${simple ? "" : `${esc(i.requester)} asked for ${goal}, importance ${i.priority}. `}Reserved ${mbit(i.granted_down_kbit)} down / ${mbit(i.granted_up_kbit)} up Mbit/s.</div>
+    <div style="margin-top:5px"><span class="as ${esc(i.assurance || "pending")}">${esc(ASSURE[i.assurance] || "Starting")}</span>${i.assurance_detail && !simple ? ` <span class="small muted">${esc(i.assurance_detail)}</span>` : ""}</div></div>
+    <div style="display:grid;gap:6px;justify-items:end"><span class="clock num" title="time left">${hm(left)}</span><button class="btn small" type="button" data-cancel="${esc(i.id)}">End now</button></div>
+    <div class="tl"><i style="width:${Math.max(0, Math.min(100, left / total * 100)).toFixed(1)}%"></i></div></div>`;
+}
+
+/* ================================================================== views */
+const VIEWS = {};
+
+/* ------------------------------------------------------------------ Monitor */
+VIEWS.monitor = {title: "Monitor", group: "Live", build() {
+  return `<section class="panel status-strip" aria-live="polite"><div class="grade" id="m-grade">–</div>
+    <div style="min-width:0"><h2 id="m-head">Waiting for the engine</h2><div class="why" id="m-why"></div></div>
+    <div class="act hstack"><a class="btn quiet" href="#prioritise">Prioritise a device</a></div></section>
+  <div id="m-banner"></div>
+  <section class="kpis" aria-label="Six brief metrics">
+    ${[["lat", "Delay added now"], ["jit", "Jitter"], ["loss", "Loss, calls and games"], ["thr", "Throughput"], ["q", "Deepest queue"], ["fair", "Fairness"]].map(([k, l]) =>
+      `<div class="kpi"><div class="l">${l}</div><div class="v num" id="k-${k}">–</div><div class="d" id="k-${k}-d"></div><canvas id="k-${k}-c"></canvas></div>`).join("")}
+  </section>
+  <section class="road">
+    ${["down", "up"].map(d => `<div><div class="roadhead"><h2>${d === "down" ? "Download" : "Upload"}</h2><span class="small muted" id="road-${d}-sub"></span></div>
+      <div class="lanes" id="lanes-${d}"></div></div>`).join("")}
+  </section>
+  <div class="hstack" style="margin-top:-8px"><p class="small muted" style="margin:0">Each strip is one traffic class. Level: its throughput (square-root scale of the shaper rate). White mark: its guaranteed floor. Below: the queue delay inside the gateway.</p><span class="sp"></span><span class="small muted">Charts show the last</span>${spanSeg("seg-a")}</div>
+  <section class="cols">
+    <div class="panel"><h2>Delay added at the access link</h2>
+      <p class="sub">One-way delay above the unloaded baseline, measured every 50 ms. Above the dashed line the estimator treats it as bufferbloat.</p>
+      <canvas class="chart" id="c-delay"></canvas>
+      <div class="legend"><span><i style="--c:var(--video)"></i>download</span><span><i style="--c:var(--bulk)"></i>upload</span><span><i class="dash" style="--c:var(--intent)"></i>event</span></div></div>
+    <div class="panel"><h2>Throughput and shaper rate</h2>
+      <p class="sub">The shaper rate (step line) follows what the link can carry. Achieved throughput fills below it.</p>
+      <canvas class="chart" id="c-rate"></canvas>
+      <div class="legend"><span><i style="--c:var(--ink)"></i>shaper rate, download</span><span><i style="--c:var(--voice)"></i>achieved, download</span><span><i class="dash" style="--c:var(--ink3)"></i>plan</span></div></div>
+  </section>
+  <section class="cols wide-l">
+    <div class="panel"><h2>Download by class</h2><p class="sub">Who is using the link, stacked by scheduling class.</p>
+      <canvas class="chart" id="c-mix"></canvas>
+      <div class="legend">${LANES.map(l => `<span><i style="--c:var(--${l})"></i>${LANE_NAME[l]}</span>`).join("")}</div></div>
+    <div class="panel"><h2>What happened</h2><p class="sub">Every adaptation, lease and safety action, newest first.</p>
+      <div class="scroll" style="max-height:300px"><ul class="timeline" id="m-events"></ul></div></div>
+  </section>`;
+}, update() {
+  const s = S.state, e = s.estimator, g = s.grade?.overall || {grade: "–", text: ""};
+  const gEl = $("m-grade"); gEl.textContent = g.grade; gEl.style.setProperty("--c", `var(${gradeColor(g.grade)})`);
+  txt("m-head", g.text || "");
+  const nd = s.devices.filter(d => d.flows).length;
+  txt("m-why", `Grade from the delay added under load (95th percentile over the last minute): ${s.grade?.down?.p95_added_ms ?? "–"} ms download, ${s.grade?.up?.p95_added_ms ?? "–"} ms upload. ${nd} device${nd === 1 ? "" : "s"} active, ${s.flows.length} flows.`);
+  const warn = [];
+  if (S.state.paused) warn.push(["warn", "Automation is paused. The gateway holds the safe baseline until you resume it on the Policy view."]);
+  if (e.blind) warn.push(["alert", "The delay reflectors are not answering. Rates are held at or below the base rate until they return."]);
+  if (s.safety.held) warn.push(["warn", "Policy changes are being held back by the change budget (at most " + (s.config.max_changes_per_minute || 90) + " a minute)."]);
+  set("m-banner", warn.map(([c, t]) => `<div class="banner ${c}">${esc(t)}</div>`).join(""));
+  const rows = S.hist.slice(-120);
+  const qmax = r => Math.max(0, ...Object.values(r.q_d || {}));
+  set("k-lat", `${f1(e.down.delay_delta_ms)}<small>ms</small>`); txt("k-lat-d", `down; up ${f1(e.up.delay_delta_ms)} ms; p95 last min ${s.grade?.down?.p95_added_ms ?? "–"} ms`);
+  set("k-jit", `${f1(e.down.jitter_ms)}<small>ms</small>`); txt("k-jit-d", `down; up ${f1(e.up.jitter_ms)} ms`);
+  const lrt = s.loss_rt_pct || {down: 0, up: 0};
+  set("k-loss", `${(lrt.down || 0).toFixed(2)}<small>%</small>`); txt("k-loss-d", `up ${(lrt.up || 0).toFixed(2)}%; bulk queues drop ${(s.loss_pct?.down || 0).toFixed(1)}% on purpose`);
+  set("k-thr", `${mbit(e.down.achieved_kbit)}<small>Mbit/s</small>`); txt("k-thr-d", `of ${mbit(e.down.rate_kbit)} shaped; up ${mbit(e.up.achieved_kbit)}`);
+  const tq = Object.entries(s.tins?.down || {}).sort((a, b) => b[1].queue_ms - a[1].queue_ms)[0];
+  set("k-q", `${f1(tq ? tq[1].queue_ms : 0)}<small>ms</small>`); txt("k-q-d", tq && tq[1].queue_ms >= 0.5 ? `deepest: ${LANE_NAME[tq[0]]} (download)` : "no standing queue");
+  set("k-fair", s.fairness.jain == null ? "–" : s.fairness.jain.toFixed(2)); txt("k-fair-d", s.fairness.jain == null ? "needs 2+ busy devices" : `Jain index, ${s.fairness.devices} busy devices`);
+  spark($("k-lat-c"), rows.map(r => r.dd), css("--video")); spark($("k-jit-c"), rows.map(r => r.jd), css("--video"));
+  spark($("k-loss-c"), rows.map(r => r.lrd ?? r.ld), css("--voice")); spark($("k-thr-c"), rows.map(r => r.ad / 1000), css("--voice"));
+  spark($("k-q-c"), rows.map(qmax), css("--besteffort")); spark($("k-fair-c"), rows.map(r => r.jain), css("--intent"));
+  for (const d of ["down", "up"]) {
+    set("lanes-" + d, lanesHTML(d));
+    txt(`road-${d}-sub`, `shaping at ${mbit(s.plan[d]?.rate)} Mbit/s, ${(STATE_TEXT[e[d].state] || e[d].state).split(":")[0].toLowerCase()}`);
+  }
+  set("m-events", eventsHTML(s.events));
+  const now = nowT(), evs = chartEvents();
+  lineChart($("c-delay"), [{color: css("--video"), pts: H("dd")}, {color: css("--bulk"), pts: H("du")}], {now, span: S.span, min: 10, threshold: s.config.bloat_threshold_ms, thresholdLabel: "bloat threshold", events: evs});
+  lineChart($("c-rate"), [{color: css("--voice"), fill: true, pts: H("ad").map(([t, v]) => [t, v / 1000])}, {color: css("--ink"), step: true, width: 2, pts: H("rd").map(([t, v]) => [t, v / 1000])},
+    {color: css("--ink3"), dash: [4, 4], width: 1.2, pts: H("rd").map(([t]) => [t, s.config.nominal_down_mbit])}], {now, span: S.span, min: 5, events: evs});
+  stackChart($("c-mix"), S.hist, "tin_d", {now, span: S.span, min: 5, lineKey: "rd", events: evs});
+}};
+
+/* ------------------------------------------------------------------ Traffic */
+VIEWS.traffic = {title: "Traffic", group: "Live", build() {
+  return `<section class="panel"><h2>Devices</h2><p class="sub">Every device on the home network, what it is doing now, and its share of each class.</p><div class="devgrid" id="t-devs"></div></section>
+  <section class="panel"><div class="hstack"><h2>Flows and their classes</h2><span class="sp"></span>
+    <div class="seg" role="group" aria-label="Filter flows" id="t-filter">${[["all", "All"], ["rt", "Realtime"], ["unsure", "Model unsure"]].map(([v, l]) => `<button type="button" data-f="${v}" aria-pressed="${S.flowFilter === v}">${l}</button>`).join("")}</div>
+    <div class="seg" role="group" aria-label="Classifier"><button type="button" id="t-ml">ML model</button><button type="button" id="t-rules">Rules</button></div></div>
+    <p class="sub">Classified from packet sizes and timing only. No payload, no domain names. Pick a class in the last column to correct a mistake; the correction applies to that app on that device from now on and is saved for retraining.</p>
+    <div class="tablewrap scroll"><table><thead><tr><th>Device</th><th>Remote</th><th>Class</th><th>Confidence</th><th>Prediction set</th><th>Decided by</th><th>Lane</th><th class="n">Down</th><th class="n">Up</th><th class="n">Age</th><th>Correct</th></tr></thead><tbody id="t-flows"></tbody></table></div>
+    <p class="small muted" id="t-stats"></p></section>
+  <section class="cols">
+    <div class="panel"><h2>How good is the classifier?</h2><p class="sub" id="t-msub">Held-out test sessions, from the training report.</p><div id="t-model">Loading the model report…</div></div>
+    <div class="panel"><h2>Where it gets confused</h2><p class="sub">Test flows by true class (rows) and predicted class (columns). Darker is more.</p><div class="tablewrap" id="t-cm"></div></div>
+  </section>`;
+}, async init() {
+  $("t-ml").onclick = () => send("POST", "/api/classifier/mode", {mode: "ml"}).then(poll);
+  $("t-rules").onclick = () => send("POST", "/api/classifier/mode", {mode: "rules"}).then(poll);
+  if (!S.model) S.model = await get("/api/model").catch(() => null);
+  modelReport();
+}, update() {
+  const s = S.state;
+  set("t-devs", devices().map(deviceCard).join("") || `<p class="empty">No devices seen yet.</p>`);
+  const ml = s.config.classifier === "ml";
+  $("t-ml").setAttribute("aria-pressed", ml); $("t-rules").setAttribute("aria-pressed", !ml);
+  $("t-ml").disabled = !s.classifier.model_loaded;
+  let fl = s.flows;
+  if (S.flowFilter === "rt") fl = fl.filter(f => ["voip", "gaming", "video"].includes(f.committed));
+  if (S.flowFilter === "unsure") fl = fl.filter(f => (f.pset || []).length !== 1 || f.source === "rules-fallback");
+  set("t-flows", fl.length ? fl.slice(0, 60).map(f => {
+    const lab = f.committed || f.label, lane = f.tin || LABEL_TIN[lab] || "besteffort";
+    const unsure = (f.pset || []).length !== 1;
+    return `<tr><td>${esc(f.device || f.lan_ip)}</td><td><span class="small muted">${esc(f.proto)} · ${esc(f.remote)}</span></td>
+      <td>${lab ? `<span class="cls" style="--c:var(--${LABEL_TIN[lab] || "besteffort"})">${esc(LABEL_NAME[lab])}</span>` : '<span class="muted">learning…</span>'}</td>
+      <td><span class="conf${(f.confidence || 0) < .7 ? " lo" : ""}"><i style="width:${((f.confidence || 0) * 100).toFixed(0)}%"></i></span><span class="small num">${f.confidence == null ? "" : pct(f.confidence)}</span></td>
+      <td class="small">${unsure ? `<span class="tag unsure">${(f.pset || []).length ? esc(f.pset.map(p => LABEL_NAME[p]).join(" or ")) : "none"}</span>` : esc(LABEL_NAME[f.pset[0]] || "")}</td>
+      <td class="small">${f.source === "user" || f.source === "override" ? '<span class="tag user">your correction</span>' : f.restored ? `<span class="tag" title="Decided from the flow's start before the engine restarted; the model now sees it from the middle and says ${esc(LABEL_NAME[f.label] || f.label)}">kept after restart</span>` : esc(SOURCE_NAME[f.source] || "")}</td>
+      <td><span class="cls" style="--c:var(--${lane})">${LANE_NAME[lane]}</span></td>
+      <td class="n">${mbit(f.kbps_dn)}</td><td class="n">${mbit(f.kbps_up)}</td><td class="n">${Math.round(f.age_s)} s</td>
+      <td><select class="relabel" data-flow="${esc(f.id)}" aria-label="Correct the class of this flow"><option value="">Correct…</option>${LABELS.map(l => `<option value="${l}">${LABEL_NAME[l]}</option>`).join("")}</select></td></tr>`;
+  }).join("") : `<tr><td colspan="11" class="empty">No flows match.</td></tr>`);
+  const st = s.classifier.stats || {}, n = (st.ml || 0) + (st.rules || 0) + (st.abstain || 0) + (st.user || 0);
+  if (s.flows_hidden) set("t-flows", `<tr><td colspan="11" class="empty">Per-flow detail is hidden: it needs the subscriber's permission for a diagnostic session (ask from the controller; the subscriber approves in their app).</td></tr>`);
+  txt("t-stats", `Live decisions since start: ${st.ml || 0} by the model, ${st.abstain || 0} handed to the rules because the model was unsure (${n ? pct((st.abstain || 0) / n, 1) : "–"}), ${st.user || 0} from corrections. Drift alarms: ${st.drift_alarms || 0}. Capture: ${s.capture.packets} packets, ${s.capture.kernel_drops} dropped by the kernel.`);
+}};
+function modelReport() {
+  const m = S.model;
+  if (!m) { set("t-model", `<p class="empty">No model report on this gateway. Train one with <code>make train</code>.</p>`); return; }
+  const ta = m.tin_level_accuracy || {}, ll = m.label_level || {}, cf = m.conformal || {}, cal = m.calibration || {};
+  txt("t-msub", `${m.model}. Trained ${m.trained_at} on ${m.rows?.train} flow windows; tested on ${m.rows?.test} from ${m.sessions?.test} unseen sessions.`);
+  const met = [["Right lane, hybrid", pct(ta.hybrid_conformal, 1), "--voice"], ["Right lane, rules only", pct(ta.rules, 1), "--bulk"],
+    ["Coverage at 90% target", pct(cf.empirical_coverage, 1), "--video"], ["Handed to rules", pct(cf.abstain_rate, 1), "--besteffort"],
+    ["Calibration error", (cal.ece_calibrated ?? 0).toFixed(3), "--intent"], ["Inference, 32 flows", `${m.inference_ms_per_32_flows} ms`, "--ink2"]];
+  const f1ml = ll.ml_argmax?.per_class_f1 || {}, f1ru = ll.rules?.per_class_f1 || {};
+  set("t-model", `<div class="metric-row">${met.map(([l, v, c]) => `<div class="metric" style="--c:var(${c})"><div class="v num">${v}</div><div class="l">${l}</div></div>`).join("")}</div>
+    <div class="hstack small muted" style="margin-bottom:6px"><span><span class="legend" style="display:inline"><i style="--c:var(--ink)"></i></span>ML F1</span><span><span class="legend" style="display:inline"><i style="--c:var(--ink3)"></i></span>rules F1</span></div>
+    <div class="f1bars">${(m.classes || []).map(c => `<div class="r"><span>${LABEL_NAME[c]}</span><span class="b"><i class="ml" style="width:${(f1ml[c] || 0) * 100}%"></i><i class="ru" style="width:${(f1ru[c] || 0) * 100}%"></i></span><span class="num small">${(f1ml[c] || 0).toFixed(2)}</span></div>`).join("")}</div>
+    <p class="small muted" style="margin:12px 0 0">Payload bytes used: <b>${m.payload_bytes_used ?? 0}</b>. Strongest features: ${(m.top_features || []).slice(0, 5).map(f => `<code>${esc(f[0])}</code>`).join(" ")}.</p>`);
+  const cm = m.confusion_ml || {}, cls = m.classes || [];
+  set("t-cm", `<table class="cm"><thead><tr><th></th>${cls.map(c => `<th>${LABEL_NAME[c].split(" ")[0]}</th>`).join("")}</tr></thead><tbody>${cls.map(r => {
+    const tot = cls.reduce((a, c) => a + (cm[r]?.[c] || 0), 0) || 1;
+    return `<tr><th style="text-align:right">${LABEL_NAME[r]}</th>${cls.map(c => { const v = cm[r]?.[c] || 0, a = v / tot; return `<td style="background:color-mix(in srgb, var(--video) ${(a * 85).toFixed(0)}%, transparent);color:${a > .55 ? "#fff" : "inherit"}">${v}</td>`; }).join("")}</tr>`;
+  }).join("")}</tbody></table>`);
+}
+
+/* ------------------------------------------------------------------ Link */
+VIEWS.link = {title: "Link", group: "Live", build() {
+  return `<section class="cols">${["down", "up"].map(d => `<div class="panel dircard"><div class="hstack"><h2>${d === "down" ? "Download" : "Upload"} capacity</h2><span class="sp"></span><span class="pill" id="l-${d}-st"></span></div>
+    <div class="bignums"><div><div class="v num" id="l-${d}-rate">–</div><div class="l">shaping at, Mbit/s</div></div><div><div class="v num" id="l-${d}-ach">–</div><div class="l">achieved, Mbit/s</div></div><div><div class="v num" id="l-${d}-dl">–</div><div class="l">delay added, ms</div></div></div>
+    <div class="range" id="l-${d}-range"></div><p class="small muted" id="l-${d}-why" style="margin:6px 0 0"></p></div>`).join("")}</section>
+  <div class="hstack" style="margin:-8px 0"><span class="sp"></span><span class="small muted">Charts show the last</span>${spanSeg("seg-b")}</div>
+  <section class="cols">${["down", "up"].map(d => `<div class="panel"><h2>${d === "down" ? "Download" : "Upload"}: estimate vs achieved</h2><p class="sub">Top: shaper rate and achieved throughput, Mbit/s. Bottom: delay added, ms.</p>
+    <canvas class="chart sm" id="l-c-${d}"></canvas><canvas class="chart sm" id="l-d-${d}" style="margin-top:10px"></canvas>
+    <div class="legend"><span><i style="--c:var(--ink)"></i>shaper rate</span><span><i style="--c:var(--voice)"></i>achieved</span><span><i style="--c:var(--${d === "down" ? "video" : "bulk"})"></i>delay added (lower chart)</span><span><i class="dash" style="--c:var(--alert)"></i>bloat threshold</span></div></div>`).join("")}</section>
+  <section class="cols">
+    <div class="panel"><h2>Delay reflectors</h2><p class="sub">Hosts that answer timestamped probes, so the gateway can see delay in each direction separately.</p><div class="tablewrap" id="l-refl"></div></div>
+    <div class="panel"><h2>Change the link</h2><div id="l-lab"></div></div>
+  </section>`;
+}, update() {
+  const s = S.state, e = s.estimator, now = nowT();
+  for (const d of ["down", "up"]) {
+    const x = e[d], st = $(`l-${d}-st`);
+    st.className = "pill statepill " + (x.state === "bloat" || x.state === "blind" ? "warn" : "ok");
+    st.textContent = (STATE_TEXT[x.state] || x.state).split(":")[0];
+    txt(`l-${d}-rate`, mbit(x.rate_kbit)); txt(`l-${d}-ach`, mbit(x.achieved_kbit)); txt(`l-${d}-dl`, f1(x.delay_delta_ms));
+    const mx = x.nominal_kbit * 1.02, P = v => Math.max(0, Math.min(100, v / mx * 100)).toFixed(1);
+    set(`l-${d}-range`, `<div class="bar"></div><div class="ok" style="left:${P(x.min_kbit)}%;right:${(100 - P(x.max_kbit))}%"></div>
+      <div class="mk" style="left:${P(x.rate_kbit)}%;background:var(--ink)" title="shaper"></div><div class="mk" style="left:${P(x.achieved_kbit)}%;background:var(--voice);width:3px;height:14px;top:8px" title="achieved"></div>
+      <span class="lbl" style="left:${P(x.min_kbit)}%">min ${mbit(x.min_kbit)}</span><span class="lbl" style="left:${P(x.max_kbit)}%">max ${mbit(x.max_kbit)}</span>`);
+    txt(`l-${d}-why`, `${STATE_TEXT[x.state] || x.state}. Plan rate ${mbit(x.nominal_kbit)} Mbit/s; the estimator keeps the shaper between ${mbit(x.min_kbit)} and ${mbit(x.max_kbit)}. Jitter ${f1(x.jitter_ms)} ms. Load ${pct(x.load)}.`);
+    const evs = chartEvents();
+    lineChart($("l-c-" + d), [{color: css("--voice"), fill: true, pts: H(d === "down" ? "ad" : "au").map(([t, v]) => [t, v / 1000])}, {color: css("--ink"), step: true, width: 2, pts: H(d === "down" ? "rd" : "ru").map(([t, v]) => [t, v / 1000])}], {now, span: S.span, min: 2, events: evs});
+    lineChart($("l-d-" + d), [{color: css(d === "down" ? "--video" : "--bulk"), pts: H(d === "down" ? "dd" : "du")}], {now, span: S.span, min: 10, threshold: s.config.bloat_threshold_ms, thresholdLabel: "bloat", events: evs});
+  }
+  const rf = e.reflectors || {};
+  set("l-refl", Object.keys(rf).length ? `<table><thead><tr><th>Reflector</th><th>Method</th><th class="n">Answered</th><th class="n">Baseline</th></tr></thead><tbody>${Object.entries(rf).map(([r, v]) =>
+    `<tr><td><code>${esc(r)}</code></td><td>${v.mode === "icmp-ts" ? "timestamp, one-way" : "echo, round trip"}</td><td class="n">${v.recv}/${v.sent} (${pct(v.sent ? v.recv / v.sent : 0)})</td>
+     <td class="n">${Object.entries(e.baselines_ms || {}).filter(([k]) => k.startsWith(r)).map(([k, b]) => `${k.split("/")[1]} ${b} ms`).join(" · ") || "–"}</td></tr>`).join("")}</tbody></table>
+     <p class="small muted">${e.samples} delay samples so far. ${e.blind ? "<b>Blind mode:</b> no fresh samples, so rates are held." : "Probes are answered; the estimator is live."}</p>` : `<p class="empty">The estimator is off: the shaper runs at a fixed rate.</p>`);
+  labLinkPanel("l-lab");
+}};
+function labLinkPanel(id) {
+  const lab = S.lab;
+  if (!lab || !lab.lab) { set(id, `<p class="sub">On a real gateway the access link is whatever the ISP delivers. In the lab you can change it from here; start the lab server with <code>sudo make lab</code>.</p>`); return; }
+  const cur = `${lab.isp.down_mbit}/${lab.isp.up_mbit}`;
+  set(id, `<p class="sub">Emulated access link now <b>${lab.isp.down_mbit} / ${lab.isp.up_mbit} Mbit/s</b>, modem buffer ${lab.isp.buffer_ms} ms at the plan rate. Pick a condition and watch the estimator follow it.</p>
+    <div class="chips" id="lab-rates">${[[100, 20, "Plan 100/20"], [50, 10, "Congested 50/10"], [20, 5, "Drop to 20/5"], [10, 3, "DSL-like 10/3"]].map(([d, u, l]) =>
+      `<button type="button" class="chipbtn" data-rate="${d},${u}" aria-pressed="${cur === `${d}/${u}` || cur === `${d}.0/${u}.0`}">${l}</button>`).join("")}</div>
+    <form class="hstack" id="lab-rate-f" style="margin-top:10px"><label class="f" for="lab-d">Down Mbit/s<input class="t" id="lab-d" type="number" min="1" max="1000" step="0.5" value="${lab.isp.down_mbit}" style="width:110px"></label>
+    <label class="f" for="lab-u">Up Mbit/s<input class="t" id="lab-u" type="number" min="0.5" max="1000" step="0.5" value="${lab.isp.up_mbit}" style="width:110px"></label>
+    <button class="btn" type="submit" style="align-self:end">Apply</button></form>`);
+}
+
+/* ------------------------------------------------------------------ Policy */
+VIEWS.policy = {title: "Policy", group: "Live", build() {
+  return `<section class="cols wide-l">
+    <div class="panel"><div class="hstack"><h2>Current policy</h2><span class="sp"></span><div class="seg" role="group" aria-label="Direction" id="p-dir">${["down", "up"].map(d => `<button type="button" data-dir="${d}" aria-pressed="${S.polDir === d}">${d === "down" ? "Download" : "Upload"}</button>`).join("")}</div></div>
+      <p class="sub" id="p-sub"></p><div class="tablewrap" id="p-plan"></div>
+      <p class="small muted">Order of construction: every class first gets its floor, then intent leases, then measured realtime demand × 1.3 (capped at 60%), and the remainder is split 2:1 between best effort and bulk. Classes may borrow unused capacity up to the full rate.</p></div>
+    <div class="panel"><h2>Controls</h2><p class="sub">Every action here is logged and can be undone.</p>
+      <div class="ctrl">
+        <div class="item"><div><b id="p-auto-t">Automation is on</b><span id="p-auto-s">The engine adapts rates and shares every 250 ms.</span></div><button class="btn" type="button" id="p-pause">Pause</button></div>
+        <div class="item"><div><b>Roll back</b><span>Return to the last policy that applied and verified cleanly.</span></div><button class="btn" type="button" id="p-rb">Roll back</button></div>
+        <div class="item"><div><b>Safe baseline now</b><span id="p-safe-s">Shape at a conservative share of the plan rate with fair classes. Leases stop boosting.</span></div><button class="btn danger" type="button" id="p-safe">Go safe</button></div>
+      </div>
+      <h3 style="font-size:16px;margin:14px 0 6px">Safety record</h3><div id="p-safety"></div></div>
+  </section>
+  <section class="cols wide-l">
+    <div class="panel"><h2>Change log</h2><p class="sub">Each change the engine applied to the shaper, with the reason it was made.</p><div class="scroll" style="max-height:360px"><ul class="timeline log" id="p-log"></ul></div></div>
+    <div class="panel"><h2>Shield</h2><p class="sub">The shield checks every plan before it reaches the kernel: rate bounds, step limits, the change budget, and that guarantees fit the rate.</p><ul class="timeline" id="p-shield"></ul></div>
+  </section>
+  <section class="panel"><div class="hstack"><h2>Kernel state</h2><span class="sp"></span><button class="btn small quiet" type="button" id="p-insp-r">Refresh</button></div>
+    <p class="sub">Exactly what is installed in Linux right now, read back with <code>tc -s</code> and <code>nft list</code>. Nothing here is hidden behind the engine.</p>
+    <div class="tabs" role="tablist" id="p-tabs">${[["down", "tc: download"], ["up", "tc: upload"], ["nft", "nftables marks"]].map(([v, l]) => `<button role="tab" type="button" data-tab="${v}" aria-selected="${S.inspTab === v}">${l}</button>`).join("")}</div>
+    <pre class="mono" id="p-insp">Loading…</pre></section>`;
+}, async init() {
+  $("p-pause").onclick = async () => {
+    const p = !S.state.paused;
+    if (p && !(await ask("Pause automation?", "The gateway switches to the safe baseline and stops adapting until you resume. Classification and monitoring continue.", "Pause automation"))) return;
+    await send("POST", "/api/automation", {paused: p}); poll();
+  };
+  $("p-rb").onclick = async () => { if (await ask("Roll back the policy?", "The shaper returns to the last policy that applied and verified cleanly.", "Roll back")) { await send("POST", "/api/rollback"); poll(); } };
+  $("p-safe").onclick = async () => { if (await ask("Switch to the safe baseline?", "Shaping stays on at a conservative rate with fair classes. Per-flow priorities and lease boosts stop until the engine adapts again.", "Go safe", true)) { await send("POST", "/api/safe"); poll(); } };
+  $("p-insp-r").onclick = loadInspect;
+  loadInspect();
+}, update() {
+  const s = S.state, d = S.polDir, plan = s.plan?.[d], tins = s.tins?.[d] || {}, fl = s.floors || {};
+  if (plan) {
+    txt("p-sub", `${d === "down" ? "Download" : "Upload"} shaped at ${mbit(plan.rate)} Mbit/s by ${s.config.backend.toUpperCase()}${s.config.leaf ? " with " + s.config.leaf + " leaves" : ""}.`);
+    set("p-plan", `<table><thead><tr><th>Class</th><th class="n">Guaranteed</th><th class="n">Share</th><th class="n">Floor</th><th class="n">Using now</th><th class="n">Queue</th><th class="n">Drops/s</th></tr></thead><tbody>${LANES.map(t => {
+      const g = plan.guarantee[t] || 0, fr = fl[t];
+      return `<tr><td><span class="cls" style="--c:var(--${t})">${LANE_NAME[t]}</span></td><td class="n">${mbit(g)}</td><td class="n">${pct(g / plan.rate)}</td><td class="n">${fr != null ? pct(fr) : (t === "intent" ? "leases" : "–")}</td>
+      <td class="n">${mbit(tins[t]?.kbit || 0)}</td><td class="n">${f1(tins[t]?.queue_ms || 0)} ms</td><td class="n">${(tins[t]?.drops_per_s || 0).toFixed(0)}</td></tr>`;
+    }).join("")}</tbody></table>`);
+  }
+  const paused = s.paused;
+  txt("p-auto-t", paused ? "Automation is paused" : "Automation is on");
+  txt("p-auto-s", paused ? "Holding the safe baseline. Nothing adapts until you resume." : "The engine adapts rates and shares several times a second.");
+  $("p-pause").textContent = paused ? "Resume" : "Pause"; $("p-pause").className = paused ? "btn primary" : "btn";
+  txt("p-safe-s", `Shape at ${pct(s.config.safe_fraction || .85)} of the plan rate with fair classes. Leases stop boosting.`);
+  const sf = s.safety, budget = s.config.max_changes_per_minute || 90;
+  set("p-safety", `<div class="metric-row"><div class="metric" style="--c:var(--video)"><div class="v num">${sf.changes_last_minute}<small class="muted" style="font-size:14px"> / ${budget}</small></div><div class="l">changes in the last minute</div></div>
+    <div class="metric" style="--c:var(--intent)"><div class="v num">${sf.shield_interventions}</div><div class="l">shield corrections</div></div>
+    <div class="metric" style="--c:var(--besteffort)"><div class="v num">${sf.rollbacks}</div><div class="l">rollbacks</div></div>
+    <div class="metric" style="--c:var(--bulk)"><div class="v num">${sf.apply_failures}</div><div class="l">failed applies</div></div></div>
+    <div class="gauge" title="change budget used"><i style="width:${Math.min(100, sf.changes_last_minute / budget * 100)}%"></i></div>`);
+  const log = s.apply_log || [];
+  set("p-log", log.length ? log.map(c => `<li><time>${clock(c.t)}</time><span class="kind">${esc(c.kind)}</span><span>${esc(c.reason)}<span class="small muted"> → ${mbit(c.down)} / ${mbit(c.up)} Mbit/s</span>${(c.shield || []).length ? `<br><span class="small" style="color:var(--intent)">shield: ${esc(c.shield.join("; "))}</span>` : ""}</span></li>`).join("") : `<li class="empty">No changes yet.</li>`);
+  const sh = Object.entries((sf.recent_interventions || []).reduce((a, x) => (a[x] = (a[x] || 0) + 1, a), {}));
+  set("p-shield", sh.length ? `<li class="small muted" style="grid-template-columns:minmax(0,1fr)">Last ${sf.recent_interventions.length} corrections:</li>` + sh.map(([x, n]) => `<li style="grid-template-columns:minmax(0,1fr) auto"><span>${esc(x)}</span><span class="tag">×${n}</span></li>`).join("") : `<li class="empty" style="grid-template-columns:1fr">No interventions. Every recent plan was within bounds.</li>`);
+}};
+async function loadInspect() {
+  S.inspect = await get("/api/inspect").catch(() => null);
+  showInspect();
+}
+function showInspect() {
+  const el = $("p-insp"); if (!el) return;
+  const i = S.inspect; if (!i) { el.textContent = "Kernel state is not available."; return; }
+  const t = S.inspTab;
+  el.textContent = t === "nft" ? i.nft : `$ tc -s qdisc show dev ${i[t].dev}\n${i[t].qdisc}\n$ tc -s class show dev ${i[t].dev}\n${i[t].class}`;
+}
+
+/* ------------------------------------------------------------------ Prioritise */
+function prioritiseForm(simple) {
+  return `<div class="form" id="pf">
+    <div><div class="f" style="margin-bottom:6px">Which device?</div><div class="devpick" id="pf-devs"></div></div>
+    <div class="row">
+      <div><div class="f" style="margin-bottom:6px">What for?</div><div class="chips" id="pf-goal"><button type="button" class="chipbtn" data-goal="low_latency">Calls and games (low delay)</button><button type="button" class="chipbtn" data-goal="throughput">Streaming or uploads (steady bandwidth)</button></div></div>
+    </div>
+    <div><div class="f" style="margin-bottom:6px">For how long?</div><div class="chips" id="pf-dur">${DURS.map(([v, l]) => `<button type="button" class="chipbtn" data-dur="${v}">${l}</button>`).join("")}</div></div>
+    ${simple ? "" : `<div class="row"><div style="grid-column:span 2;min-width:0"><div class="f" style="margin-bottom:6px">Importance if priorities overlap</div><div class="chips" id="pf-prio">${[[1, "Normal"], [2, "High"], [3, "Critical"]].map(([v, l]) => `<button type="button" class="chipbtn" data-prio="${v}">${l}</button>`).join("")}</div></div>
+</div><div class="row">
+      <label class="f" for="pf-who">Asked by<input class="t" id="pf-who" placeholder="household" maxlength="40"></label>
+      <label class="f" for="pf-lab">Label<input class="t" id="pf-lab" placeholder="e.g. Board meeting" maxlength="60"></label></div>`}
+    <div class="preview" id="pf-prev" aria-live="polite"><span class="muted">Pick a device to see what this would reserve and who would give up share.</span></div>
+    <div class="hstack"><span class="sp"></span><button class="btn primary" type="button" id="pf-go" disabled>Prioritise</button></div></div>`;
+}
+let pvTimer = null;
+function pfSync() {
+  const f = S.form, devs = devices();
+  if (!f.target && devs.length) { /* leave unselected until the user picks */ }
+  set("pf-devs", devs.map(d => `<button type="button" data-dev="${esc(d.ip)}" aria-pressed="${f.target === d.ip}">${icon(d.type, 20)}<span><b>${esc(d.name || d.ip)}</b><small>${esc(d.activity || "Idle")}</small></span></button>`).join("") || `<span class="empty">No devices yet.</span>`);
+  document.querySelectorAll("#pf-goal [data-goal]").forEach(b => b.setAttribute("aria-pressed", b.dataset.goal === f.goal));
+  document.querySelectorAll("#pf-dur [data-dur]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.dur === f.dur));
+  document.querySelectorAll("#pf-prio [data-prio]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.prio === f.prio));
+  if ($("pf-go")) $("pf-go").disabled = !f.target;
+}
+function pfBody() {
+  const f = S.form, g = f.goal === "throughput";
+  return {target: f.target, goal: f.goal, duration_s: f.dur, priority: f.prio, requester: ($("pf-who")?.value || "").trim() || "household",
+    label: ($("pf-lab")?.value || "").trim(), demand_down_kbit: g ? 16000 : 3000, demand_up_kbit: g ? 4000 : 2000};
+}
+function schedulePreview() { clearTimeout(pvTimer); pvTimer = setTimeout(preview, 150); }
+async function preview() {
+  const el = $("pf-prev"); if (!el || !S.form.target) return;
+  const r = await send("POST", "/api/intents?dry_run=1", {...pfBody(), dry_run: true});
+  const d = r.data, p = d.preview?.candidate;
+  if (!p) { el.innerHTML = `<span class="muted">${esc(d.reason || d.error || "No preview available.")}</span>`; return; }
+  const frac = p.fraction_of_demand, others = Object.entries(d.preview.others || {});
+  el.innerHTML = `<div><b>${esc(devName(S.form.target))}</b> would get <b>${mbit(p.granted_down_kbit)} Mbit/s down and ${mbit(p.granted_up_kbit)} up</b> reserved for ${durText(S.form.dur)} (${pct(Math.min(1, frac))} of what this kind of use needs).</div>
+    <div class="fit"><i style="width:${Math.min(100, frac * 100).toFixed(0)}%"></i></div>
+    ${!d.ok ? `<div style="color:var(--alert)"><b>Can't reserve this now:</b> ${esc(d.reason)}</div>` : ""}
+    ${others.length ? `<div>Overlapping leases are renegotiated by weighted bargaining: ${others.map(([id, o]) => `${esc(devName(o.target))} keeps ${mbit(o.granted_down_kbit)}/${mbit(o.granted_up_kbit)} Mbit/s`).join("; ")}.</div>` : ""}
+    <div class="small">${(d.impact || []).length ? `Gives up share while this runs: ${d.impact.map(x => `<b>${esc(x.device)}</b> (${esc((devices().find(v => v.ip === x.ip)?.activity || LABEL_NAME[x.class] || "busy").toLowerCase())}, ${mbit(x.kbps_dn)} Mbit/s now)`).join(", ")}. They keep their floors and use whatever is left.` : "Nothing else is busy, so nobody gives anything up right now."}</div>
+    <div class="small muted">All leases together may reserve at most ${pct(S.state.budget?.max_boost_fraction || .6)} of the link (${mbit(d.preview.boost_capacity_kbit.down)} Mbit/s down now). The lease ends by itself; you can end it early.</div>`;
+}
+function bindPrioritise() {
+  const root = $("pf"); if (!root) return;
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.dev) { S.form.target = b.dataset.dev; pfSync(); schedulePreview(); }
+    if (b.dataset.goal) { S.form.goal = b.dataset.goal; pfSync(); schedulePreview(); }
+    if (b.dataset.dur) { S.form.dur = +b.dataset.dur; pfSync(); schedulePreview(); }
+    if (b.dataset.prio) { S.form.prio = +b.dataset.prio; pfSync(); schedulePreview(); }
+    if (b.id === "pf-go") {
+      b.disabled = true;
+      const r = await send("POST", "/api/intents", pfBody());
+      if (r.data.ok) { toast(`${devName(S.form.target)} is prioritised for ${durText(S.form.dur)}.`); S.form.target = null; $("pf-prev").innerHTML = '<span class="muted">Done. Pick another device to add a second priority.</span>'; }
+      else if (!r.data.replay) toast(r.data.reason || r.data.error || "The lease was not granted.", 5000);
+      pfSync(); poll();
+    }
+  });
+}
+function modesHTML(simple) {
+  const ms = S.modes || [], devs = devices();
+  return ms.map(m => `<div class="mode"><b>${esc(m.name)}</b><p>${esc(m.text)}</p>
+    <p class="small">${m.goal === "low_latency" ? "Low delay" : "Steady bandwidth"} · ${durText(m.duration_s)} · reserves up to ${mbit(m.demand_down_kbit)}/${mbit(m.demand_up_kbit)} Mbit/s</p>
+    <div class="hstack"><select class="t" id="md-${m.id}" aria-label="Device for ${esc(m.name)}" style="flex:1;width:auto">${devs.map(d => `<option value="${esc(d.ip)}">${esc(d.name || d.ip)}</option>`).join("")}</select>
+    <button class="btn small primary" type="button" data-mode="${m.id}">Start</button></div></div>`).join("");
+}
+async function startMode(id) {
+  const target = $("md-" + id)?.value; if (!target) return;
+  const r = await send("POST", `/api/modes/${id}/activate`, {target, requester: "household"});
+  if (r.data.ok) toast(`${(S.modes || []).find(m => m.id === id)?.name} started for ${devName(target)}.`);
+  else if (!r.data.replay) toast(r.data.reason || "The mode could not start.", 5000);
+  poll();
+}
+VIEWS.prioritise = {title: "Prioritise", group: "Control", build() {
+  return `<section class="cols wide-l">
+    <div class="panel"><h2>Prioritise a device</h2><p class="sub">A temporary lease: the device gets a reserved share for a while, then everything returns to normal by itself. You see the cost before you commit.</p>${prioritiseForm(false)}</div>
+    <div style="display:grid;gap:22px;align-content:start">
+      <div class="panel"><h2>Active priorities</h2><p class="sub">Checked continuously against what the device actually gets.</p><div id="pr-leases"></div></div>
+      <div class="panel"><h2>Daily boost budget</h2><p class="sub" id="pr-bsub"></p><div id="pr-budget"></div></div>
+    </div></section>
+  <section class="panel"><h2>Modes</h2><p class="sub">One-tap presets for common situations. Each starts an ordinary lease you can end at any time.</p><div class="modes" id="pr-modes"></div></section>
+  <section class="cols wide-r">
+    <div class="panel"><h2>Add a schedule</h2><p class="sub">A recurring window that starts a lease automatically, for example weekday work calls.</p>
+      <form class="form" id="sc-f"><div class="row"><label class="f" for="sc-dev">Device<select class="t" id="sc-dev"></select></label>
+        <label class="f" for="sc-goal">For<select class="t" id="sc-goal"><option value="low_latency">Calls and games</option><option value="throughput">Streaming or uploads</option></select></label></div>
+        <div><div class="f" style="margin-bottom:6px">Days</div><div class="days" id="sc-days">${DAYS.map((d, i) => `<button type="button" data-day="${i}" aria-pressed="${S.schedDays.includes(i)}">${d}</button>`).join("")}</div></div>
+        <div class="row"><label class="f" for="sc-s">From<input class="t" id="sc-s" type="time" value="09:00"></label><label class="f" for="sc-e">Until<input class="t" id="sc-e" type="time" value="17:30"></label>
+        <label class="f" for="sc-l">Label<input class="t" id="sc-l" placeholder="Work calls" maxlength="60"></label></div>
+        <div class="hstack"><span class="sp"></span><button class="btn primary" type="submit">Add schedule</button></div></form></div>
+    <div class="panel"><h2>Schedules</h2><div id="sc-list"></div></div>
+  </section>`;
+}, async init() {
+  if (!S.modes) S.modes = await get("/api/modes").catch(() => R?.modes || []);
+  bindPrioritise(); pfSync();
+  set("pr-modes", modesHTML());
+  $("sc-days").onclick = (e) => { const b = e.target.closest("[data-day]"); if (!b) return; const d = +b.dataset.day; S.schedDays = S.schedDays.includes(d) ? S.schedDays.filter(x => x !== d) : [...S.schedDays, d].sort(); b.setAttribute("aria-pressed", S.schedDays.includes(d)); };
+  $("sc-f").onsubmit = async (e) => {
+    e.preventDefault();
+    const r = await send("POST", "/api/schedules", {target: $("sc-dev").value, goal: $("sc-goal").value, days: S.schedDays, start: $("sc-s").value, end: $("sc-e").value, label: $("sc-l").value || "Scheduled", priority: 2});
+    if (r.status === 200) toast("Schedule added."); else if (!r.data.replay) toast(r.data.error || "The schedule was not added.", 5000);
+    poll();
+  };
+}, update() {
+  pfSync();
+  const ls = activeLeases();
+  set("pr-leases", ls.length ? ls.map(i => leaseHTML(i)).join("") : `<p class="empty">Nothing is prioritised. Every device shares the link by class.</p>`);
+  const b = S.state.budget || {};
+  txt("pr-bsub", `Each person can boost for up to ${Math.round((b.daily_min || 480) / 60)} hours a day in total; a single lease lasts at most ${durText(b.max_lease_s || 28800)}. This stops one person from holding priority all day.`);
+  const used = Object.entries(b.used_min || {});
+  set("pr-budget", used.length ? used.map(([who, m]) => `<div style="display:grid;grid-template-columns:110px minmax(0,1fr) 80px;gap:10px;align-items:center;margin-bottom:6px"><span>${esc(who)}</span><div class="gauge"><i style="width:${Math.min(100, m / (b.daily_min || 480) * 100)}%;background:var(--intent)"></i></div><span class="small num">${Math.round(m)} / ${b.daily_min} min</span></div>`).join("") : `<p class="empty">No boosts used today.</p>`);
+  const dv = $("sc-dev"); if (dv) { const o = devices().map(d => `<option value="${esc(d.ip)}">${esc(d.name || d.ip)}</option>`).join(""); if (dv._o !== o) { const v = dv.value; dv.innerHTML = o; dv._o = o; if (v) dv.value = v; } }
+  const sc = schedules();
+  set("sc-list", sc.length ? `<table><thead><tr><th>Device</th><th>When</th><th>For</th><th></th></tr></thead><tbody>${sc.map(x => `<tr><td>${esc(devName(x.target))}</td><td>${x.days.map(d => DAYS[d]).join(" ")} ${esc(x.start)}–${esc(x.end)}</td><td>${esc(x.label || (x.goal === "low_latency" ? "Calls and games" : "Bandwidth"))}</td><td><button class="btn small quiet" type="button" data-unsched="${esc(x.id)}">Remove</button></td></tr>`).join("")}</tbody></table>` : `<p class="empty">No schedules yet.</p>`);
+  const ms = $("pr-modes"); if (ms && ms.querySelector("select")?.options.length !== devices().length) set("pr-modes", modesHTML());
+}};
+
+/* ------------------------------------------------------------------ Experiments */
+VIEWS.experiments = {title: "Experiments", group: "Evidence", build() {
+  return `<section class="panel"><h2>Scenarios</h2><p class="sub">Each scenario replays the same household situation against the baselines and IntentQoS, with the same random parameters for every arm.</p>
+    <div class="scen" id="x-scen"></div>
+    <div class="hstack" style="margin-top:14px" id="x-run"></div><div id="x-job" style="margin-top:12px"></div></section>
+  <section class="panel"><div class="hstack"><h2 id="x-rt">Results</h2><span class="sp"></span><select class="t" id="x-src" aria-label="Which results" style="width:auto"></select></div>
+    <p class="sub" id="x-rsub"></p><div class="tablewrap" id="x-table"></div><div class="figs" id="x-figs" style="margin-top:14px"></div></section>
+  <section class="panel"><h2>Inject conditions by hand</h2><p class="sub" id="x-isub"></p><div id="x-inject"></div></section>`;
+}, async init() {
+  S.exps = await get("/lab/experiments").catch(() => null);
+  this.render();
+}, render() {
+  const ex = S.exps;
+  if (!ex) {
+    set("x-scen", `<p class="empty">Experiments run from the lab server, which drives the emulated home network. Start it with <code>sudo make lab</code> and open this console on port 8090. The committed results are in <code>results/REPORT.md</code>.</p>`);
+    set("x-table", ""); return;
+  }
+  set("x-scen", ex.catalogue.map(c => `<button type="button" class="sc" data-scen="${c.id}" aria-pressed="${S.scen === c.id}"><span class="id">${c.id.split("_")[0].toUpperCase()} · about ${c.duration_s} s per run</span><b>${esc(c.short)}</b><p>${esc(c.story)}</p><span class="hstack">${c.arms.map(a => `<span class="arm" style="--c:var(${ARM_COLOR[a]})">${ARM_NAME[a]}</span>`).join("")}</span></button>`).join(""));
+  const cat = ex.catalogue.find(c => c.id === S.scen) || ex.catalogue[0];
+  if (!S.arms || !S.arms.every(a => cat.arms.includes(a))) S.arms = [...cat.arms];
+  const canRun = S.lab?.lab && !S.replay;
+  set("x-run", `<div class="f">Seeds</div><div class="chips">${[1, 2, 3, 5].map(n => `<button type="button" class="chipbtn" data-seeds="${n}" aria-pressed="${S.seeds === n}">${n}</button>`).join("")}</div>
+    <div class="f" style="margin-left:8px">Arms</div><div class="chips">${cat.arms.map(a => `<button type="button" class="chipbtn" data-arm="${a}" aria-pressed="${S.arms.includes(a)}">${ARM_NAME[a]}</button>`).join("")}</div><span class="sp"></span>
+    <span class="small muted">about ${Math.ceil(S.seeds * S.arms.length * (cat.duration_s + 8) / 60)} min</span>
+    <button class="btn primary" type="button" id="x-go" ${canRun ? "" : "disabled"} title="${canRun ? "" : "Needs the lab server"}">Run scenario</button>`);
+  const srcs = [["results", `Committed: ${Object.values(ex.summary?.[S.scen]?.arms || {})[0] || 0} seeds per arm`]].concat((ex.jobs || []).filter(j => j.state === "done" && j.scenario === S.scen).map(j => [j.id, `Lab run ${j.id}`]));
+  const sel = $("x-src"); const o = srcs.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+  if (sel._o !== o) { sel.innerHTML = o; sel._o = o; } sel.value = srcs.some(s => s[0] === S.resSrc) ? S.resSrc : "results";
+  this.results();
+}, async results() {
+  const ex = S.exps; let summ = ex.summary, figs = ex.figures || [];
+  if (S.resSrc !== "results") { const d = await get("/lab/experiments/" + S.resSrc).catch(() => null); summ = d?.summary; figs = d?.figures || []; }
+  const sc = summ?.[S.scen];
+  txt("x-rt", sc ? sc.title : "Results");
+  if (!sc) { set("x-table", `<p class="empty">No results for this scenario yet.</p>`); set("x-figs", ""); return; }
+  const arms = Object.keys(sc.arms), ref = arms.find(a => !sc.metrics[0]?.vs?.[a]) || arms[0];
+  txt("x-rsub", `Medians over ${Object.values(sc.arms).join("/")} runs per arm, with the interquartile range as dots. The p-value compares ${ARM_NAME[ref]} with each other arm (two-sided Mann-Whitney U).`);
+  set("x-table", `<table><thead><tr><th>Metric</th>${arms.map(a => `<th class="n"><span class="arm" style="--c:var(${ARM_COLOR[a]})">${ARM_NAME[a]}</span></th>`).join("")}<th>Spread across runs</th></tr></thead><tbody>${sc.metrics.map(m => {
+    const med = arms.map(a => m.arms[a]?.median), fin = med.filter(Number.isFinite);
+    const best = m.better === "lower" ? Math.min(...fin) : Math.max(...fin);
+    const all = arms.flatMap(a => m.arms[a]?.values || []).filter(Number.isFinite), lo = Math.min(...all, 0), hi = Math.max(...all) || 1, P = v => ((v - lo) / (hi - lo || 1) * 100).toFixed(1);
+    const fmt = v => !Number.isFinite(v) ? "–" : Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2);
+    return `<tr><td>${esc(m.label)} <span class="small muted">(${esc(m.unit)}, ${m.better} is better)</span></td>${arms.map((a, i) => {
+      const v = m.vs?.[a]; const p = v?.p_value;
+      return `<td class="n" style="${med[i] === best ? "font-weight:700" : ""}">${fmt(med[i])}${v ? `<br><span class="small muted" style="font-family:var(--sans)">p ${p < 0.001 ? "< 0.001" : "= " + (p ?? 1).toFixed(3)}</span>` : (a === ref ? '<br><span class="small muted" style="font-family:var(--sans)">reference</span>' : "")}</td>`;
+    }).join("")}<td><div class="dots">${arms.map(a => (m.arms[a]?.values || []).map(v => `<i style="left:${P(v)}%;--c:var(${ARM_COLOR[a]})"></i>`).join("") + (Number.isFinite(m.arms[a]?.median) ? `<b style="left:${P(m.arms[a].median)}%;--c:var(${ARM_COLOR[a]})"></b>` : "")).join("")}</div></td></tr>`;
+  }).join("")}</tbody></table>`);
+  const fig = figs.filter(f => f.includes("fig_" + S.scen.split("_")[0]));
+  set("x-figs", fig.map(f => `<figure style="margin:0"><img alt="Figure for ${esc(sc.title)}" src="${S.replay ? (R.figures?.[f] || "") : "/lab/figures/" + esc(f)}"></figure>`).join(""));
+}, update() {
+  const lab = S.lab, job = lab?.job;
+  if (job) {
+    set("x-job", `<div class="hstack small"><b>${esc(job.scenario)}</b><span class="muted">${job.done} of ${job.total} runs · ${job.state}${job.state === "running" ? ` · about ${Math.max(0, Math.ceil((job.eta_s - (Date.now() / 1000 - job.started)) / 60))} min left` : ""}</span></div>
+      <div class="progress" style="margin:6px 0"><i style="width:${(job.done / job.total * 100).toFixed(0)}%"></i></div><pre class="mono" style="max-height:120px">${esc(job.log.join("\n") || "starting…")}</pre>`);
+    if (job.state === "done" && S._lastJob !== job.id) { S._lastJob = job.id; get("/lab/experiments").then(x => { S.exps = x; S.resSrc = job.id; VIEWS.experiments.render(); }).catch(() => {}); }
+  } else set("x-job", "");
+  txt("x-isub", lab?.lab ? (S.replay ? "Recorded lab state. In a live lab these switches start real traffic on the emulated home network." : "Start household traffic on the emulated home network, change the link, or crash the engine, and watch Monitor respond.") : "Needs the lab server (sudo make lab).");
+  if (!lab?.lab) { set("x-inject", ""); return; }
+  const tr = lab.traffic || {};
+  set("x-inject", `<div class="preset-grid">${Object.entries(lab.presets).map(([k, n]) => `<button type="button" class="toggle" data-preset="${k}" aria-pressed="${!!tr[k]}"><b>${esc(n)}</b><span>${tr[k] ? `running · ${tr[k].flows} flow${tr[k].flows > 1 ? "s" : ""}` : "off"}</span></button>`).join("")}</div>
+    <div style="margin-top:14px" id="x-link"></div>
+    <div class="hstack" style="margin-top:14px"><span class="small muted">Engine: ${lab.engine.running ? "running" : "stopped"} · classifier ${esc(lab.engine.classifier)} · watchdog ${lab.engine.watchdog ? "armed" : "off"}</span><span class="sp"></span>
+      <button class="btn small danger" type="button" id="x-kill">Crash the engine</button><button class="btn small" type="button" id="x-restart">Restart engine</button><button class="btn small quiet" type="button" id="x-reset">Stop all traffic</button></div>`);
+  labLinkPanel("x-link");
+}};
+
+/* ------------------------------------------------------------------ System */
+const ARCH = [
+  {layer: "UI", y: 18, nodes: [["console", "Console", "this page"], ["api", "REST API", "intents, corrections, control"], ["prom", "Prometheus", "/metrics"]]},
+  {layer: "Analytics", y: 104, nodes: [["grade", "Metrics + grade", ""], ["exp", "Experiment runner", "baselines vs IntentQoS"]]},
+  {layer: "Data", y: 190, nodes: [["events", "Event log", "events.jsonl"], ["leases", "Lease store", "intents.json"], ["model", "Model", "flowclf.iqm"], ["hist", "Time series", "1 s rows"]]},
+  {layer: "Edge (gateway)", y: 276, nodes: [["capture", "Capture", ""], ["classifier", "Classifier", ""], ["estimator", "Estimator", ""], ["intents", "Intents", ""], ["policy", "Policy + shield", ""], ["enforcer", "Enforcer", ""]]},
+  {layer: "Network", y: 362, nodes: [["isp", "Access link", ""], ["watchdog", "Watchdog", ""], ["nft", "nftables marks", ""], ["tc", "tc shaper", ""]]},
+  {layer: "Devices", y: 448, nodes: [["lan", "Home devices", ""]]},
+];
+const ARCH_EDGES = [["lan", "capture"], ["capture", "classifier"], ["classifier", "policy"], ["estimator", "policy"], ["intents", "policy"], ["policy", "enforcer"], ["enforcer", "tc"], ["enforcer", "nft"], ["tc", "isp"],
+  ["api", "intents"], ["console", "api"], ["model", "classifier"], ["watchdog", "tc"], ["grade", "console"], ["hist", "grade"], ["intents", "leases"]];
+function archHealth() {
+  const s = S.state, sy = S.sys || {}, h = {};
+  const cap = s.capture || {};
+  h.console = ["ok", S.replay ? "replay" : "live"]; h.api = ["ok", "answering"]; h.prom = ["ok", "/metrics"];
+  h.grade = ["ok", `grade ${s.grade?.overall?.grade || "–"}`]; h.exp = [S.lab?.lab ? "ok" : "", S.lab?.lab ? "lab connected" : "needs lab server"];
+  h.events = ["ok", `${(s.events || []).length} recent`]; h.leases = ["ok", `${activeLeases().length} active`];
+  h.model = [s.classifier.model_loaded ? "ok" : "warn", s.classifier.model_loaded ? "loaded" : "rules only"]; h.hist = ["ok", `${S.hist.length} rows here`];
+  h.capture = [cap.kernel_drops > 0 ? "warn" : "ok", `${cap.flows ?? 0} flows · ${cap.kernel_drops ?? 0} drops`];
+  h.classifier = ["ok", `${s.config.classifier} · ${s.flows.length} flows`];
+  h.estimator = [!s.config.estimator ? "" : s.estimator.blind ? "bad" : "ok", !s.config.estimator ? "off" : s.estimator.blind ? "blind" : `${s.estimator.down.state} / ${s.estimator.up.state}`];
+  h.intents = ["ok", `${activeLeases().length} leases`];
+  h.policy = [s.paused ? "warn" : "ok", s.paused ? "paused" : `${s.safety.changes_last_minute}/min`];
+  h.enforcer = [s.safety.apply_failures ? "warn" : "ok", `${s.safety.rollbacks} rollbacks`];
+  h.tc = ["ok", `${s.config.backend.toUpperCase()}${s.config.leaf ? " + " + s.config.leaf : ""}`]; h.nft = ["ok", "flow → class"];
+  const wd = sy.watchdog || {}; h.watchdog = [wd.alive ? "ok" : "bad", wd.alive ? `armed · ${wd.trips || 0} trips` : "not running"];
+  h.isp = ["ok", `${mbit(s.estimator.down.rate_kbit)}/${mbit(s.estimator.up.rate_kbit)} shaped`];
+  h.lan = ["ok", `${s.devices.filter(d => d.flows).length} active devices`];
+  return h;
+}
+function archSVG() {
+  const W = 1000, h = archHealth(), pos = {};
+  let out = "";
+  for (const L of ARCH) {
+    out += `<rect class="layer" x="0" y="${L.y - 8}" width="${W}" height="76" rx="10"/><text class="lt" x="14" y="${L.y + 8}">${L.layer}</text>`;
+    const n = L.nodes.length, gw = (W - 170) / n;
+    L.nodes.forEach(([id, t], i) => { const x = 160 + i * gw + 6, w = gw - 12; pos[id] = {x: x + w / 2, y: L.y + 30, w}; });
+  }
+  let edges = "";
+  for (const [a, b] of ARCH_EDGES) {
+    const p = pos[a], q = pos[b]; if (!p || !q) continue;
+    const y1 = p.y + (q.y > p.y ? 21 : q.y < p.y ? -21 : 0), y2 = q.y + (q.y > p.y ? -21 : q.y < p.y ? 21 : 0);
+    const hot = ["lan-capture", "classifier-policy", "policy-enforcer", "enforcer-tc", "tc-isp"].includes(a + "-" + b);
+    edges += `<path class="${hot ? "flow" : "edge"}" d="M${p.x},${y1} C${p.x},${(y1 + y2) / 2} ${q.x},${(y1 + y2) / 2} ${q.x},${y2}"/>`;
+  }
+  let nodes = "";
+  for (const L of ARCH) for (const [id, t, sub] of L.nodes) {
+    const p = pos[id], [st, live] = h[id] || ["", sub], w = Math.min(p.w, 210);
+    nodes += `<g class="node ${st}"><rect x="${p.x - w / 2}" y="${p.y - 21}" width="${w}" height="42" rx="8"/><circle cx="${p.x - w / 2 + 12}" cy="${p.y - 6}" r="4"/>
+      <text class="nt" x="${p.x - w / 2 + 22}" y="${p.y - 2}">${esc(t)}</text><text class="ns" x="${p.x - w / 2 + 12}" y="${p.y + 14}">${esc(live || sub)}</text></g>`;
+  }
+  return `<svg class="arch" viewBox="0 0 ${W} 530" role="img" aria-label="Architecture with live health of each component">${out}${edges}${nodes}</svg>`;
+}
+VIEWS.system = {title: "System", group: "Evidence", build() {
+  return `<section class="panel"><h2>Architecture, live</h2><p class="sub">The six layers the brief asks for. Each box shows the live state of that component; the moving line is the packet path.</p><div class="tablewrap" id="s-arch"></div></section>
+  <section class="cols">
+    <div class="panel"><div class="hstack"><h2>Setup check</h2><span class="sp"></span><button class="btn small quiet" type="button" id="s-rerun">Run again</button></div><p class="sub">The verification steps from the setup guide, run against this gateway now.</p><ul class="checks" id="s-checks"></ul></div>
+    <div style="display:grid;gap:22px;align-content:start">
+      <div class="panel"><h2>Engine overhead</h2><p class="sub">The brief's CPU-overhead criterion, measured on the gateway itself.</p><div class="metric-row" id="s-proc"></div><canvas class="chart sm" id="s-cpu" style="height:90px"></canvas></div>
+      <div class="panel"><h2>Kernel and versions</h2><div id="s-kern"></div></div>
+    </div></section>
+  <section class="panel"><h2>Known limitations</h2><p class="sub">Where the prototype stops and a production product would continue. Full list in <code>docs/KNOWN_LIMITATIONS.md</code> and <code>docs/FINDINGS.md</code>.</p>
+    <ul class="lim">
+      <li><b>Emulated, and labelled as such.</b> The ISP link, its modem buffer, the internet delay and the household devices are emulated in Linux network namespaces. Real DOCSIS, GPON or 5G scheduling and Wi-Fi airtime are not modelled.</li>
+      <li><b>Classifier trained on emulated traffic.</b> Expect lower accuracy in real homes; the correction loop on the Traffic view collects labels for retraining. VPNs and QUIC connection reuse hide applications inside one flow.</li>
+      <li><b>One copy into user space.</b> The C capture helper aggregates flows from a memory-mapped ring, but every packet header still leaves the kernel once. The production path is eBPF at the TC hook.</li>
+      <li><b>No physical router yet.</b> The router build ran natively on x86 and as aarch64 + musl under emulation; a run on real ARM hardware is the next step.</li>
+      <li><b>Home side only.</b> The engine shapes the home side of the bottleneck. Download shaping happens after the bottleneck and costs about 5–10% of capacity.</li>
+      <li><b>Measured trade-offs.</b> Serving streaming above bulk cuts bulk throughput when TVs are busy; a lease on a 3 Mbit/s uplink costs the other call. See the Experiments view.</li>
+      <li><b>Security.</b> On a router the console and API need the router key (sessions are cookies, writes must be JSON). The lab leaves them open. There is no TLS on the LAN side; keep the API off the WAN.</li>
+    </ul></section>`;
+}, async init() {
+  $("s-rerun").onclick = async () => { S.setup = await get("/api/setup-check").catch(() => null); this.checks(); toast("Setup check finished."); };
+  [S.setup, S.sys] = await Promise.all([get("/api/setup-check").catch(() => null), get("/api/system").catch(() => S.sys)]);
+  if (!S.model) S.model = await get("/api/model").catch(() => null);
+  this.checks();
+}, checks() {
+  const c = S.setup || [];
+  set("s-checks", c.length ? c.map(x => `<li><span class="ic${x.ok ? "" : " no"}" aria-label="${x.ok ? "pass" : "fail"}">${x.ok ? "✓" : "!"}</span><b>${esc(x.name)}</b><span class="det">${esc(x.detail)}${x.command ? ` · <code>${esc(x.command)}</code>` : ""}</span></li>`).join("") : `<li class="empty">The setup check is not available.</li>`);
+}, update() {
+  set("s-arch", archSVG());
+  const sy = S.sys || {}, p = S.state.proc || sy.proc || {};
+  const inf = S.model?.inference_ms_per_32_flows;
+  set("s-proc", `<div class="metric" style="--c:var(--video)"><div class="v num">${p.cpu_pct ?? "–"}%</div><div class="l">engine CPU (one core = 100%)</div></div>
+    <div class="metric" style="--c:var(--voice)"><div class="v num">${p.rss_mb ?? "–"} MB</div><div class="l">memory</div></div>
+    <div class="metric" style="--c:var(--besteffort)"><div class="v num">${S.state.capture.kernel_drops}</div><div class="l">capture drops</div></div>
+    <div class="metric" style="--c:var(--intent)"><div class="v num">${inf ?? "–"} ms</div><div class="l">classify 32 flows</div></div>`);
+  lineChart($("s-cpu"), [{color: css("--video"), fill: true, pts: H("cpu", 300)}], {now: nowT(), span: 300, min: 10});
+  const k = sy.kernel || {}, v = sy.versions || {}, wd = sy.watchdog || {};
+  set("s-kern", `<div class="caps">${["cake", "fq_codel", "netem", "htb", "fq", "nftables", "ipv6"].map(q => `<span class="pill ${k[q] ? "ok" : ""}">${q} ${k[q] ? "available" : "missing"}</span>`).join("")}</div>
+    <p class="small muted" style="margin:10px 0">Backend chosen: <b>${esc((sy.backend || S.state.config.backend).toUpperCase())}${sy.leaf ? " + " + esc(sy.leaf) : ""}</b>. CAKE is used automatically when the kernel has it.</p>
+    <table><tbody><tr><td>Watchdog</td><td>${wd.alive ? `armed, heartbeat ${wd.age_s} s ago, ${wd.trips || 0} trips${wd.last_trip ? `; last restored the safe state in ${wd.last_trip.restore_ms} ms` : ""}` : esc(wd.detail || "not running")}</td></tr>
+    ${Object.entries(v).map(([a, b]) => `<tr><td>${esc(a)}</td><td><code>${esc(b)}</code></td></tr>`).join("")}<tr><td>Uptime</td><td>${hm(S.state.uptime_s)}</td></tr></tbody></table>`);
+}};
+
+/* ------------------------------------------------------------------ Household */
+VIEWS.home = {title: "Home", group: "Household", hh: true, build() {
+  return `<section class="hh-hero"><div class="grade" id="h-grade">–</div><div><h2 id="h-head">Checking your connection…</h2><p id="h-why"></p></div></section>
+  <section class="panel"><h2>Prioritised now</h2><div id="h-leases"></div></section>
+  <section class="panel"><h2>Who's online</h2><p class="sub">What each device is doing right now.</p><div class="devgrid" id="h-devs"></div></section>
+  <section class="panel"><h2>Quick modes</h2><p class="sub">Pick a device and start. Everything returns to normal by itself.</p><div class="modes" id="h-modes"></div></section>`;
+}, async init() { if (!S.modes) S.modes = await get("/api/modes").catch(() => R?.modes || []); set("h-modes", modesHTML(true)); },
+update() {
+  const s = S.state, g = s.grade?.overall?.grade || "–";
+  const gEl = $("h-grade"); gEl.textContent = g; gEl.style.setProperty("--c", `var(${gradeColor(g)})`);
+  const busy = s.devices.filter(d => d.flows).length;
+  const head = {"A+": "Your internet is smooth", A: "Your internet is smooth", B: "Mostly smooth", C: "Some lag while big downloads run", D: "Laggy right now", F: "Very laggy right now"}[g] || "Checking your connection";
+  txt("h-head", head);
+  txt("h-why", `${s.grade?.overall?.text || ""} ${busy} device${busy === 1 ? " is" : "s are"} using the internet. ${s.paused ? "Smart sharing is paused." : "Smart sharing is on and adjusts by itself."}`);
+  const ls = activeLeases();
+  set("h-leases", ls.length ? ls.map(i => leaseHTML(i, true)).join("") : `<p class="empty">Nothing is prioritised. <a href="#boost">Prioritise a device</a> for a call or a game.</p>`);
+  set("h-devs", devices().map(deviceCard).join(""));
+  const ms = $("h-modes"); if (ms && ms.querySelector("select")?.options.length !== devices().length) set("h-modes", modesHTML(true));
+}};
+VIEWS.devices = {title: "Devices", group: "Household", hh: true, build() {
+  return `<section class="panel"><h2>Your devices</h2><p class="sub">Give devices names you recognise. If something is in the wrong class, say what it really is: the gateway learns from it.</p><div class="hh-cards" id="d-list"></div></section>`;
+}, update() {
+  const el = $("d-list"); if (!el) return;
+  const devs = devices(), key = devs.map(d => d.ip + (d.name || "") + d.type).join("|");
+  if (el._k !== key || !el.children.length) {
+    if (el.contains(document.activeElement)) { /* keep the user's typing */ }
+    else {
+      el._k = key;
+      el.innerHTML = devs.map(d => `<div class="hh-edit" data-ip="${esc(d.ip)}"><span class="ic" style="width:40px;height:40px;border-radius:10px;background:var(--sunk);display:grid;place-items:center;color:var(--ink2)">${icon(d.type)}</span>
+        <div style="min-width:0"><b>${esc(d.name || d.ip)}</b><div class="small muted" data-act>${esc(d.activity || "Idle")} · ${esc(d.ip)}</div></div>
+        <div class="row2"><label class="f" for="dn-${esc(d.ip)}">Name<input class="t" id="dn-${esc(d.ip)}" value="${esc(d.name || "")}" maxlength="40"></label>
+        <label class="f" for="dt-${esc(d.ip)}">Type<select class="t" id="dt-${esc(d.ip)}">${DEVICE_TYPES.map(t => `<option value="${t}" ${t === d.type ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+        <button class="btn small" type="button" data-save="${esc(d.ip)}" style="align-self:end">Save</button></div>
+        ${d.flows ? `<div class="row2" style="grid-template-columns:minmax(0,1fr)"><label class="f" for="dx-${esc(d.ip)}">Wrong activity? This is really…<select class="t" id="dx-${esc(d.ip)}" data-fix="${esc(d.ip)}"><option value="">Choose what it is doing</option>${LABELS.map(l => `<option value="${l}">${LABEL_NAME[l]}</option>`).join("")}</select></label></div>` : ""}</div>`).join("");
+    }
+  } else {
+    devs.forEach(d => { const a = el.querySelector(`[data-ip="${CSS.escape(d.ip)}"] [data-act]`); if (a) a.textContent = `${d.activity || "Idle"} · ${d.ip}`; });
+  }
+}};
+VIEWS.boost = {title: "Prioritise", group: "Household", hh: true, build() {
+  return `<section class="cols wide-l"><div class="panel"><h2>Prioritise a device</h2><p class="sub">For a call, a game or a film. It ends by itself.</p>${prioritiseForm(true)}</div>
+    <div class="panel"><h2>Prioritised now</h2><div id="b-leases"></div></div></section>`;
+}, init() { bindPrioritise(); pfSync(); },
+update() { pfSync(); const ls = activeLeases(); set("b-leases", ls.length ? ls.map(i => leaseHTML(i, true)).join("") : `<p class="empty">Nothing is prioritised.</p>`); }};
+
+/* ================================================================== shell */
+const OP_VIEWS = ["monitor", "traffic", "link", "policy", "prioritise", "experiments", "system"];
+const HH_VIEWS = ["home", "devices", "boost"];
+function navHTML() {
+  const list = S.household ? HH_VIEWS : OP_VIEWS; let g = null, out = "";
+  list.forEach((v, i) => { const V = VIEWS[v]; if (V.group !== g) { g = V.group; out += `<span class="grp" aria-hidden="true"></span>`; } out += `<a href="#${v}" ${S.view === v ? 'aria-current="page"' : ""}>${V.title}<span class="k">${i + 1}</span></a>`; });
+  return out;
+}
+async function go(view) {
+  const list = S.household ? HH_VIEWS : OP_VIEWS;
+  if (!VIEWS[view]) view = list[0];
+  if (VIEWS[view].hh !== undefined ? !S.household : S.household) { S.household = !!VIEWS[view].hh; syncAudience(); }
+  S.view = view;
+  $("nav").innerHTML = navHTML();
+  txt("view-title", VIEWS[view].title);
+  const c = $("content"); c.innerHTML = VIEWS[view].build(); c._h = null;
+  document.title = `${VIEWS[view].title}, home gateway`;
+  if (VIEWS[view].init) await VIEWS[view].init();
+  render();
+}
+function syncAudience() { $("aud-op").setAttribute("aria-pressed", !S.household); $("aud-hh").setAttribute("aria-pressed", S.household); }
+function render() {
+  const s = S.state;
+  if (!s || s.starting) return;
+  const c = s.config;
+  if (S.household) set("ctx", `Your ${c.nominal_down_mbit} Mbit/s line, shared fairly between everyone at home${S.lab?.lab ? " (lab network)" : ""}`);
+  else set("ctx", `Shaper ${esc(c.backend.toUpperCase())}${c.leaf ? " with " + esc(c.leaf) + " leaves" : ""} on ${esc(c.lan)} and ${esc(c.wan)}, classifier ${esc(c.classifier === "ml" ? "model with rule fallback" : "rules")}${S.lab?.lab ? ", emulated lab network" : ""}`);
+  txt("foot-ver", `IntentQoS ${s.version}, running ${hm(s.uptime_s)}`); txt("foot-be", `LAN ${c.lan}, WAN ${c.wan}`);
+  const e = s.estimator;
+  set("wan", `<span><b>${c.nominal_down_mbit}/${c.nominal_up_mbit}</b>plan, Mbit/s</span><span><b>${mbit(e.down.rate_kbit)}/${mbit(e.up.rate_kbit)}</b>shaping now</span><span><b>${mbit(e.down.achieved_kbit)}/${mbit(e.up.achieved_kbit)}</b>in use</span><span><b>${esc(s.grade?.overall?.grade || "–")}</b>grade</span>`);
+  try { VIEWS[S.view]?.update?.call(VIEWS[S.view]); } catch (e) { console.error(e); }
+}
+function setConn(ok, label) {
+  const el = $("conn"); el.className = "pill " + (ok ? "ok live" : "alert");
+  el.innerHTML = `<span class="dot"></span><span>${esc(label)}</span>`;
+}
+
+let pollBusy = false, tick = 0;
+async function poll() {
+  if (pollBusy) return; pollBusy = true;
+  try {
+    if (S.replay) {
+      S.state = await get("/api/state");
+      const rows = await get("/api/history");
+      if (rows.length) { S.hist = S.hist.concat(rows); S.lastT = rows[rows.length - 1].t; }
+      S.lab = await get("/lab/status").catch(() => null);
+      setConn(true, "Replay");
+      updateReplayBar();
+    } else {
+      S.state = await get("/api/state");
+      const rows = await get("/api/history?since=" + S.lastT);
+      if (rows.length) { S.hist = S.hist.concat(rows).slice(-2000); S.lastT = rows[rows.length - 1].t; }
+      if (tick % 3 === 0 && S.labTried !== false) S.lab = await get("/lab/status").catch(() => { S.labTried = false; return null; });
+      if (tick % 5 === 0 && S.view === "system") S.sys = await get("/api/system").catch(() => S.sys);
+      if (tick % 5 === 0 && S.view === "experiments" && S.lab?.job?.state === "running") S.exps = await get("/lab/experiments").catch(() => S.exps);
+      setConn(true, S.state.paused ? "Live · paused" : "Live");
+    }
+    S.connected = true; tick++;
+    set("gbanner", S.state.error ? `The engine's control loop is failing and keeps the last good policy: ${esc(S.state.error)}` : ""); $("content").style.opacity = "";
+    render();
+  } catch (e) {
+    S.connected = false;
+    if (!S.replay && R) { startReplay(); pollBusy = false; return poll(); }
+    setConn(false, "Engine not reachable"); $("content").style.opacity = ".55";
+    const lab = S.labTried === false ? null : await get("/lab/status").catch(() => null);
+    set("gbanner", lab?.lab ? `The engine is not running. ${lab.engine.watchdog ? "The watchdog has put the gateway in its safe state, so traffic keeps flowing with fair sharing." : "The watchdog is not running either."} Restart it from the lab: <button class="btn small" type="button" id="x-restart">Restart engine</button>`
+      : "The engine is not answering. If it crashed, the watchdog keeps the gateway in a safe state. This page retries every second.");
+    if (!S.state) $("content").innerHTML = `<section class="panel"><h2>Waiting for the engine</h2><p class="sub">This console talks to the IntentQoS engine's API. Start it with <code>sudo make engine</code> (or the whole lab with <code>sudo make lab</code>); this page retries every second.</p></section>`;
+  } finally { pollBusy = false; }
+}
+
+/* ------------------------------------------------------------------ replay */
+function startReplay() {
+  S.replay = true; S.hist = []; S.lastT = 0; S.rp.i = 0;
+  $("replaybar").hidden = false;
+  txt("rp-what", R.description || "Recorded live on the namespace testbed.");
+  $("rp-scrub").max = R.frames.length - 1;
+  S.sys = R.system; S.modes = R.modes; S.span = 120;
+}
+function seek(i) {
+  S.rp.i = Math.max(0, Math.min(R.frames.length - 1, i));
+  S.hist = []; S.lastT = 0; S.cpuHist = [];
+}
+function updateReplayBar() {
+  $("rp-scrub").value = S.rp.i;
+  txt("rp-pos", `${hm(S.rp.i)} / ${hm(R.frames.length - 1)}`);
+  const ch = (R.marks || []).filter(m => m.i <= S.rp.i).pop();
+  txt("rp-ch", ch ? `Now: ${ch.what}` : "");
+  $("rp-play").textContent = S.rp.playing ? "Pause" : "Play";
+}
+function replayTick() {
+  if (!S.replay || !S.rp.playing) return;
+  if (S.rp.i >= R.frames.length - 1) seek(0); else S.rp.i++;
+}
+
+/* ------------------------------------------------------------------ global events */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.span) { S.span = +b.dataset.span; document.querySelectorAll("[data-span]").forEach(x => x.setAttribute("aria-pressed", +x.dataset.span === S.span)); render(); return; }
+  if (b.dataset.cancel) {
+    if (await ask("End this priority now?", `${devName(activeLeases().find(i => i.id === b.dataset.cancel)?.target)} goes back to sharing the link normally.`, "End now")) { await send("DELETE", "/api/intents/" + b.dataset.cancel); toast("Priority ended."); poll(); }
+    return;
+  }
+  if (b.dataset.mode) return startMode(b.dataset.mode);
+  if (b.dataset.unsched) { await send("DELETE", "/api/schedules/" + b.dataset.unsched); poll(); return; }
+  if (b.dataset.f) { S.flowFilter = b.dataset.f; document.querySelectorAll("[data-f]").forEach(x => x.setAttribute("aria-pressed", x.dataset.f === S.flowFilter)); render(); return; }
+  if (b.dataset.dir) { S.polDir = b.dataset.dir; document.querySelectorAll("[data-dir]").forEach(x => x.setAttribute("aria-pressed", x.dataset.dir === S.polDir)); render(); return; }
+  if (b.dataset.tab) { S.inspTab = b.dataset.tab; document.querySelectorAll("[data-tab]").forEach(x => x.setAttribute("aria-selected", x.dataset.tab === S.inspTab)); showInspect(); return; }
+  if (b.dataset.save) {
+    const ip = b.dataset.save, name = $("dn-" + ip).value.trim(), type = $("dt-" + ip).value;
+    const r = await send("PUT", "/api/devices/" + ip, {name, type});
+    if (r.status === 200) toast(`Saved ${name || ip}.`); else toast(r.data.error || "Not saved.");
+    $("d-list")._k = null; poll(); return;
+  }
+  if (b.dataset.scen) { S.scen = b.dataset.scen; S.arms = null; S.resSrc = "results"; VIEWS.experiments.render(); return; }
+  if (b.dataset.seeds) { S.seeds = +b.dataset.seeds; VIEWS.experiments.render(); return; }
+  if (b.dataset.arm) { const a = b.dataset.arm; S.arms = S.arms.includes(a) ? S.arms.filter(x => x !== a) : [...S.arms, a]; if (!S.arms.length) S.arms = [a]; VIEWS.experiments.render(); return; }
+  if (b.id === "x-go") {
+    const cat = S.exps.catalogue.find(c => c.id === S.scen);
+    if (!(await ask(`Run ${cat.short}?`, `This takes about ${Math.ceil(S.seeds * S.arms.length * (cat.duration_s + 8) / 60)} minutes. Live traffic and the live engine stop while it runs, then the engine restarts by itself.`, "Run scenario"))) return;
+    const r = await send("POST", "/lab/experiments/run", {scenario: S.scen, seeds: S.seeds, arms: S.arms});
+    if (r.status === 200) toast("Experiment started. Progress shows below the scenarios."); else toast(r.data.error || "Could not start.", 5000);
+    poll(); return;
+  }
+  if (b.dataset.preset) { const on = b.getAttribute("aria-pressed") === "true"; await send("POST", "/lab/traffic", {preset: b.dataset.preset, action: on ? "stop" : "start"}); S.lab = await get("/lab/status").catch(() => S.lab); render(); return; }
+  if (b.dataset.rate) { const [d, u] = b.dataset.rate.split(",").map(Number); await send("POST", "/lab/condition", {down: d, up: u}); toast(`Access link set to ${d}/${u} Mbit/s.`); S.lab = await get("/lab/status").catch(() => S.lab); render(); return; }
+  if (b.id === "x-kill") { if (await ask("Crash the engine?", "The engine is killed with SIGKILL, so it cannot clean up. The watchdog should restore the safe state within a few seconds. Restart it afterwards.", "Crash it", true)) { await send("POST", "/lab/engine", {action: "kill"}); toast("Engine killed. Watch the watchdog take over on the System view."); } return; }
+  if (b.id === "x-restart") { await send("POST", "/lab/engine", {action: "restart"}); toast("Engine restarting."); return; }
+  if (b.id === "x-reset") { await send("POST", "/lab/reset"); toast("All lab traffic stopped and the link is back at the plan rate."); S.lab = await get("/lab/status").catch(() => S.lab); render(); return; }
+});
+document.addEventListener("change", async (e) => {
+  const s = e.target;
+  if (s.matches("select.relabel") && s.value) {
+    const r = await send("POST", "/api/flows/label", {flow: s.dataset.flow, label: s.value, scope: "app"});
+    if (r.status === 200) toast(`Corrected to ${LABEL_NAME[s.value]}. Saved for retraining.`); poll(); return;
+  }
+  if (s.dataset.fix && s.value) {
+    const f = (S.state.flows || []).filter(x => x.lan_ip === s.dataset.fix).sort((a, b) => (b.kbps_dn + b.kbps_up) - (a.kbps_dn + a.kbps_up))[0];
+    if (f) { const r = await send("POST", "/api/flows/label", {flow: f.id, label: s.value, scope: "app"}); if (r.status === 200) toast(`Thanks. ${devName(s.dataset.fix)} is now treated as ${LABEL_NAME[s.value].toLowerCase()}.`); }
+    s.value = ""; poll(); return;
+  }
+  if (s.id === "x-src") { S.resSrc = s.value; VIEWS.experiments.results(); }
+});
+document.addEventListener("submit", async (e) => {
+  if (e.target.id === "lab-rate-f") {
+    e.preventDefault();
+    const d = +$("lab-d").value, u = +$("lab-u").value;
+    const r = await send("POST", "/lab/condition", {down: d, up: u});
+    if (r.status === 200) toast(`Access link set to ${d}/${u} Mbit/s.`);
+    S.lab = await get("/lab/status").catch(() => S.lab); render();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input,select,textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+  const list = S.household ? HH_VIEWS : OP_VIEWS, n = +e.key;
+  if (n >= 1 && n <= list.length) location.hash = list[n - 1];
+});
+window.addEventListener("hashchange", () => go(location.hash.slice(1)));
+$("aud-op").onclick = () => { S.household = false; syncAudience(); location.hash = "monitor"; };
+$("aud-hh").onclick = () => { S.household = true; syncAudience(); location.hash = "home"; };
+$("theme").onclick = () => {
+  const root = document.documentElement, cur = root.dataset.theme || "dark";
+  root.dataset.theme = cur === "dark" ? "light" : "dark";
+  try { localStorage.setItem("iq-theme", root.dataset.theme); } catch (err) { /* ignore */ }
+  render();
+};
+$("rp-play").onclick = () => { S.rp.playing = !S.rp.playing; updateReplayBar(); };
+$("rp-scrub").oninput = (e) => { seek(+e.target.value); poll(); };
+window.addEventListener("resize", () => render());
+try { const t = localStorage.getItem("iq-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
+
+if (REMOTE) {
+  S.labTried = false;
+  document.title = `Home ${REMOTE.home || ""}, gateway console`;
+  const rb = document.getElementById("replaybar");
+  rb.hidden = false; rb.style.background = "var(--video)";
+  rb.innerHTML = `<b>Remote console</b><span>Home ${esc(REMOTE.home || REMOTE.gw)}, live through its router agent. Every change you make is recorded in the audit log.</span>`;
+}
+(async function boot() {
+  if (R && (R.force || location.hash === "#replay")) startReplay();
+  const first = location.hash.slice(1);
+  S.household = HH_VIEWS.includes(first); syncAudience();
+  await poll();
+  await go(first);
+  setInterval(() => { replayTick(); poll(); }, 1000);
+})();
+</script>
+</body>
+</html>

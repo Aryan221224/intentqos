@@ -1,0 +1,39 @@
+# IntentQoS on a real Linux gateway. Copy to /etc/intentqos.toml and edit.
+
+[interfaces]
+lan = "eth1"                         # toward the home switch / Wi-Fi AP  (download shaping)
+wan = "eth0"                         # toward the modem / ONT            (upload shaping)
+lan_subnets = ["192.168.1.0/24", "fd00:1::/64"]
+
+[link]
+down_mbit = 100.0                    # your plan's rates
+up_mbit = 20.0
+
+[estimator]
+reflectors = ["1.1.1.1", "8.8.8.8", "9.9.9.9", "208.67.222.222"]
+method = "icmp-ts"                   # falls back to echo per reflector automatically
+probe_interval_ms = 100
+
+[classifier]
+mode = "ml"
+model_path = "models/flowclf.iqm"
+
+[enforce]
+backend = "auto"                     # CAKE when available
+nat = true                           # the gateway masquerades the LAN
+
+[api]
+listen = "192.168.1.1:8080"          # LAN address only
+require_auth = true                  # the console and API need the router key ...
+key_file = "/etc/intentqos/admin.key"  # ... created here (0600) on first start
+
+[watchdog]
+heartbeat_path = "/run/intentqos/heartbeat.json"
+timeout_s = 3.0
+exit_state = "safe"
+
+[data]
+dir = "data"
+
+[devices]                            # optional friendly names
+# work-laptop = "192.168.1.20"

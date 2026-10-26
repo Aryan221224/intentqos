@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+:root{--bg:{{BG}};--ink:{{INK}};--mute:{{MUTE}};--acc:#F2A93B}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;display:grid;place-items:center;padding:24px}
+main{width:min(64rem,100%);display:grid;gap:14px}
+h1{margin:0;font-size:24px;font-weight:600}
+p{margin:0;color:var(--mute);line-height:1.5}
+.bar{height:4px;border-radius:2px;background:rgba(127,127,127,.25);overflow:hidden}
+.bar i{display:block;height:100%;width:30%;background:var(--acc);border-radius:2px;animation:run 1.4s ease-in-out infinite}
+@keyframes run{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+@media (prefers-reduced-motion: reduce){.bar i{animation:none;width:100%;opacity:.5}}
+ol{margin:0;padding-left:20px;color:var(--mute);display:grid;gap:4px;font-size:14px}
+ol li.done{color:var(--ink)}
+ol li.now{color:var(--ink);font-weight:600}
+code{font-family:Consolas,monospace;font-size:13px;background:rgba(127,127,127,.18);padding:1px 5px;border-radius:4px}
+.err{color:#E5533D}
+pre{margin:0;max-height:62vh;overflow:auto;font:12px/1.45 Consolas,monospace;background:rgba(127,127,127,.14);padding:10px 12px;border-radius:6px;white-space:pre-wrap;color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+  <svg width="44" height="44" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#F2A93B"/><path d="M8 19c3-6 13-6 16 0 M11 15.5c2.5-3.5 7.5-3.5 10 0" stroke="#1D2B5E" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="16" cy="21.5" r="2.2" fill="#1D2B5E"/></svg>
+  <h1>{{TITLE}}</h1>
+  <p id="msg">Starting…</p>
+  <div class="bar" id="bar"><i></i></div>
+  <ol id="steps"></ol>
+  <p style="font-size:13px">Elapsed <span id="t">0</span> s</p>
+</main>
+<script>
+const t0 = Date.now();
+async function loop() {
+  document.getElementById("t").textContent = Math.round((Date.now() - t0) / 1000);
+  let s = null;
+  try { s = await (await fetch("/status" + location.search, {cache: "no-store"})).json(); } catch (e) { setTimeout(loop, 1000); return; }
+  document.getElementById("msg").textContent = s.msg;
+  document.getElementById("steps").innerHTML = (s.steps || []).map((x, i) => `<li class="${i < s.step ? "done" : i === s.step ? "now" : ""}">${x}</li>`).join("");
+  if (s.state === "ready") { location.replace(s.target); return; }
+  if (s.state === "error") {
+    document.getElementById("bar").hidden = true;
+    const m = document.getElementById("msg"); m.className = "err";
+    m.textContent = s.msg + " ";
+    const c = document.createElement("code"); c.textContent = s.log; m.append(document.createElement("br"), "Log: ", c);
+    if (s.detail) { const d = document.createElement("pre"); d.textContent = s.detail; document.querySelector("main").append(d); }
+    return;
+  }
+  setTimeout(loop, 1000);
+}
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+{
+ "trained_at": "2026-10-01 14:29:54",
+ "data": "ml/data/dataset.jsonl",
+ "rows": {
+  "train": 9314,
+  "calibration": 2375,
+  "test": 3994
+ },
+ "sessions": {
+  "train": 14,
+  "calibration": 4,
+  "test": 6
+ },
+ "classes": [
+  "voip",
+  "gaming",
+  "video",
+  "streaming",
+  "web",
+  "bulk"
+ ],
+ "alpha": 0.1,
+ "qhat": 0.1684,
+ "model": "RandomForest(60 trees, depth 14) + isotonic calibration (3-fold)",
+ "train_seconds": 1.6,
+ "inference_ms_per_32_flows": 15.13,
+ "label_level": {
+  "rules": {
+   "macro_f1": 0.4391,
+   "accuracy": 0.5238,
+   "per_class_f1": {
+    "voip": 0.662,
+    "gaming": 0.0,
+    "video": 0.935,
+    "streaming": 0.0,
+    "web": 0.437,
+    "bulk": 0.599
+   }
+  },
+  "ml_argmax": {
+   "macro_f1": 0.966,
+   "accuracy": 0.9732,
+   "per_class_f1": {
+    "voip": 0.981,
+    "gaming": 0.983,
+    "video": 1.0,
+    "streaming": 0.937,
+    "web": 0.904,
+    "bulk": 0.991
+   }
+  },
+  "hybrid_conformal": {
+   "macro_f1": 0.9446,
+   "accuracy": 0.9544,
+   "per_class_f1": {
+    "voip": 0.938,
+    "gaming": 0.937,
+    "video": 1.0,
+    "streaming": 0.926,
+    "web": 0.882,
+    "bulk": 0.985
+   }
+  }
+ },
+ "tin_level_accuracy": {
+  "rules": 0.7026,
+  "ml_argmax": 0.9927,
+  "hybrid_conformal": 0.9872
+ },
+ "conformal": {
+  "target_coverage": 0.9,
+  "empirical_coverage": 0.9447,
+  "abstain_rate": 0.0436,
+  "selective_accuracy": 0.9877,
+  "mean_set_size": 0.956
+ },
+ "calibration": {
+  "ece_raw_rf": 0.052,
+  "ece_calibrated": 0.0073
+ },
+ "per_flow_timeline": {
+  "rules": {
+   "voip": {
+    "flows": 7,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.22,
+    "correct_tin_time_share": 1.0
+   },
+   "gaming": {
+    "flows": 8,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.22,
+    "correct_tin_time_share": 0.9433
+   },
+   "video": {
+    "flows": 6,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.39,
+    "correct_tin_time_share": 1.0
+   },
+   "streaming": {
+    "flows": 7,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.35,
+    "correct_tin_time_share": 0.3983
+   },
+   "web": {
+    "flows": 6,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.37,
+    "correct_tin_time_share": 0.9762
+   },
+   "bulk": {
+    "flows": 28,
+    "never_correct": 4,
+    "median_time_to_correct_s": 6.31,
+    "correct_tin_time_share": 0.5046
+   },
+   "_all": {
+    "flows": 62,
+    "never_correct": 4,
+    "median_time_to_correct_s": 0.48,
+    "correct_tin_time_share": 0.6987
+   }
+  },
+  "hybrid": {
+   "voip": {
+    "flows": 7,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.22,
+    "correct_tin_time_share": 1.0
+   },
+   "gaming": {
+    "flows": 8,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.22,
+    "correct_tin_time_share": 1.0
+   },
+   "video": {
+    "flows": 6,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.39,
+    "correct_tin_time_share": 1.0
+   },
+   "streaming": {
+    "flows": 7,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.35,
+    "correct_tin_time_share": 0.9929
+   },
+   "web": {
+    "flows": 6,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.37,
+    "correct_tin_time_share": 1.0
+   },
+   "bulk": {
+    "flows": 28,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.46,
+    "correct_tin_time_share": 0.9719
+   },
+   "_all": {
+    "flows": 62,
+    "never_correct": 0,
+    "median_time_to_correct_s": 0.35,
+    "correct_tin_time_share": 0.9865
+   }
+  }
+ },
+ "confusion_ml": {
+  "voip": {
+   "voip": 499,
+   "gaming": 9,
+   "video": 0,
+   "streaming": 0,
+   "web": 0,
+   "bulk": 0
+  },
+  "gaming": {
+   "voip": 10,
+   "gaming": 553,
+   "video": 0,
+   "streaming": 0,
+   "web": 0,
+   "bulk": 0
+  },
+  "video": {
+   "voip": 0,
+   "gaming": 0,
+   "video": 325,
+   "streaming": 0,
+   "web": 0,
+   "bulk": 0
+  },
+  "streaming": {
+   "voip": 0,
+   "gaming": 0,
+   "video": 0,
+   "streaming": 438,
+   "web": 58,
+   "bulk": 0
+  },
+  "web": {
+   "voip": 0,
+   "gaming": 0,
+   "video": 0,
+   "streaming": 1,
+   "web": 412,
+   "bulk": 0
+  },
+  "bulk": {
+   "voip": 0,
+   "gaming": 0,
+   "video": 0,
+   "streaming": 0,
+   "web": 29,
+   "bulk": 1660
+  }
+ },
+ "top_features": [
+  [
+   "early_mean",
+   0.1829
+  ],
+  [
+   "early_max",
+   0.1036
+  ],
+  [
+   "early_iat_ms",
+   0.0744
+  ],
+  [
+   "is_udp",
+   0.055
+  ],
+  [
+   "log_bytes",
+   0.0536
+  ],
+  [
+   "std_up",
+   0.0451
+  ],
+  [
+   "early_up_frac",
+   0.036
+  ],
+  [
+   "small_frac",
+   0.0348
+  ],
+  [
+   "dn_up_ratio",
+   0.0345
+  ],
+  [
+   "mean_up",
+   0.0326
+  ]
+ ],
+ "payload_bytes_used": 0,
+ "features": [
+  "is_udp",
+  "age_s",
+  "pps_up",
+  "pps_dn",
+  "kbps_up",
+  "kbps_dn",
+  "mean_up",
+  "mean_dn",
+  "max_up",
+  "max_dn",
+  "std_up",
+  "std_dn",
+  "iat_ms_up",
+  "iat_cv_up",
+  "iat_ms_dn",
+  "iat_cv_dn",
+  "dn_up_ratio",
+  "small_frac",
+  "large_frac",
+  "idle_frac_dn",
+  "burst_cv_dn",
+  "active_frac",
+  "log_bytes",
+  "early_mean",
+  "early_max",
+  "early_up_frac",
+  "early_iat_ms"
+ ]
+}

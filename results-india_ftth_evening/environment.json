@@ -1,0 +1,193 @@
+{
+ "testbed": {
+  "down_mbit": 100,
+  "up_mbit": 100,
+  "isp_buffer_ms": 50,
+  "base_rtt_ms": 9.0,
+  "netem": false,
+  "cake": false,
+  "fq_codel": false,
+  "kernel": "6.18.44-fc-v114",
+  "ipv6": false,
+  "tcp_cc": "cubic",
+  "profile": "india_ftth_evening",
+  "server_cc": "bbr",
+  "delay_method": "accessemu (C, TUN)",
+  "nominal_down": 100,
+  "nominal_up": 100,
+  "rate_factor": 1.02,
+  "limit_down": 625000,
+  "limit_up": 625000,
+  "accessemu_pid": 23863,
+  "capacity_pid": 23879
+ },
+ "started": "2026-10-13 19:26:21",
+ "kernel": "6.18.44-fc-v114",
+ "python": "3.11.15",
+ "profile": {
+  "name": "india_ftth_evening",
+  "title": "Urban Indian home on fibre (FTTH/GPON), evening, devices on Wi-Fi",
+  "status": "EMULATION calibrated to published measurements; not a measurement of a real line",
+  "plan": {
+   "down_mbit": 100,
+   "up_mbit": 100,
+   "rate_factor": 1.02,
+   "why": "Jio Fiber and BSNL 100 Mbit/s plans are symmetric 100/100; ISPs provision slightly above plan (Airtel TRAI disclosure shows the cap above nominal)",
+   "sources": [
+    "https://telecomtalk.info/?p=520118",
+    "https://telecomtalk.info/?p=702926",
+    "https://www.airtel.in/broadband-tnc"
+   ]
+  },
+  "buffers": {
+   "down_ms": 50,
+   "up_ms": 50,
+   "why": "Byte-limited FIFO at the bottleneck, 50 ms at plan rate (625 kB). Matches US fibre loaded-latency medians (+10 to +14 ms) with tails beyond +100 ms when the FIFO stays full; a BNG default queue limit of 100 ms of the shaped rate bounds it from above",
+   "sources": [
+    "https://dl.ifip.org/db/conf/tma/tma2024/tma2024-final4.pdf",
+    "https://data.fcc.gov/download/measuring-broadband-america/2023/2023-Fixed-Measuring-Broadband-America-Report.pdf",
+    "https://community.cisco.com/t5/xr-os-and-platforms/asr9k-pppoe-shaping/td-p/2852939"
+   ]
+  },
+  "wan": {
+   "down": {
+    "base_ms": 5.0,
+    "jitter_ms": 0.5,
+    "loss": 0.0001,
+    "ge_p": 1.33e-05,
+    "ge_r": 0.006,
+    "ge_loss_bad": 0.445,
+    "ge_loss_good": 0.0
+   },
+   "up": {
+    "base_ms": 4.0,
+    "jitter_ms": 0.5,
+    "dba_min_ms": 0.1,
+    "dba_max_ms": 2.0,
+    "loss": 0.0001
+   },
+   "why": "Metro FTTH idle RTT to an in-city CDN about 10 ms (TRAI-reported latency 5-17 ms for Jio, Airtel, ACT, BSNL); idle jitter about 1 ms (Jio, ACT); GPON upstream DBA wait 0.1-2 ms (ITU-T G.984); loss 0.00-0.07 % (TRAI) plus Gilbert-Elliott burst loss fitted to broadband-gateway traces (about 0.1 %)",
+   "sources": [
+    "https://www.trai.gov.in/sites/default/files/2026-04/Publication-DU_merged.pdf",
+    "https://www.itu.int/rec/T-REC-G.984.1",
+    "http://www.ohohlfeld.com/paper/hasslinger_hohlfeld-mmb_2008.pdf"
+   ]
+  },
+  "evening_capacity": {
+   "applies_to": "down",
+   "levels": [
+    [
+     0.85,
+     0.9,
+     1.0
+    ],
+    [
+     0.12,
+     0.6,
+     0.9
+    ],
+    [
+     0.03,
+     0.3,
+     0.6
+    ]
+   ],
+   "hold_mean_s": 30,
+   "why": "Fibre delivers 90-100 % of plan in the evening on average (Ofcom, ACCC, FCC, Opensignal India); occasional dips from shared GPON trees and aggregation load; level shares and hold times are an engineering estimate (low confidence on timing)",
+   "sources": [
+    "https://insights.opensignal.com/2023/06/15/india-june-2023-fixed-broadband-experience",
+    "https://www.accc.gov.au/media-release/fibre-to-the-premises-delivers-most-reliable-broadband-connection"
+   ]
+  },
+  "failover_4g": {
+   "down_mbit": 20,
+   "up_mbit": 8,
+   "buffer_ms": 300,
+   "extra_ms": 15.0,
+   "jitter_ms": 4.0,
+   "loss": 0.005,
+   "why": "The realistic cause of a 100 -> 20 Mbit/s drop is failover to a 4G backup: India's median 4G download is about 19 Mbit/s; metro 4G adds RTT, jitter (5-15 ms) and loss (0.5-2 %); LTE modems buffer 200-500 ms. Switch-over is modelled as instant (hot standby)",
+   "sources": [
+    "https://statista.com/statistics/1496635/india-median-5g-and-4g-performance",
+    "https://blog.hopbox.net/blog/isp-link-quality-india"
+   ]
+  },
+  "wifi": {
+   "stations": {
+    "laptop": 5,
+    "tv1": 5,
+    "tv2": 24,
+    "tv3": 24,
+    "console": 5,
+    "phone": 5
+   },
+   "wired": [
+    "desktop",
+    "nas"
+   ],
+   "psm": [
+    "phone"
+   ],
+   "neighbour_busy": {
+    "5": {
+     "median": 0.05,
+     "p90": 0.3,
+     "cap": 0.6
+    },
+    "24": {
+     "median": 0.25,
+     "p90": 0.5,
+     "cap": 0.8
+    }
+   },
+   "params": {
+    "wifi5.med_ms": 1.0,
+    "wifi5.sigma": 0.8,
+    "wifi5.cap_mbps": 400,
+    "wifi5.loss": 0.0005,
+    "wifi24.med_ms": 2.0,
+    "wifi24.sigma": 1.0,
+    "wifi24.cap_mbps": 100,
+    "wifi24.loss": 0.002,
+    "wifi.knee": 0.5,
+    "wifi.tail_xm_ms": 10,
+    "wifi.tail_alpha": 1.5,
+    "wifi.tail_cap_ms": 200,
+    "wifi.scan_mean_s": 180,
+    "wifi.dwell_min": 2,
+    "wifi.dwell_max": 4,
+    "wifi.absence_min_ms": 20,
+    "wifi.absence_max_ms": 40,
+    "wifi.psm_timeout_ms": 200,
+    "wifi.beacon_ms": 102.4,
+    "wifi5.stall_per_s": 0.0333,
+    "wifi24.stall_per_s": 0.1
+   },
+   "why": "Per-packet Wi-Fi hop delay: lognormal access delay (5 GHz median 1 ms one way, 2.4 GHz 2 ms), growth above 50 % airtime use. Latency spikes are modelled as stall episodes in time (interference bursts, retries, rate-adaptation collapse): Poisson arrivals, 1 per 30 s on 5 GHz and 1 per 10 s on 2.4 GHz, scaled up with neighbour busy time, Pareto length (10 ms minimum, alpha 1.5, 200 ms cap); every packet arriving during an episode waits for its end. Calibration target: a home is quieter than the large campus WLAN measured by Sui et al. (median 3 ms, p90 about 20 ms, p99 above 250 ms; 5 GHz 35 % lower than 2.4 GHz). Background scans while a client carries traffic use short adaptive dwells (2-4 off-channel visits of 20-40 ms, every 3 min on average). Phones add power-save wake delay. Scan and stall schedules come from a per-station random stream seeded per run, so every arm sees the same events at the same moments. Stall rates and lengths are an engineering estimate (low confidence)",
+   "sources": [
+    "https://microsoft.com/en-us/research/wp-content/uploads/2017/01/mobisys_2016b.pdf",
+    "https://conferences.sigcomm.org/sigcomm/2015/pdf/papers/p153.pdf",
+    "https://daoyuan14.github.io/papers/CoNEXT16_WiFiMeasure.pdf",
+    "https://www.usenix.org/conference/atc17/technical-sessions/presentation/hoilan-jorgesen",
+    "https://hal.sorbonne-universite.fr/hal-00864852"
+   ]
+  },
+  "tcp": {
+   "server_cc": "bbr",
+   "client_cc": "cubic",
+   "why": "Google and Akamai serve most downloads with BBR; Windows, Android, macOS and Linux clients use CUBIC",
+   "sources": [
+    "https://streamingmedia.com/Articles/News/Online-Video-News/Akamai-Reports-Improved-Performance-with-BBR-Algorithm-135831.aspx",
+    "https://www.comp.nus.edu.sg/~bleong/publications/sigmetrics2020-gordon.pdf"
+   ]
+  },
+  "engine_cpu": {
+   "quota": 0.2,
+   "why": "Raspberry Pi 4 (Cortex-A72) single-thread speed is about 1/9-1/11 of a desktop x86 core (PassMark, Geekbench); this lab vCPU runs CPython at about half a desktop core, so the engine gets 20 % of one vCPU",
+   "sources": [
+    "https://www.cpubenchmark.net/compare/4128vs3917/ARM-Cortex-A53-4-1800-MHz-vs-ARM-Cortex-A72-4-1500-MHz",
+    "https://www.raspberrypi.com/news/benchmarking-raspberry-pi-5/"
+   ]
+  }
+ }
+}

@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" font-family="'DejaVu Sans', Barlow, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#3a4a4e"/>
+    </marker>
+    <style>
+      .t{font-size:15px;font-weight:700;fill:#16272B}
+      .s{font-size:12px;fill:#53656A}
+      .l{font-size:13px;font-weight:700;fill:#16272B}
+      .w{font-size:13px;font-weight:700;fill:#F4F7F5}
+      .ws{font-size:12px;fill:#c7d4d1}
+      .box{fill:#ffffff;stroke:#3a4a4e;stroke-width:1.3}
+      .kb{fill:#24383d;stroke:#5f7a7f}
+      .zone{fill:none;stroke:#9fb0ad;stroke-width:1.2;stroke-dasharray:5 5}
+      .ln{stroke:#3a4a4e;stroke-width:1.4;fill:none}
+      .hot{fill:#eef0ff;stroke:#5b4fc7;stroke-width:2}
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="#F1F4F1"/>
+  <text x="30" y="40" font-size="21" font-weight="700" fill="#16272B">IntentQoS: one observe, decide, enforce loop on the home gateway</text>
+  <text x="30" y="62" class="s">Device, edge, network, data, analytics and user-interface components. Arrows show data flow. No packet payload is ever read.</text>
+
+  <!-- DEVICES -->
+  <rect x="30" y="90" width="196" height="560" rx="14" class="zone"/>
+  <text x="46" y="114" class="t">Devices</text>
+  <text x="46" y="132" class="s">household LAN</text>
+  <rect x="46" y="150" width="164" height="54" rx="10" class="box"/><text x="58" y="173" class="l">Laptop</text><text x="58" y="191" class="s">video call, VoIP</text>
+  <rect x="46" y="216" width="164" height="54" rx="10" class="box"/><text x="58" y="239" class="l">TVs</text><text x="58" y="257" class="s">adaptive streaming</text>
+  <rect x="46" y="282" width="164" height="54" rx="10" class="box"/><text x="58" y="305" class="l">Console</text><text x="58" y="323" class="s">gaming</text>
+  <rect x="46" y="348" width="164" height="54" rx="10" class="box"/><text x="58" y="371" class="l">Desktop, NAS</text><text x="58" y="389" class="s">downloads, backup</text>
+  <rect x="46" y="440" width="164" height="70" rx="10" class="box"/><text x="58" y="463" class="l">Phone or laptop</text><text x="58" y="481" class="s">dashboard and</text><text x="58" y="497" class="s">"prioritise my call"</text>
+
+  <!-- EDGE -->
+  <rect x="250" y="90" width="645" height="560" rx="14" class="zone"/>
+  <text x="266" y="114" class="t">Edge: Linux home gateway</text>
+  <text x="266" y="132" class="s">Python engine + kernel data path (tc, nftables) + a separate watchdog</text>
+
+  <rect x="270" y="148" width="605" height="122" rx="12" fill="#16272B"/>
+  <text x="286" y="170" class="w">Kernel data path</text>
+  <rect x="286" y="182" width="186" height="74" rx="9" class="kb"/>
+  <text x="298" y="204" class="w">nftables map</text><text x="298" y="222" class="ws">5-tuple to class mark,</text><text x="298" y="239" class="ws">DSCP for Wi-Fi WMM</text>
+  <rect x="484" y="182" width="186" height="74" rx="9" class="kb"/>
+  <text x="496" y="204" class="w">Download shaper</text><text x="496" y="222" class="ws">CAKE diffserv4 or HTB,</text><text x="496" y="239" class="ws">5 classes with floors</text>
+  <rect x="682" y="182" width="180" height="74" rx="9" class="kb"/>
+  <text x="694" y="204" class="w">Upload shaper</text><text x="694" y="222" class="ws">per-host isolation,</text><text x="694" y="239" class="ws">ACK filter</text>
+
+  <!-- column 1 -->
+  <rect x="270" y="300" width="180" height="76" rx="10" class="box"/>
+  <text x="282" y="322" class="l">1 Capture</text><text x="282" y="340" class="s">AF_PACKET, 96 B snap,</text><text x="282" y="356" class="s">headers only</text>
+  <rect x="270" y="392" width="180" height="94" rx="10" class="box"/>
+  <text x="282" y="414" class="l">2 Classifier</text><text x="282" y="432" class="s">rule baseline + forest,</text><text x="282" y="448" class="s">calibrated, conformal,</text><text x="282" y="464" class="s">abstains when unsure,</text><text x="282" y="480" class="s">corrections, drift</text>
+  <rect x="270" y="502" width="180" height="94" rx="10" class="box"/>
+  <text x="282" y="524" class="l">6 Intent leases</text><text x="282" y="542" class="s">TTL, daily budgets,</text><text x="282" y="558" class="s">admission control,</text><text x="282" y="574" class="s">Nash bargaining,</text><text x="282" y="590" class="s">assurance checks</text>
+
+  <!-- column 2 -->
+  <rect x="480" y="360" width="200" height="140" rx="12" class="hot"/>
+  <text x="494" y="384" class="l">4 Policy engine</text>
+  <text x="494" y="402" class="s">reserve realtime demand,</text>
+  <text x="494" y="418" class="s">intent grants, floors</text>
+  <text x="494" y="442" class="l" fill="#5b4fc7">Safety shield</text>
+  <text x="494" y="460" class="s">bounds, step limits,</text>
+  <text x="494" y="476" class="s">change budget,</text>
+  <text x="494" y="492" class="s">starvation rollback</text>
+  <rect x="480" y="520" width="200" height="94" rx="10" class="box"/>
+  <text x="494" y="542" class="l">7 API and dashboard</text><text x="494" y="560" class="s">REST: intents, labels,</text><text x="494" y="576" class="s">safe mode; dashboard;</text><text x="494" y="592" class="s">Prometheus /metrics</text>
+
+  <!-- column 3 -->
+  <rect x="705" y="300" width="175" height="76" rx="10" class="box"/>
+  <text x="717" y="322" class="l">5 Enforcer</text><text x="717" y="340" class="s">tc batch, read back,</text><text x="717" y="356" class="s">commit or roll back</text>
+  <rect x="705" y="400" width="175" height="76" rx="10" class="box"/>
+  <text x="717" y="422" class="l">3 Capacity estimator</text><text x="717" y="440" class="s">one-way delay rise,</text><text x="717" y="456" class="s">cuts rate on bloat</text>
+  <rect x="705" y="500" width="175" height="76" rx="10" class="box"/>
+  <text x="717" y="522" class="l">Watchdog</text><text x="717" y="540" class="s">stale heartbeat:</text><text x="717" y="556" class="s">install safe state</text>
+
+  <!-- NETWORK -->
+  <rect x="915" y="90" width="255" height="250" rx="14" class="zone"/>
+  <text x="931" y="114" class="t">Network</text>
+  <rect x="933" y="130" width="219" height="70" rx="10" class="box"/>
+  <text x="945" y="153" class="l">ISP access link</text><text x="945" y="171" class="s">the bottleneck, with a</text><text x="945" y="187" class="s">bloated modem buffer</text>
+  <rect x="933" y="214" width="219" height="54" rx="10" class="box"/>
+  <text x="945" y="237" class="l">Delay reflectors</text><text x="945" y="255" class="s">answer ICMP timestamp</text>
+  <rect x="933" y="280" width="219" height="46" rx="10" class="box"/>
+  <text x="945" y="308" class="l">Internet services</text>
+
+  <!-- DATA + ANALYTICS -->
+  <rect x="915" y="360" width="255" height="290" rx="14" class="zone"/>
+  <text x="931" y="384" class="t">Data and analytics</text>
+  <rect x="933" y="398" width="219" height="80" rx="10" class="box"/>
+  <text x="945" y="420" class="l">Data store (files)</text><text x="945" y="438" class="s">time series, events,</text><text x="945" y="454" class="s">leases, corrections,</text><text x="945" y="470" class="s">model bundle</text>
+  <rect x="933" y="494" width="219" height="64" rx="10" class="box"/>
+  <text x="945" y="516" class="l">Training (offline)</text><text x="945" y="534" class="s">record, train, calibrate;</text><text x="945" y="550" class="s">bundle goes to (2)</text>
+  <rect x="933" y="570" width="219" height="66" rx="10" class="box"/>
+  <text x="945" y="592" class="l">Evaluation harness</text><text x="945" y="610" class="s">seeded scenarios,</text><text x="945" y="626" class="s">statistics, report</text>
+
+  <!-- arrows -->
+  <path class="ln" d="M210 330 H266" marker-end="url(#a)"/><text x="214" y="322" class="s">packets</text>
+  <path class="ln" d="M360 270 V296" marker-end="url(#a)"/>
+  <path class="ln" d="M360 376 V388" marker-end="url(#a)"/>
+  <path class="ln" d="M450 430 H476" marker-end="url(#a)"/>
+  <path class="ln" d="M450 540 C 466 540 466 488 476 488" marker-end="url(#a)"/>
+  <path class="ln" d="M705 438 H684" marker-end="url(#a)"/>
+  <path class="ln" d="M680 380 C 694 380 694 338 701 338" marker-end="url(#a)"/>
+  <path class="ln" d="M792 300 V274" marker-end="url(#a)"/>
+  <path class="ln" d="M875 170 H929" marker-end="url(#a)"/>
+  <path class="ln" d="M933 248 C 902 248 902 438 884 438" marker-end="url(#a)"/>
+  <path class="ln" d="M128 510 V672 H580 V618" marker-end="url(#a)"/>
+  <path class="ln" d="M480 566 H454" marker-end="url(#a)"/>
+  <path class="ln" d="M680 600 H898 C 912 600 912 450 929 450" marker-end="url(#a)"/>
+  <path class="ln" d="M1042 478 V490" marker-end="url(#a)"/>
+
+  <text x="30" y="712" class="s">Classes, highest first: intent lease, voice, video, best effort, bulk. Every class keeps a floor, so nothing starves.</text>
+  <text x="30" y="732" class="s">The testbed replaces "Network" with emulation (network namespaces, tbf bottleneck, delay line) and labels it as such.</text>
+</svg>

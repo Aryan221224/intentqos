@@ -1,0 +1,207 @@
+{
+ "all": {
+  "adaptive_ml": {
+   "runs": 50,
+   "flow_ticks": 39254,
+   "class_accuracy": 0.9809446171090844,
+   "label_accuracy": 0.9787792326896622,
+   "sources": {
+    "ml": 0.9708309981148417,
+    "ml-hold": 0.02692719213328578,
+    "rules-fallback": 0.0022418097518724206
+   },
+   "per_class": {
+    "voip": {
+     "ticks": 4201,
+     "class_accuracy": 1.0
+    },
+    "video": {
+     "ticks": 4172,
+     "class_accuracy": 1.0
+    },
+    "web": {
+     "ticks": 925,
+     "class_accuracy": 1.0
+    },
+    "bulk": {
+     "ticks": 24122,
+     "class_accuracy": 0.968990962606749
+    },
+    "streaming": {
+     "ticks": 4569,
+     "class_accuracy": 1.0
+    },
+    "gaming": {
+     "ticks": 1265,
+     "class_accuracy": 1.0
+    }
+   }
+  },
+  "adaptive_ml_bulk": {
+   "runs": 10,
+   "flow_ticks": 10589,
+   "class_accuracy": 0.9924449900840495,
+   "label_accuracy": 0.9810180375861743,
+   "sources": {
+    "ml": 0.9751629049013126,
+    "rules-fallback": 0.004438568325620927,
+    "ml-hold": 0.02039852677306639
+   },
+   "per_class": {
+    "gaming": {
+     "ticks": 1264,
+     "class_accuracy": 1.0
+    },
+    "streaming": {
+     "ticks": 3532,
+     "class_accuracy": 1.0
+    },
+    "bulk": {
+     "ticks": 5793,
+     "class_accuracy": 0.9861902295874331
+    }
+   }
+  },
+  "adaptive_ml_intent": {
+   "runs": 10,
+   "flow_ticks": 9405,
+   "class_accuracy": 0.9346092503987241,
+   "label_accuracy": 0.9346092503987241,
+   "sources": {
+    "rules-fallback": 0.003934077618288145,
+    "ml": 0.9936204146730463,
+    "ml-hold": 0.0024455077086656036
+   },
+   "per_class": {
+    "voip": {
+     "ticks": 1938,
+     "class_accuracy": 1.0
+    },
+    "video": {
+     "ticks": 1926,
+     "class_accuracy": 1.0
+    },
+    "bulk": {
+     "ticks": 5541,
+     "class_accuracy": 0.8890092041147807
+    }
+   }
+  },
+  "adaptive_rules": {
+   "runs": 30,
+   "flow_ticks": 28367,
+   "class_accuracy": 0.6692635809214933,
+   "label_accuracy": 0.5709803645080551,
+   "sources": {
+    "rules": 1.0
+   },
+   "per_class": {
+    "voip": {
+     "ticks": 2024,
+     "class_accuracy": 1.0
+    },
+    "video": {
+     "ticks": 2012,
+     "class_accuracy": 1.0
+    },
+    "web": {
+     "ticks": 924,
+     "class_accuracy": 1.0
+    },
+    "bulk": {
+     "ticks": 17567,
+     "class_accuracy": 0.6396652814937098
+    },
+    "streaming": {
+     "ticks": 4572,
+     "class_accuracy": 0.3324584426946632
+    },
+    "gaming": {
+     "ticks": 1268,
+     "class_accuracy": 1.0
+    }
+   }
+  }
+ },
+ "matched": {
+  "scenarios": [
+   "s1_iso_during_call",
+   "s2_wan_drop",
+   "s3_tvs_and_gaming"
+  ],
+  "arms": {
+   "adaptive_ml": {
+    "runs": 30,
+    "flow_ticks": 28385,
+    "class_accuracy": 0.9928483353884093,
+    "label_accuracy": 0.9898537960190241,
+    "sources": {
+     "ml": 0.9621983441958781,
+     "ml-hold": 0.03568786330808526,
+     "rules-fallback": 0.002113792496036639
+    },
+    "per_class": {
+     "voip": {
+      "ticks": 2025,
+      "class_accuracy": 1.0
+     },
+     "video": {
+      "ticks": 2015,
+      "class_accuracy": 1.0
+     },
+     "web": {
+      "ticks": 925,
+      "class_accuracy": 1.0
+     },
+     "bulk": {
+      "ticks": 17586,
+      "class_accuracy": 0.9884567269418856
+     },
+     "streaming": {
+      "ticks": 4569,
+      "class_accuracy": 1.0
+     },
+     "gaming": {
+      "ticks": 1265,
+      "class_accuracy": 1.0
+     }
+    }
+   },
+   "adaptive_rules": {
+    "runs": 30,
+    "flow_ticks": 28367,
+    "class_accuracy": 0.6692635809214933,
+    "label_accuracy": 0.5709803645080551,
+    "sources": {
+     "rules": 1.0
+    },
+    "per_class": {
+     "voip": {
+      "ticks": 2024,
+      "class_accuracy": 1.0
+     },
+     "video": {
+      "ticks": 2012,
+      "class_accuracy": 1.0
+     },
+     "web": {
+      "ticks": 924,
+      "class_accuracy": 1.0
+     },
+     "bulk": {
+      "ticks": 17567,
+      "class_accuracy": 0.6396652814937098
+     },
+     "streaming": {
+      "ticks": 4572,
+      "class_accuracy": 0.3324584426946632
+     },
+     "gaming": {
+      "ticks": 1268,
+      "class_accuracy": 1.0
+     }
+    }
+   }
+  }
+ }
+}
