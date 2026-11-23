@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntentQoS Test Kit</title><link rel="stylesheet" href="/kit.css"><link rel="icon" href="/icon.png"></head>
+<body>
+<header><img src="/icon.png" alt=""><b>IntentQoS Test Kit</b><span class="sub">measures your line with IntentQoS off and on</span></header>
+<main>
+  <section class="card" id="conn">
+    <h2>1 Connect to your router</h2>
+    <div id="known" class="small"></div>
+    <div class="grid2" style="margin-top:6px">
+      <div><label for="rip">Router address</label><input id="rip" placeholder="192.168.8.1"></div>
+      <div><label for="key">Router key (shown by Router Setup)</label><input id="key" class="mono" placeholder="XXXX-XXXX-XXXX-XXXX"></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button id="check">Connect</button><span id="checkres" class="small"></span></div>
+    <details style="margin-top:14px"><summary class="small">Or pair with the Operator Console (fills the router and key in, and sends reports to the console)</summary>
+      <div class="grid2" style="margin-top:8px">
+        <div><label for="console">Console</label><input id="console" placeholder="found automatically, or its address"></div>
+        <div><label for="pin">Pairing PIN</label><input id="pin" inputmode="numeric" maxlength="7" placeholder="123 456"></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="ghost" id="pairbtn">Pair</button><span id="pairres" class="small"></span></div>
+    </details>
+  </section>
+
+  <section class="card" id="choose">
+    <h2>2 Choose the tests</h2>
+    <div id="scen"></div>
+    <div class="grid2" style="margin-top:8px">
+      <div><label for="secs">Seconds per measurement</label><select id="secs"><option value="20">20 (quick)</option><option value="30" selected>30</option><option value="60">60 (steadier)</option></select></div>
+      <div class="small muted" style="align-self:end">Each test runs twice: first with IntentQoS switched off (the router's bounded test window), then on. Keep other heavy use of the internet low while it runs.</div>
+    </div>
+    <div class="row" style="margin-top:14px"><button id="run" disabled>Run tests</button><button class="ghost" id="fo" disabled>Failover test (fibre → 4G)…</button></div>
+    <div id="fobox" class="note hidden" style="margin-top:12px">
+      Failover test: measures under load on the fibre line, then you move the router's WAN cable to the <b>4G Bridge</b> laptop and it measures how quickly calls and games recover.
+      Run it once with IntentQoS on; for comparison, move the cable back and run it again with IntentQoS off.
+      <div class="row" style="margin-top:8px"><button id="foon">Start (IntentQoS on)</button><button class="ghost" id="fooff">Start (IntentQoS off)</button></div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="runbox">
+    <h2 id="phase">Running…</h2>
+    <div style="height:6px;background:var(--sunken);border-radius:3px;overflow:hidden;margin-bottom:10px"><div id="bar" style="height:100%;width:0;background:var(--act)"></div></div>
+    <div id="waiting" class="note warn hidden" style="margin-bottom:10px"><b id="waittext"></b><div class="row" style="margin-top:8px"><button id="moved">Cable moved</button></div></div>
+    <canvas id="cv" width="900" height="220"></canvas>
+    <div class="row small muted" style="margin-top:6px;justify-content:space-between"><span>delay (ms) of small call-like packets, 10 a second</span><span id="tput"></span></div>
+    <div class="row" style="margin-top:10px"><button class="ghost" id="stop">Stop</button></div>
+  </section>
+
+  <section class="card hidden" id="resbox">
+    <h2>Results</h2>
+    <table><thead><tr><th>Test</th><th>IntentQoS off</th><th>IntentQoS on</th><th>Change</th><th>Speed (off / on)</th></tr></thead><tbody id="res"></tbody></table>
+    <p class="small muted">p99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.</p>
+    <div id="finish" class="row hidden" style="margin-top:8px"><button id="openrep">Open the report</button><span id="upl" class="small"></span></div>
+    <div id="err" class="note bad hidden" style="margin-top:10px"></div>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+setInterval(() => fetch("/hb").catch(() => {}), 3000); fetch("/hb");
+async function api(path, body) {
+  const r = await fetch(path, {method: body ? "POST" : "GET", headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
+}
+let connected = false;
+async function load() {
+  const p = await api("/api/profile");
+  $("scen").innerHTML = p.scenarios.map((s, i) => `<label class="row" style="gap:8px;color:var(--text);margin:6px 0;align-items:flex-start">
+    <input type="checkbox" value="${esc(s.ID)}" ${i < 2 ? "checked" : ""} style="width:auto;margin-top:3px"><span><b>${esc(s.Name)}</b><br><span class="small muted">${esc(s.Desc)}</span></span></label>`).join("");
+  const r = (p.routers || []).filter(x => x.key).slice(-1)[0];
+  if (r) { $("rip").value = r.lan_ip; $("key").value = r.key; $("known").innerHTML = `Using the router saved on this laptop: <b>${esc(r.name || r.lan_ip)}</b>`; }
+  else if (p.gateways && p.gateways.length) $("rip").value = p.gateways[0];
+  if (p.consoles && p.consoles.length) $("console").value = p.consoles[0].https;
+  if (p.paired && p.console) $("pairres").textContent = `Paired with the console at ${p.console.ip}: reports are sent there.`;
+  if (r) check();
+}
+async function check() {
+  $("checkres").innerHTML = '<span class="spin"></span>';
+  try {
+    const d = await api("/api/check", {router: $("rip").value.trim(), key: $("key").value.trim()});
+    connected = true; $("run").disabled = false; $("fo").disabled = false;
+    const c = d.config || {};
+    $("checkres").innerHTML = `<span class="pill ok">connected</span> plan ${esc(c.nominal_down_mbit ?? "?")}/${esc(c.nominal_up_mbit ?? "?")} Mbit/s` + (d.bypass ? ' <span class="pill warn">a test window is open</span>' : "");
+  } catch (e) { connected = false; $("run").disabled = true; $("fo").disabled = true; $("checkres").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+}
+$("check").onclick = check;
+$("pairbtn").onclick = async () => {
+  $("pairres").innerHTML = '<span class="spin"></span>';
+  try {
+    const d = await api("/api/pair", {console: $("console").value.trim(), pin: $("pin").value.replace(/\s/g, "")});
+    const r = (d.routers || []).filter(x => x.key).slice(-1)[0];
+    if (r) { $("rip").value = r.lan_ip; $("key").value = r.key; }
+    $("pairres").textContent = `Paired with the console at ${d.console.ip}.` + (r ? "" : " It knows no router yet: run Router Setup first.");
+    if (r) check();
+  } catch (e) { $("pairres").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+};
+function chosen() { return [...document.querySelectorAll("#scen input:checked")].map(x => x.value); }
+async function begin(path, body) {
+  $("err").classList.add("hidden"); $("finish").classList.add("hidden"); $("res").innerHTML = "";
+  try { await api(path, body); } catch (e) { $("err").textContent = e.message; $("err").classList.remove("hidden"); $("resbox").classList.remove("hidden"); return; }
+  $("runbox").classList.remove("hidden"); $("resbox").classList.remove("hidden"); $("run").disabled = true; $("fo").disabled = true;
+  poll();
+}
+$("run").onclick = () => begin("/api/run", {router: $("rip").value.trim(), key: $("key").value.trim(), seconds: +$("secs").value, scenarios: chosen()});
+$("fo").onclick = () => $("fobox").classList.toggle("hidden");
+$("foon").onclick = () => begin("/api/failover", {router: $("rip").value.trim(), key: $("key").value.trim(), qos: "on"});
+$("fooff").onclick = () => begin("/api/failover", {router: $("rip").value.trim(), key: $("key").value.trim(), qos: "off"});
+$("moved").onclick = () => api("/api/moved", {});
+$("stop").onclick = () => api("/api/stop", {});
+$("openrep").onclick = () => api("/api/open-report", {});
+function draw(samples) {
+  const cv = $("cv"), g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  g.clearRect(0, 0, W, H);
+  if (!samples.length) return;
+  const t0 = samples[0].t, t1 = samples[samples.length - 1].t, span = Math.max(10, t1 - t0);
+  const ok = samples.filter(s => s.rtt >= 0).map(s => s.rtt);
+  const ymax = Math.max(20, Math.ceil(Math.max(...ok, 1) / 10) * 10);
+  g.strokeStyle = dark ? "#2C323E" : "#D8DCE3"; g.fillStyle = dark ? "#A3ABBA" : "#576173"; g.font = "11px system-ui";
+  for (let i = 0; i <= 4; i++) { const y = H - 16 - i / 4 * (H - 28); g.beginPath(); g.moveTo(34, y); g.lineTo(W - 4, y); g.stroke(); g.fillText(String(Math.round(ymax * i / 4)), 4, y + 4); }
+  g.fillStyle = dark ? "#58C493" : "#1C7C52";
+  for (const s of samples) {
+    const x = 34 + (s.t - t0) / span * (W - 40);
+    if (s.rtt < 0) { g.fillStyle = "#C0321D"; g.fillRect(x, 6, 2, 6); g.fillStyle = dark ? "#58C493" : "#1C7C52"; continue; }
+    const y = H - 16 - Math.min(s.rtt, ymax) / ymax * (H - 28);
+    g.fillRect(x - 1, y - 1, 2.4, 2.4);
+  }
+}
+async function poll() {
+  const l = await api("/api/live");
+  $("phase").innerHTML = (l.running ? '<span class="spin"></span> ' : "") + esc(l.phase || "");
+  $("bar").style.width = Math.round((l.progress || 0) * 100) + "%";
+  $("tput").textContent = l.running ? `↓ ${(l.down_mbps || 0).toFixed(1)}  ↑ ${(l.up_mbps || 0).toFixed(1)} Mbit/s` : "";
+  $("waiting").classList.toggle("hidden", !l.waiting); $("waittext").textContent = l.waiting || "";
+  draw(l.recent || []);
+  const unit = r => /RPM|capacity/.test(r.metric || "") ? "" : " ms";
+  const extra = (r, side) => [r[side + "_p50"] != null ? `p50 ${esc(r[side + "_p50"])}` : "",
+    r[side + "_call_qoo"] != null ? `call ${esc(r[side + "_call_qoo"])} · game ${esc(r[side + "_game_qoo"])}` : "",
+    r[side + "_rpm"] != null && !/RPM/.test(r.metric || "") ? `RPM ${esc(r[side + "_rpm"])}` : ""].filter(Boolean).join(" · ");
+  $("res").innerHTML = (l.results || []).map(r => `<tr><td>${esc(r.name)}<br><span class="small muted">${esc(r.metric || "")}</span></td>
+    <td><b>${esc(r.off)}${r.off === "—" ? "" : unit(r)}</b> <span class="small muted">${extra(r, "off")}</span></td>
+    <td><b style="color:var(--ok)">${esc(r.on)}${unit(r)}</b> <span class="small muted">${extra(r, "on")}</span></td><td>${esc(r.change)}</td>
+    <td class="small">${esc(r.off_tput || "")}${r.on_tput ? " / " + esc(r.on_tput) : ""}</td></tr>`).join("");
+  if (l.error) { $("err").textContent = l.error; $("err").classList.remove("hidden"); }
+  if (!l.running && l.done) {
+    $("run").disabled = !connected; $("fo").disabled = !connected;
+    if (l.report) { $("finish").classList.remove("hidden"); $("upl").textContent = l.uploaded ? "Sent to the Operator Console." : "Saved in Documents › IntentQoS Reports."; }
+    return;
+  }
+  setTimeout(poll, 500);
+}
+load();
+</script>
+</body></html>

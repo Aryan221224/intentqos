@@ -64,6 +64,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--lab-serial", default="LAB-GW-0001")
     ap.add_argument("--lab-claim", default="LAB-CLAIM-0001")
+    ap.add_argument("--no-lab-gateway", action="store_true", help="home kit: the real router pairs itself later")
     a = ap.parse_args()
     cfg = load_config(a.config)
     if os.path.exists(os.path.join(cfg["data_dir"], "controller.db")):
@@ -104,15 +105,16 @@ def main() -> int:
         sha = hashlib.sha256(blob).hexdigest()
         payload = {"version": ver, "sha256": sha, "size": len(blob)}
         db.x("INSERT INTO models (version, sha256, size, path, metrics, signature, created, note) VALUES (?,?,?,?,?,?,?,?)",
-             (ver, sha, len(blob), dst, jdump(metrics), ctl.key.sign(payload), now(), note))
+             (ver, sha, len(blob), dst, jdump(metrics), jdump(ctl.key.targets_sigs(payload)), now(), note))
     default_pid = db.val("SELECT id FROM profiles WHERE name='default'")
     # the real lab home
     sid = db.x("INSERT INTO subscribers (account, name, phone, email, plan_id, region, pop, olt, pon, area, created) "
                "VALUES (?,?,?,?,?,?,?,?,?,?,?)", ("SN-100001", "Asha Verma", "9800000001", "asha@example.com",
                                                   plan_id["HOME-100"], "Greater Noida", "GN-POP-1", "GN-OLT-01", "1/1/3:12",
                                                   "Knowledge Park II", now() - 412 * 86400))
-    db.x("INSERT INTO gateways (serial, claim_hash, subscriber_id, profile_id) VALUES (?,?,?,?)",
-         (a.lab_serial, S.h(a.lab_claim), sid, default_pid))
+    if not a.no_lab_gateway:
+        db.x("INSERT INTO gateways (serial, claim_hash, subscriber_id, profile_id) VALUES (?,?,?,?)",
+             (a.lab_serial, S.h(a.lab_claim), sid, default_pid))
     # simulated homes
     olts = [(r, p, o) for r, pops in TOPOLOGY.items() for p, os_ in pops.items() for o in os_]
     sims = []

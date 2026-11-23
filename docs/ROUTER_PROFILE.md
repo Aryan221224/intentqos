@@ -18,6 +18,7 @@ If the helper is missing or dies, the engine falls back to the Python capture an
 |---|---|---|---|
 | Original (Python capture, scikit-learn) on x86 | ~29% | ~158 MB | all flows correct |
 | **Router build on x86** (helper + pure-Python model) | **2.7%** (+0.1% helper) | **25 MB** (+4 MB helper) | all flows correct |
+| **2.0 engine in the lab** (experience sensing, outcome control, offers; pure-Python phase-wise model; light household load: a call and browsing) | 2.0% | 29 MB | not the same workload as the row above |
 | **Router build as aarch64 + musl**, under qemu-user emulation | 21–30% of the *host* core, emulation included | 54–56 MB, qemu included | all flows correct |
 
 The aarch64 run used a static musl Python (the same C library as OpenWrt) and the **installed
@@ -46,8 +47,9 @@ On prplOS the engine can also run as an LCM container (`router/container/Dockerf
 
 ## What a production port would still change
 
-- Classification and capture in eBPF at the TC hook (per-flow maps in the kernel), so even the
-  0.5-second aggregation leaves user space; or the router SoC's flow-offload counters.
+- Capture in eBPF at the TC hook is now built (`capture.backend = ebpf`, see `docs/INNOVATIONS.md`) but
+  verified only in emulation on Linux 6.18; it needs testing on router kernels (5.15, 6.6) and SoCs. The
+  router SoC's flow-offload counters are the other route.
 - The control loop (estimator, policy) in C or Rust, as the community did for cake-autorate
   (C and Rust rewrites exist), to fit 64 MB routers without Python at all.
 - Hardware QoS offload where the SoC provides it (the shaper itself is single-threaded in Linux).

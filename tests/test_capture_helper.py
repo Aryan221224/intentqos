@@ -93,6 +93,39 @@ class TestHelperMatchesPython(unittest.TestCase):
                 self.assertEqual(getattr(wh, field), getattr(wp, field), (k, field))
             self.assertEqual((fh.pk_up, fh.pk_dn, fh.by_up, fh.by_dn), (fp.pk_up, fp.pk_dn, fp.by_up, fp.by_dn))
             self.assertEqual([(s, d) for _, s, d in fh.early], [(s, d) for _, s, d in fp.early])
+            for field in ("ect0", "ect1", "ce", "dscp_up", "retx_up", "retx_dn"):
+                self.assertEqual(getattr(wh, field), getattr(wp, field), (k, field))
+
+    def test_same_experience_fields(self):
+        """TCP-timestamp RTT, ECN, DSCP, retransmissions and QUIC spin: counts must agree exactly."""
+        from tests.test_innovations import experience_frames
+        fr = experience_frames()
+        table_h = FlowTable(["192.168.9.0/24"])
+        h = HelperCapture("iqtb", table_h, HELPER, ["192.168.9.0/24"])
+        h.args = ["ip", "netns", "exec", NS, HELPER, "-i", "iqtb", "-n", "192.168.9.0/24"]
+        h.start()
+        try:
+            import pickle
+            sender = subprocess.Popen(["ip", "netns", "exec", NS, sys.executable, "-c",
+                                       "import socket,sys,pickle,time\n"
+                                       "fr=pickle.load(sys.stdin.buffer)\n"
+                                       "s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW)\n"
+                                       "s.bind(('iqta',0))\n"
+                                       "t0=time.monotonic()\n"
+                                       "for dt,f in fr:\n"
+                                       "    time.sleep(max(0,t0+dt-time.monotonic())); s.send(f)\n"],
+                                      stdin=subprocess.PIPE)
+            sender.communicate(pickle.dumps(fr))
+            time.sleep(0.3)
+            h.roll(table_h, time.monotonic())
+        finally:
+            h.stop()
+        tcp = table_h.flows[("192.168.9.20", "198.51.100.7", 6, 40001, 443)].hist[-1]
+        self.assertEqual((tcp.rw_n, tcp.rl_n, tcp.ect1, tcp.ce, tcp.dscp_up, tcp.retx_dn), (1, 1, 1, 1, 46, 1))
+        self.assertAlmostEqual(tcp.rw_s, 40.0, delta=15.0)
+        quic = table_h.flows[("192.168.9.20", "198.51.100.7", 17, 50000, 443)].hist[-1]
+        self.assertEqual(quic.sp_n, 7)
+        self.assertAlmostEqual(quic.sp_s / quic.sp_n, 30.0, delta=10.0)
 
 
 if __name__ == "__main__":

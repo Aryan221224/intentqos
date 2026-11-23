@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntentQoS 4G Bridge</title><link rel="stylesheet" href="/kit.css"><link rel="icon" href="/icon.png"></head>
+<body>
+<header><img src="/icon.png" alt=""><b>IntentQoS 4G Bridge</b><span class="sub">turns this laptop into the router's 4G backup line</span></header>
+<main>
+  <section class="card">
+    <h2>How it is wired</h2>
+    <div class="mono small" style="background:var(--sunken);border-radius:8px;padding:12px;white-space:pre">Phone (4G) ──USB cable, USB tethering on──▶ this laptop ──Ethernet cable──▶ router's WAN port</div>
+    <ol class="small" style="margin:10px 0 0;padding-left:18px">
+      <li>Plug the phone into this laptop by USB and turn on <b>USB tethering</b> (Android: Settings › Hotspot &amp; tethering; iPhone: Personal Hotspot).</li>
+      <li>Press <b>Share the phone's 4G</b> below (Windows asks for permission once).</li>
+      <li>For the failover test, move the router's WAN cable from the ISP router to this laptop's Ethernet port when the Test Kit asks.</li>
+    </ol>
+  </section>
+  <section class="card">
+    <h2>This laptop</h2>
+    <div id="state"><span class="spin"></span> Looking at the network adapters…</div>
+    <div class="grid2" style="margin-top:10px">
+      <div><label for="phone">Phone connection (shares its internet)</label><select id="phone"></select></div>
+      <div><label for="eth">Ethernet port (to the router's WAN)</label><select id="eth"></select></div>
+    </div>
+    <div class="row" style="margin-top:14px"><button id="share">Share the phone's 4G</button><button class="ghost" id="unshare">Stop sharing</button><button class="ghost" id="refresh">Refresh</button></div>
+    <div id="msg" class="note hidden" style="margin-top:12px"></div>
+  </section>
+  <p class="small muted">Leave this laptop awake and plugged in during the test: Windows stops sharing when it sleeps. Sharing stays on after this window closes; press Stop sharing when you are done.</p>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+setInterval(() => fetch("/hb").catch(() => {}), 3000); fetch("/hb");
+async function api(path, body) {
+  const r = await fetch(path, {method: body ? "POST" : "GET", headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
+}
+function note(text, cls) { $("msg").className = "note " + (cls || ""); $("msg").textContent = text; }
+async function refresh() {
+  try {
+    const s = await api("/api/state");
+    if (s.error && !(s.adapters || []).length) { $("state").innerHTML = `<div class="note">${esc(s.error)}</div>`; return; }
+    const ad = s.adapters || [];
+    const phones = ad.filter(a => a.phone), wired = ad.filter(a => a.wired);
+    const keepP = $("phone").value, keepE = $("eth").value;
+    $("phone").innerHTML = (phones.length ? phones : ad).map(a => `<option value="${esc(a.name)}">${esc(a.name)} — ${esc(a.desc)}${a.up ? "" : " (disconnected)"}</option>`).join("");
+    $("eth").innerHTML = (wired.length ? wired : ad).map(a => `<option value="${esc(a.name)}">${esc(a.name)} — ${esc(a.desc)}${a.up ? "" : " (no cable)"}</option>`).join("");
+    if (keepP) $("phone").value = keepP; if (keepE) $("eth").value = keepE;
+    const sharing = ad.find(a => a.shared === "private");
+    const rows = [
+      ["Phone (USB tethering)", phones.length ? `<span class="pill ok">found</span> ${esc(phones[0].name)}` : '<span class="pill warn">not found</span> plug the phone in and turn on USB tethering'],
+      ["Internet on this laptop", s.internet ? '<span class="pill ok">working</span>' : '<span class="pill bad">not reachable</span>'],
+      ["Sharing", sharing ? `<span class="pill ok">on</span> to ${esc(sharing.name)} (${esc((sharing.ips || []).join(", "))})` : '<span class="pill">off</span>']];
+    $("state").innerHTML = `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  } catch (e) { $("state").innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+}
+$("refresh").onclick = refresh;
+$("share").onclick = async () => {
+  note("Turning on sharing…");
+  try { await api("/api/share", {phone: $("phone").value, eth: $("eth").value}); note("Sharing is on. The router's WAN port gets an address from this laptop when its cable is plugged in here.", "ok"); }
+  catch (e) { note(e.message, "bad"); }
+  refresh();
+};
+$("unshare").onclick = async () => { try { await api("/api/unshare", {}); note("Sharing is off.", ""); } catch (e) { note(e.message, "bad"); } refresh(); };
+refresh(); setInterval(refresh, 8000);
+</script>
+</body></html>

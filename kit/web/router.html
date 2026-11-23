@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntentQoS Router Setup</title><link rel="stylesheet" href="/kit.css"><link rel="icon" href="/icon.png"></head>
+<body>
+<header><img src="/icon.png" alt=""><b>IntentQoS Router Setup</b><span class="sub">installs IntentQoS on your OpenWrt or GL.iNet router</span></header>
+<main>
+  <ol class="steps" id="steps"><li id="t1" class="on">1 Find</li><li id="t2">2 Sign in</li><li id="t3">3 Settings</li><li id="t4">4 Install</li><li id="t5">5 Done</li></ol>
+
+  <section class="card" id="p1">
+    <h2>Find your router</h2>
+    <p class="muted small" style="margin-top:0">Connect this laptop to the router (Wi-Fi or a LAN port). The router needs its own internet connection, because it downloads Python and tc from its package feed.</p>
+    <div id="found"><span class="spin"></span> Looking on this network…</div>
+    <label for="host">Router address</label>
+    <div class="row"><input id="host" style="flex:1" placeholder="192.168.8.1"><button id="next1">Next</button><button class="ghost" id="rescan">Search again</button></div>
+    <div id="consoleNote" class="small muted" style="margin-top:10px"></div>
+  </section>
+
+  <section class="card hidden" id="p2">
+    <h2>Sign in to the router</h2>
+    <div class="grid2">
+      <div><label for="user">User</label><input id="user" value="root"></div>
+      <div><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"></div>
+    </div>
+    <p class="small muted">GL.iNet: the password of the router's admin panel. OpenWrt: the root password you set in LuCI (empty if never set). It is used only to reach the router over SSH and is not stored.</p>
+    <label class="row small" style="gap:6px;color:var(--text)"><input type="checkbox" id="trust" style="width:auto"> trust a new router identity (only after resetting or reflashing the router)</label>
+    <div class="row" style="margin-top:12px"><button id="next2">Sign in</button><button class="ghost" id="back2">Back</button></div>
+    <div id="err2" class="note bad hidden" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card hidden" id="p3">
+    <h2>Your router</h2>
+    <dl class="kv" id="facts"></dl>
+    <div id="warn3" class="note warn hidden" style="margin-top:12px"></div>
+    <h2 style="margin-top:18px">Your internet plan</h2>
+    <div class="grid2">
+      <div><label for="down">Download, Mbit/s</label><input id="down" type="number" min="1" value="100"></div>
+      <div><label for="up">Upload, Mbit/s</label><input id="up" type="number" min="1" value="100"></div>
+    </div>
+    <p class="small muted">From your ISP bill (e.g. 100/100 for a Jio or Airtel 100 Mbps fibre plan). IntentQoS measures the real line too and follows it.</p>
+    <h2 style="margin-top:18px">Operator Console</h2>
+    <label class="row small" style="gap:6px;color:var(--text)"><input type="checkbox" id="pair" style="width:auto" checked> pair this router with the Operator Console</label>
+    <div class="grid2" id="pairbox">
+      <div><label for="console">Console</label><input id="console" placeholder="found automatically, or its address"></div>
+      <div><label for="pin">Pairing PIN (shown on the console)</label><input id="pin" inputmode="numeric" maxlength="7" placeholder="123 456"></div>
+    </div>
+    <div class="row" style="margin-top:16px"><button id="install">Install IntentQoS</button><button class="ghost" id="back3">Back</button>
+      <span style="flex:1"></span><button class="ghost hidden" id="uninstall">Uninstall from this router…</button></div>
+    <div id="unbox" class="note warn hidden" style="margin-top:12px">Remove IntentQoS from this router? Shaping stops, and the router's flow offloading and its own QoS settings are put back.
+      <label class="row small" style="gap:6px;margin-top:6px"><input type="checkbox" id="purge" style="width:auto"> also delete IntentQoS settings and the router key</label>
+      <div class="row" style="margin-top:8px"><button class="danger" id="unyes">Remove IntentQoS</button><button class="ghost" id="unno">Cancel</button></div>
+      <div id="unres" class="small" style="margin-top:8px"></div></div>
+  </section>
+
+  <section class="card hidden" id="p4">
+    <h2 id="h4"><span class="spin"></span> Installing…</h2>
+    <div class="log" id="log"></div>
+    <div id="err4" class="note bad hidden" style="margin-top:12px"></div>
+    <div class="row hidden" id="retry4" style="margin-top:12px"><button id="again">Try again</button><button class="ghost" id="back4">Back to settings</button></div>
+  </section>
+
+  <section class="card hidden" id="p5">
+    <h2 style="color:var(--ok)">IntentQoS is running on your router</h2>
+    <dl class="kv" id="done"></dl>
+    <div id="pairres" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:16px"><button id="openc">Open the router console</button><button class="ghost" id="copyk">Copy router key</button></div>
+    <p class="small muted">Next: run <b>IntentQoS Test Kit</b> on the test laptop to measure the difference. You can run this program again at any time to update or uninstall.</p>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+setInterval(() => fetch("/hb").catch(() => {}), 3000); fetch("/hb");
+let consoles = [], facts = {}, result = null;
+async function api(path, body) {
+  const r = await fetch(path, {method: body ? "POST" : "GET", headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
+}
+function show(n) {
+  for (let i = 1; i <= 5; i++) { $("p" + i).classList.toggle("hidden", i !== n); $("t" + i).className = i < n ? "done" : i === n ? "on" : ""; }
+}
+async function find() {
+  $("found").innerHTML = '<span class="spin"></span> Looking on this network…';
+  try {
+    const d = await api("/api/find");
+    consoles = d.consoles || [];
+    if (!d.routers.length) $("found").innerHTML = '<div class="note warn">No router answered at the usual addresses. Type its address below (printed on the router\'s label).</div>';
+    else {
+      $("found").innerHTML = d.routers.map(r => `<label class="row" style="gap:8px;color:var(--text);margin:4px 0"><input type="radio" name="cand" value="${esc(r.ip)}" style="width:auto">
+        <b class="mono">${esc(r.ip)}</b><span class="small muted">${esc(r.label || "")}</span>${r.ssh ? '<span class="pill ok">SSH</span>' : '<span class="pill warn">no SSH</span>'}</label>`).join("");
+      const first = d.routers.find(r => r.ssh) || d.routers[0];
+      $("host").value = first.ip;
+      document.querySelectorAll("input[name=cand]").forEach(el => { el.checked = el.value === first.ip; el.onchange = () => $("host").value = el.value; });
+    }
+    $("consoleNote").innerHTML = consoles.length ? `Operator Console found: <b>${esc(consoles[0].name)}</b> at <span class="mono">${esc(consoles[0].ip)}</span>` :
+      "No Operator Console found yet. Start <b>IntentQoS Operator Console</b> on the operator laptop to pair, or skip pairing.";
+    if (consoles.length) $("console").value = consoles[0].https;
+  } catch (e) { $("found").innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+}
+$("rescan").onclick = find;
+$("next1").onclick = () => { if ($("host").value.trim()) { show(2); $("pw").focus(); } };
+$("back2").onclick = () => show(1); $("back3").onclick = () => show(2); $("back4").onclick = () => show(3);
+$("pw").addEventListener("keydown", e => { if (e.key === "Enter") $("next2").click(); });
+$("next2").onclick = async () => {
+  $("err2").classList.add("hidden"); $("next2").disabled = true; $("next2").textContent = "Signing in…";
+  try {
+    const d = await api("/api/connect", {host: $("host").value.trim(), user: $("user").value.trim(), password: $("pw").value, trust: $("trust").checked});
+    facts = d.facts;
+    const rows = [["Model", facts.model || "unknown"], ["Firmware", (facts.gl ? `GL.iNet ${facts.gl} · ` : "") + (facts.description || "")],
+      ["CPU", facts.machine], ["Free flash", facts.free_kb ? `${Math.round(facts.free_kb / 1024)} MB` : "?"], ["Router internet", facts.internet === "yes" ? "connected" : "not connected"],
+      ["IntentQoS", facts.installed ? `version ${facts.installed} installed${facts.controller ? " · paired" : ""}` : "not installed"]];
+    $("facts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+    const w = [];
+    if (facts.internet !== "yes") w.push("The router has no internet connection. It needs one to download Python and tc.");
+    const pv = (facts.python || "").split(".").map(Number);
+    if (pv.length === 2 && (pv[0] < 3 || (pv[0] === 3 && pv[1] < 9))) w.push(`Python ${facts.python} on this firmware is too old (3.9 or newer is needed).`);
+    if (facts.free_kb && +facts.free_kb < 22000 && !facts.python) w.push("Less than 22 MB of free flash: the install may not fit.");
+    $("warn3").innerHTML = w.map(esc).join("<br>"); $("warn3").classList.toggle("hidden", !w.length);
+    $("install").textContent = facts.installed ? (facts.installed === d.payload_version ? "Reinstall" : `Update to ${d.payload_version}`) : "Install IntentQoS";
+    $("uninstall").classList.toggle("hidden", !facts.installed);
+    show(3);
+  } catch (e) { $("err2").textContent = e.message; $("err2").classList.remove("hidden"); }
+  $("next2").disabled = false; $("next2").textContent = "Sign in";
+};
+$("pair").onchange = () => $("pairbox").classList.toggle("hidden", !$("pair").checked);
+async function start() {
+  $("err4").classList.add("hidden"); $("retry4").classList.add("hidden"); $("log").innerHTML = "";
+  $("h4").innerHTML = '<span class="spin"></span> Installing… (a few minutes: the router downloads Python and tc)';
+  show(4);
+  try {
+    await api("/api/install", {down: +$("down").value, up: +$("up").value, pair: $("pair").checked, pin: $("pin").value.replace(/\s/g, ""), console: $("console").value.trim()});
+    poll();
+  } catch (e) { $("err4").textContent = e.message; $("err4").classList.remove("hidden"); $("retry4").classList.remove("hidden"); }
+}
+$("install").onclick = start; $("again").onclick = start;
+function cls(l) { return l.startsWith("✗") ? "bad" : l.startsWith("⚠") ? "warn" : ""; }
+async function poll() {
+  const j = await api("/api/job");
+  $("log").innerHTML = (j.lines || []).map(l => `<div class="${cls(l)}">${esc(l)}</div>`).join(""); $("log").scrollTop = 1e9;
+  if (!j.done) { setTimeout(poll, 600); return; }
+  if (!j.ok) { $("h4").textContent = "Install stopped"; $("err4").textContent = j.error; $("err4").classList.remove("hidden"); $("retry4").classList.remove("hidden"); return; }
+  result = j.result;
+  $("done").innerHTML = [["Router console", `<a href="${esc(result.console)}" target="_blank">${esc(result.console)}</a>`], ["Router key", `<span class="mono">${esc(result.key)}</span>`],
+    ["Detected", `LAN ${esc(result.lan)} (${esc(result.subnet)}), WAN ${esc(result.wan)}`], ["Firmware", esc(result.firmware)], ["IntentQoS", esc(result.version) + ` · Python ${esc(result.python)}`]]
+    .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  $("pairres").innerHTML = !$("pair").checked ? '<div class="note">Not paired with an Operator Console. Run this program again to pair later.</div>'
+    : j.pair_error ? `<div class="note bad">Installed, but pairing failed: ${esc(j.pair_error)}</div>
+        <div class="row" style="margin-top:8px"><input id="pin2" placeholder="PIN" style="max-width:160px"><button id="pairnow">Pair now</button></div>`
+    : j.enrolled ? '<div class="note ok">Paired: the router is reporting to the Operator Console.</div>'
+    : '<div class="note warn">Paired, but the router has not reported to the console yet. It keeps trying in the background.</div>';
+  const pn = $("pairnow");
+  if (pn) pn.onclick = async () => { await api("/api/pair", {down: +$("down").value, up: +$("up").value, pin: $("pin2").value.replace(/\s/g, ""), console: $("console").value.trim()}); show(4); poll(); };
+  show(5);
+}
+$("openc").onclick = () => result && window.open(result.console, "_blank");
+$("copyk").onclick = async () => { if (result) { await navigator.clipboard.writeText(result.key); $("copyk").textContent = "Copied"; setTimeout(() => $("copyk").textContent = "Copy router key", 1500); } };
+$("uninstall").onclick = () => $("unbox").classList.remove("hidden");
+$("unno").onclick = () => $("unbox").classList.add("hidden");
+$("unyes").onclick = async () => {
+  $("unyes").disabled = true;
+  try { const d = await api("/api/uninstall", {purge: $("purge").checked}); $("unres").innerHTML = "Removed. " + (d.steps || []).map(esc).join(". ");
+    $("install").textContent = "Install IntentQoS"; $("uninstall").classList.add("hidden"); }
+  catch (e) { $("unres").textContent = e.message; }
+  $("unyes").disabled = false;
+};
+find();
+</script>
+</body></html>

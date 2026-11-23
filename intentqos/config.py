@@ -2,8 +2,54 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
-import tomllib
+import re
+
+try:
+    import tomllib
+except ModuleNotFoundError:          # Python < 3.11 (e.g. OpenWrt 21.02 / GL.iNet stock firmware ship 3.9)
+    tomllib = None
+
+
+def _mini_toml(text: str) -> dict:
+    """Minimal TOML reader for Python < 3.11: [tables], key = value with strings, numbers, booleans and
+    one-line arrays. Enough for the configs this project writes (intentqos-uci, the examples)."""
+    out: dict = {}
+    cur = out
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.fullmatch(r"\[([A-Za-z0-9_.-]+)\]\s*(#.*)?", line)
+        if m:
+            cur = out
+            for part in m.group(1).split("."):
+                cur = cur.setdefault(part, {})
+            continue
+        k, sep, v = line.partition("=")
+        if not sep:
+            raise ValueError(f"cannot parse config line: {raw!r}")
+        v = v.strip()
+        # drop a trailing comment that is outside any string
+        q, i = False, 0
+        for i, ch in enumerate(v):
+            if ch == '"' and (i == 0 or v[i - 1] != "\\"):
+                q = not q
+            elif ch == "#" and not q:
+                v = v[:i].rstrip()
+                break
+        if v.startswith("'") and v.endswith("'"):
+            v = json.dumps(v[1:-1])
+        cur[k.strip().strip('"')] = json.loads(v)
+    return out
+
+
+def _load_toml(f) -> dict:
+    data = f.read()
+    if tomllib is not None:
+        return tomllib.loads(data.decode())
+    return _mini_toml(data.decode())
 
 DEFAULTS: dict = {
     "interfaces": {
@@ -57,8 +103,10 @@ DEFAULTS: dict = {
         "drift_quiet_s": 30.0,        # drift back toward the plan rate only this long after the last queue
     },
     "capture": {
-        "backend": "auto",             # auto: native helper (router/iq-capture) when present, else Python
+        "backend": "auto",             # auto: native helper (router/iq-capture) when present, else Python;
+                                       # ebpf: kernel flow engine (iq-capture -e + iq-flow.bpf.o, tc with libbpf)
         "helper_path": "",
+        "bpf_object": "",              # iq-flow.bpf.o; default: router/ next to the engine or /usr/lib/intentqos
     },
     "classifier": {
         "mode": "ml",                  # ml | rules  (ml falls back to rules if no model is present)
@@ -75,6 +123,12 @@ DEFAULTS: dict = {
         "labels_path": "",             # committed class per live flow, kept across an engine restart; default <data.dir>/labels.json
         "restore_max_age_s": 120,      # labels older than this are not restored (the flows will have ended)
         "corrections_path": "data/corrections.jsonl",
+        "adaptive_conformal": True,    # re-tune alpha online (Gibbs & Candes 2021) from household and weak-label feedback
+    },
+    "weak_labels": {
+        "path": "data/weak_labels.json",
+        "fetch_ms365": False,          # download Microsoft's published Optimize endpoints (Teams media) weekly
+        "max_age_s": 604800,
     },
     "policy": {
         "tick_ms": 500,
@@ -96,7 +150,38 @@ DEFAULTS: dict = {
         "mark_dscp": True,             # also write DSCP so Wi-Fi WMM / CAKE diffserv honour the class
         "nft_table": "intentqos",
         "flow_timeout_s": 60,
+        "l4s": True,                   # ECT(1) packets get CE marks at 1 ms (fq_codel ce_threshold_selector)
+        "dualpi2": True,               # use DualPI2 on the intent/voice leaves where the kernel has it (6.17+)
+        "cake_mq": True,               # CAKE per hardware queue (Linux 7.0) on multi-queue interfaces
+        "flow_offload": "off",         # off | software-bulk | hardware-bulk (research; needs capture.backend=ebpf)
     },
+    "outcome": {
+        "enabled": True,               # choose policy parameters by predicted Quality of Outcome
+        "gate": True,                  # refuse guarantee moves predicted to hurt a call, game or lease
+        "period_s": 2.0,
+        "gate_min_qoo": 60.0,
+        "gate_drop": 10.0,
+        "safe_tuning": False,          # SafeOpt-style per-home tuning of the bloat threshold (opt-in)
+        "tune_dwell_s": 60.0,
+        "tune_safety_min": 60.0,
+    },
+    "wifi": {
+        "cvt_max": 0.8,                # Sundaresan et al.: steady packet gaps below this = a bottleneck upstream
+        "lan_rtt_ms": 15.0,            # ... and LAN RTT above this = the Wi-Fi is that bottleneck
+        "min_pps": 100.0,
+    },
+    "identity": {
+        "dhcp_hook_path": "/tmp/intentqos/dhcp.jsonl",
+        "leases_path": "/tmp/dhcp.leases",
+        "fingerprints_path": "",       # optional {"<option 55 list>": "<type>"} file of verified fingerprints
+    },
+    "cellular": {
+        "enabled": False,              # only for routers with their own modem (ModemManager)
+        "bandwidth_mhz": 20.0,
+        "share": 0.35,
+        "fade_db": 6.0,
+    },
+    "qoo": {},                         # per-class overrides of the Quality of Outcome thresholds (qoo.py)
     "intents": {
         "max_duration_s": 8 * 3600,
         "default_duration_s": 3600,
@@ -152,7 +237,7 @@ def load(path: str | None = None, overrides: dict | None = None) -> dict:
     cfg = copy.deepcopy(DEFAULTS)
     if path:
         with open(path, "rb") as f:
-            cfg = _merge(cfg, tomllib.load(f))
+            cfg = _merge(cfg, _load_toml(f))
     if overrides:
         cfg = _merge(cfg, overrides)
     # Relative paths (models/, data/) resolve against the project root when the config lives in

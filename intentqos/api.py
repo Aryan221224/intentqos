@@ -230,7 +230,7 @@ def make_handler(eng):
             u = urlparse(self.path)
             if u.path == "/api/session":
                 return self._session("GET")
-            if (u.path.startswith("/api/") or u.path == "/metrics") and u.path != "/api/healthz" \
+            if (u.path.startswith(("/api/", "/camara/")) or u.path == "/metrics") and u.path != "/api/healthz" \
                     and not self._authorised(write=False):
                 return self._send(401, {"error": "sign in with the router key", "auth_required": True})
             if u.path.startswith("/fonts/"):
@@ -286,7 +286,47 @@ def make_handler(eng):
                 return self._send(200, prometheus(eng.snapshot or {}), "text/plain; version=0.0.4")
             if u.path == "/api/healthz":
                 return self._send(200, {"ok": eng.running, "t": time.time()})
+            if u.path == "/api/experience":
+                snap = eng.snapshot or {}
+                return self._send(200, {k: snap.get(k) for k in ("experience", "bottlenecks", "outcome", "l4s",
+                                                                  "identity", "cellular", "probing")})
+            if u.path == "/api/offers":
+                return self._send(200, eng.offers.open())
+            if u.path == "/api/usp":
+                from .usp import data_model
+                return self._send(200, data_model(eng))
+            if u.path == "/camara/qos-profiles/v1/qos-profiles":
+                from .camara import PROFILES, profile_doc
+                return self._send(200, [profile_doc(n) for n in PROFILES])
+            if u.path.startswith("/camara/qos-profiles/v1/qos-profiles/"):
+                from .camara import PROFILES, profile_doc
+                n = u.path.rsplit("/", 1)[-1]
+                return self._send(200, profile_doc(n)) if n in PROFILES else \
+                    self._send(404, {"status": 404, "code": "NOT_FOUND", "message": "no such QoS profile"})
+            if u.path.startswith("/camara/quality-on-demand/v1/sessions/"):
+                return self._camara("GET", u.path, {})
             return self._send(404, {"error": "not found"})
+
+        def _camara(self, method: str, path: str, body: dict):
+            from .camara import CamaraError
+            q = eng.qod
+            parts = path.rstrip("/").split("/")          # ['', 'camara', 'quality-on-demand', 'v1', ...]
+            try:
+                if parts[4:] == ["sessions"] and method == "POST":
+                    return self._send(201, q.create(body, str(self.headers.get("X-Requester", "camara-app"))[:64]))
+                if parts[4:] == ["retrieve-sessions"] and method == "POST":
+                    return self._send(200, q.retrieve(body))
+                if len(parts) == 6 and parts[4] == "sessions":
+                    if method == "GET":
+                        return self._send(200, q.get(parts[5]))
+                    if method == "DELETE":
+                        q.delete(parts[5])
+                        return self._send(204, b"")
+                if len(parts) == 7 and parts[4] == "sessions" and parts[6] == "extend" and method == "POST":
+                    return self._send(200, q.extend(parts[5], body))
+            except CamaraError as e:
+                return self._send(e.status, e.body())
+            return self._send(404, {"status": 404, "code": "NOT_FOUND", "message": "not found"})
 
         def do_POST(self):
             u = urlparse(self.path)
@@ -347,6 +387,12 @@ def make_handler(eng):
                 return self._send(200, eng.resume_device(ip, who))
             if u.path == "/api/rollback":
                 return self._send(200, eng.operator_rollback())
+            if u.path == "/api/bypass":
+                try:
+                    return self._send(200, eng.set_bypass(bool(body.get("on")), float(body.get("minutes", 5)),
+                                                          str(body.get("by", "operator"))[:40]))
+                except (TypeError, ValueError) as e:
+                    return self._send(400, {"error": str(e)})
             if u.path == "/api/automation":
                 eng.set_paused(bool(body.get("paused")), str(body.get("requester", "operator"))[:40])
                 return self._send(200, {"paused": eng.paused})
@@ -371,6 +417,28 @@ def make_handler(eng):
                     return self._send(200, eng.scheduler.add(body))
                 except (ValueError, TypeError) as e:
                     return self._send(400, {"error": str(e)})
+            if u.path.startswith("/camara/quality-on-demand/v1/"):
+                return self._camara("POST", u.path, body)
+            if u.path == "/api/intents/parse":
+                # plain-language request -> a drafted lease; confirm=true then asks for it like any other request
+                from .nlintent import parse
+                r = parse(str(body.get("text", "")), eng.devices, body.get("from_ip") or self.client_address[0])
+                if not r["ok"] or not body.get("confirm"):
+                    if r["ok"]:
+                        r["preview"] = eng.intents.request(dict(r["request"]), eng.estimator.down.rate,
+                                                           eng.estimator.up.rate, dry_run=True)
+                    return self._send(200 if r["ok"] else 400, r)
+                req = dict(r["request"], requester=str(body.get("requester", "household"))[:64])
+                res = eng.intents.request(req, eng.estimator.down.rate, eng.estimator.up.rate)
+                res["understood"] = r["understood"]
+                return self._send(200 if res.get("ok") else 409, res)
+            if u.path.startswith("/api/offers/") and u.path.endswith(("/accept", "/dismiss")):
+                oid = u.path.split("/")[3]
+                if u.path.endswith("/dismiss"):
+                    ok = eng.offers.dismiss(oid)
+                    return self._send(200 if ok else 404, {"ok": ok})
+                res = eng.offers.accept(oid, eng, str(body.get("requester", "household"))[:64], body.get("minutes"))
+                return self._send(200 if res.get("ok") else 409, res)
             return self._send(404, {"error": "not found"})
 
         def do_PUT(self):
@@ -403,6 +471,8 @@ def make_handler(eng):
             if u.path.startswith("/api/schedules/"):
                 ok = eng.scheduler.remove(u.path.rsplit("/", 1)[-1])
                 return self._send(200 if ok else 404, {"ok": ok})
+            if u.path.startswith("/camara/quality-on-demand/v1/sessions/"):
+                return self._camara("DELETE", u.path, {})
             return self._send(404, {"error": "not found"})
 
     return H

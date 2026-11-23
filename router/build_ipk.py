@@ -23,14 +23,14 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OW = os.path.join(ROOT, "router", "openwrt", "files")
 DIST = os.path.join(ROOT, "router", "dist")
-VERSION = "1.0.0-1"
+VERSION = "2.0.0-1"
 # static helper binary -> OpenWrt package architectures it serves
 ARCHES = {"aarch64": ["aarch64_cortex-a53", "aarch64_cortex-a72", "aarch64_generic"],
           "armv7": ["arm_cortex-a7_neon-vfpv4", "arm_cortex-a9_vfpv3-d16", "arm_cortex-a15_neon-vfpv4"],
           "mipsel": ["mipsel_24kc", "mipsel_74kc"],
           "x86_64": ["x86_64"]}
 DEPENDS = ("python3-light, python3-email, python3-urllib, python3-openssl, python3-logging, tc-full, kmod-sched-core, "
-           "kmod-sched-cake, kmod-sched-htb, nftables, iq-capture")
+           "kmod-sched-cake, nftables, iq-capture")
 
 
 def _tar(entries: list[tuple[str, bytes, int]], gz: bool = True) -> bytes:
@@ -87,6 +87,11 @@ def main() -> int:
     files.append(("./etc/config/intentqos", read(os.path.join(OW, "intentqos.config")), 0o644))
     files.append(("./etc/init.d/intentqos", read(os.path.join(OW, "intentqos.init")), 0o755))
     files.append(("./usr/sbin/intentqos-uci", read(os.path.join(OW, "intentqos-uci")), 0o755))
+    files.append(("./etc/hotplug.d/dhcp/90-intentqos",
+                  read(os.path.join(ROOT, "router", "kit", "files", "etc", "hotplug.d", "dhcp", "90-intentqos")), 0o755))
+    for obj in ("iq-flow.bpf.o", "iq-flow-eb.bpf.o"):              # kernel flow engine, opt-in (capture=ebpf)
+        if os.path.isfile(os.path.join(ROOT, "router", obj)):
+            files.append((f"./usr/lib/intentqos/{obj}", read(os.path.join(ROOT, "router", obj)), 0o644))
     post = "#!/bin/sh\n[ -n \"$IPKG_INSTROOT\" ] || { /etc/init.d/intentqos enable; /etc/init.d/intentqos restart; }\nexit 0\n"
     prerm = "#!/bin/sh\n[ -n \"$IPKG_INSTROOT\" ] || { /etc/init.d/intentqos stop; /etc/init.d/intentqos disable; }\nexit 0\n"
     out = [ipk("intentqos", "all", files, {"Depends": DEPENDS, "Section": "net", "License": "MIT", "Source": "intentqos",

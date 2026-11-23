@@ -27,3 +27,7 @@ results/nul-in.txt
 testbed/accessemu
 # raw experiment runs (regenerate with testbed.run_eval)
 results*/runs/
+# home-kit build cache and embedded build products (rebuild with kit/build.py)
+kit/.cache/
+kit/embed/
+kit/*.syso

@@ -684,12 +684,17 @@ function eventsHTML(evs, n = 40) {
   if (!evs.length) return `<li class="empty">Nothing has happened yet.</li>`;
   return evs.slice().reverse().slice(0, n).map(e => `<li><time>${clock(e.t)}</time><span class="kind">${esc(e.kind)}</span><span class="${esc(e.level)}">${esc(e.msg)}</span></li>`).join("");
 }
+function deviceQoO(ip) {
+  const qs = ((S.state.experience || {}).apps || []).filter(a => a.ip === ip && a.qoo != null && ["voip", "video", "gaming", "streaming", "web"].includes(a.label));
+  return qs.length ? Math.min(...qs.map(a => a.qoo)) : null;
+}
 function deviceCard(d) {
   const lease = activeLeases().find(i => i.target === d.ip);
+  const q = deviceQoO(d.ip);
   const tot = (d.kbps_dn + d.kbps_up) || 1;
   const parts = Object.entries(d.labels || {}).filter(([l]) => l !== "?").map(([l, n]) => `<i style="--c:var(--${LABEL_TIN[l] || "besteffort"});width:${(n / Object.values(d.labels).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%"></i>`).join("");
   return `<div class="dev${lease ? " boost" : ""}"><span class="ic">${icon(d.type)}</span>
-    <span class="nm">${esc(d.name || d.ip)} ${lease ? '<span class="tag boost">prioritised</span>' : ""}</span>
+    <span class="nm">${esc(d.name || d.ip)} ${lease ? '<span class="tag boost">prioritised</span>' : ""}${q != null ? ` <span class="tag${q < 60 ? " unsure" : ""}" title="How well its apps are working now (Quality of Outcome, 0 to 100)">${q >= 80 ? "working well" : q >= 60 ? "mostly fine" : "struggling"}</span>` : ""}</span>
     <span class="act">${esc(d.activity || "Idle")}</span>
     <span class="rt num">↓ ${mbit(d.kbps_dn)} · ↑ ${mbit(d.kbps_up)} Mbit/s · ${d.flows} flow${d.flows === 1 ? "" : "s"}</span>
     <span class="bar">${parts}</span></div>`;
@@ -1234,9 +1239,66 @@ VIEWS.system = {title: "System", group: "Evidence", build() {
     ${Object.entries(v).map(([a, b]) => `<tr><td>${esc(a)}</td><td><code>${esc(b)}</code></td></tr>`).join("")}<tr><td>Uptime</td><td>${hm(S.state.uptime_s)}</td></tr></tbody></table>`);
 }};
 
+/* ------------------------------------------------------------------ Experience (IntentQoS 2.0) */
+function qooPill(q) {
+  if (q == null) return `<span class="pill">no score yet</span>`;
+  const c = q >= 80 ? "ok" : q >= 60 ? "" : q >= 40 ? "warn" : "alert";
+  return `<span class="pill ${c}" title="Quality of Outcome, 0 to 100">${Math.round(q)}</span>`;
+}
+const WHERE = {wifi: "Wi-Fi", line: "broadband line", none: "far end or internet path", idle: "too little traffic to tell"};
+VIEWS.experience = {title: "Experience", group: "Live", build() {
+  return `<section class="panel"><div class="hstack"><h2>What each app gets</h2><span class="sp"></span><span class="small muted" id="e-src"></span></div>
+    <p class="sub">Quality of Outcome per app session (IETF method: 100 works perfectly, 0 unusable), from round trips measured passively in TCP timestamps and QUIC spin bits, or estimated from the queue and path when a flow carries neither.</p>
+    <div class="tablewrap"><table><thead><tr><th>Device</th><th>App</th><th>QoO</th><th class="n">Delay p50 / p99</th><th>Measured how</th><th>Held back by</th><th class="n">Down</th></tr></thead><tbody id="e-apps"></tbody></table></div></section>
+  <section class="cols">
+    <div class="panel"><h2>Where the delay comes from</h2><p class="sub">ΔQ: the internet path's floor (G) and what queues add above it (V), the round trip inside the home per device, and each lane's queue.</p><div id="e-dq"></div></div>
+    <div class="panel"><h2>Outcome control</h2><p class="sub">Policy settings chosen by predicted QoO; plans that would hurt a protected app are refused.</p><div id="e-oc"></div></div>
+  </section>
+  <section class="cols">
+    <div class="panel"><h2>Lanes and links</h2><div id="e-ll"></div></div>
+    <div class="panel"><h2>Devices recognised</h2><p class="sub">Device type from its DHCP request, name and maker, or set by the household.</p><div id="e-id"></div></div>
+  </section>`;
+}, update() {
+  const s = S.state, xp = s.experience || {}, apps = xp.apps || [];
+  txt("e-src", `${apps.length} app session${apps.length === 1 ? "" : "s"}${s.probing ? ` · probes every ${s.probing.interval_ms} ms, ${s.probing.passive_rtt_per_s} passive samples/s` : ""}`);
+  set("e-apps", apps.length ? apps.map(a => {
+    const lat = a.latency_ms || {}, b = a.bottleneck || {};
+    return `<tr><td>${esc(a.device || a.ip)}</td><td>${esc(LABEL_NAME[a.label] || a.label)}${a.l4s ? ' <span class="tag">L4S</span>' : ""}${a.call ? ` <span class="small muted">${esc(a.call.tier || "")}</span>` : ""}</td>
+      <td>${qooPill(a.qoo)}${a.worst ? ` <span class="small muted">${esc(a.worst)}</span>` : ""}</td>
+      <td class="n num">${lat[50] ?? lat["50"] ?? "–"} / ${lat[99] ?? lat["99"] ?? "–"} ms</td>
+      <td class="small">${a.latency_source === "measured" ? "measured" : "estimated"}</td>
+      <td class="small" title="${esc(b.why || "")}">${esc(WHERE[b.where] || "–")}</td><td class="n num">${mbit(a.kbit_down)}</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty">No app sessions yet.</td></tr>`);
+  const g = (xp.path || {}).gsv || {}, rtt = (xp.path || {}).rtt_ms || {};
+  const devs = Object.entries(xp.devices || {}), qs = xp.queues || {};
+  set("e-dq", `<table><tbody><tr><td>Internet path</td><td class="num">G ${g.g ?? "–"} ms · V p50 ${g.v_p50 ?? "–"} · p99 ${g.v_p99 ?? "–"} ms · median RTT ${rtt[50] ?? rtt["50"] ?? "–"} ms</td></tr>
+    ${devs.map(([ip, d]) => `<tr><td>${esc(devName(ip))}</td><td class="num">in-home round trip p50 ${d.lan_rtt_ms[50] ?? d.lan_rtt_ms["50"] ?? "–"} · p99 ${d.lan_rtt_ms[99] ?? d.lan_rtt_ms["99"] ?? "–"} ms</td></tr>`).join("")}
+    ${Object.entries(qs).map(([dir, lanes]) => `<tr><td>${dir === "down" ? "Download" : "Upload"} lanes</td><td class="small">${Object.entries(lanes).map(([n, q]) => `${esc(n)} ${q[99] ?? q["99"] ?? "–"} ms`).join(" · ")}</td></tr>`).join("")}</tbody></table>`);
+  const oc = s.outcome || {};
+  set("e-oc", oc.enabled === false ? `<p class="empty">Off. The classic policy decides the lanes.</p>` :
+    `<div class="metric" style="--c:var(--voice)"><div class="v num">${oc.objective ?? "–"}</div><div class="l">weighted QoO of live apps</div></div>
+     <div class="metric" style="--c:var(--intent)"><div class="v num">${oc.worst_protected ?? "–"}</div><div class="l">worst call, game or boosted device</div></div>
+     <p class="small" style="margin:10px 0 4px">Headroom for real-time lanes ×${oc.theta?.realtime_headroom ?? "–"}, bulk share of the rest ${oc.theta?.remainder_bulk_share ?? "–"}; ${oc.gated || 0} plan${oc.gated === 1 ? "" : "s"} refused.</p>
+     ${(oc.decisions || []).slice(0, 4).map(d => `<div class="small muted">${esc(d.why || JSON.stringify(d))}</div>`).join("")}
+     ${oc.safe_tuning ? `<p class="small">Safe tuning: bloat threshold ${esc(oc.safe_tuning.setting_ms)} ms (safe start ${esc(oc.safe_tuning.safe_seed_ms)} ms).</p>` : ""}`);
+  const l4 = s.l4s || {}, cell = s.cellular, cap = s.capture || {};
+  set("e-ll", `<table><tbody><tr><td>L4S</td><td>${esc(l4.mode || "–")}${l4.flows ? ` · ${l4.flows} L4S flow${l4.flows === 1 ? "" : "s"}` : ""}</td></tr>
+    <tr><td>Flow accounting</td><td>${esc(cap.backend || "–")}</td></tr>
+    <tr><td>Mobile backup</td><td>${cell ? `${esc(cell.tech || "")} ceiling ${mbit(cell.ceiling_kbit)} Mbit/s${cell.fading ? " · fading" : ""}` : "not in use"}</td></tr>
+    <tr><td>CAMARA sessions</td><td>${s.camara_sessions || 0}</td></tr>
+    <tr><td>Open offers</td><td>${(s.offers || []).length}</td></tr></tbody></table>`);
+  const idn = s.identity || {};
+  const rows = devices().map(d => `<tr><td>${esc(d.name || d.ip)}</td><td>${esc(d.type || "–")}</td><td class="small muted">${esc(d.type_source || "")}</td></tr>`).join("");
+  set("e-id", `<table><tbody>${rows || `<tr><td class="empty">No devices yet.</td></tr>`}</tbody></table>${idn.hook === false ? `<p class="small muted">The DHCP hook is not installed, so types come from names and makers only.</p>` : ""}`);
+}};
+
 /* ------------------------------------------------------------------ Household */
 VIEWS.home = {title: "Home", group: "Household", hh: true, build() {
   return `<section class="hh-hero"><div class="grade" id="h-grade">–</div><div><h2 id="h-head">Checking your connection…</h2><p id="h-why"></p></div></section>
+  <div id="h-offers"></div>
+  <section class="panel"><h2>Ask for what you need</h2><p class="sub">In your own words, for example “keep my interview smooth for 45 minutes” or “TV ko 10 baje tak priority do”. You see what the router understood before anything changes.</p>
+    <div class="hstack" style="gap:8px;flex-wrap:wrap"><input class="t" id="nl-text" maxlength="300" placeholder="Keep my call smooth for an hour" style="flex:1;min-width:220px" aria-label="What do you need?"><button class="btn" type="button" id="nl-go">Check</button></div>
+    <div id="nl-out" class="small" style="margin-top:8px" aria-live="polite"></div></section>
   <section class="panel"><h2>Prioritised now</h2><div id="h-leases"></div></section>
   <section class="panel"><h2>Who's online</h2><p class="sub">What each device is doing right now.</p><div class="devgrid" id="h-devs"></div></section>
   <section class="panel"><h2>Quick modes</h2><p class="sub">Pick a device and start. Everything returns to normal by itself.</p><div class="modes" id="h-modes"></div></section>`;
@@ -1251,6 +1313,10 @@ update() {
   const ls = activeLeases();
   set("h-leases", ls.length ? ls.map(i => leaseHTML(i, true)).join("") : `<p class="empty">Nothing is prioritised. <a href="#boost">Prioritise a device</a> for a call or a game.</p>`);
   set("h-devs", devices().map(deviceCard).join(""));
+  const offers = s.offers || [];
+  set("h-offers", offers.map(o => `<section class="panel" style="border-left:4px solid var(--intent)"><div class="hstack" style="gap:10px;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px"><b>${esc(o.reason)}</b><div class="small muted">Prioritise ${esc(o.device)} for an hour? Nothing changes unless you say yes.</div></div>
+    <button class="btn" type="button" data-offer="${esc(o.id)}">Yes, prioritise</button><button class="btn quiet" type="button" data-offer-no="${esc(o.id)}">Not now</button></div></section>`).join(""));
   const ms = $("h-modes"); if (ms && ms.querySelector("select")?.options.length !== devices().length) set("h-modes", modesHTML(true));
 }};
 VIEWS.devices = {title: "Devices", group: "Household", hh: true, build() {
@@ -1280,7 +1346,7 @@ VIEWS.boost = {title: "Prioritise", group: "Household", hh: true, build() {
 update() { pfSync(); const ls = activeLeases(); set("b-leases", ls.length ? ls.map(i => leaseHTML(i, true)).join("") : `<p class="empty">Nothing is prioritised.</p>`); }};
 
 /* ================================================================== shell */
-const OP_VIEWS = ["monitor", "traffic", "link", "policy", "prioritise", "experiments", "system"];
+const OP_VIEWS = ["monitor", "experience", "traffic", "link", "policy", "prioritise", "experiments", "system"];
 const HH_VIEWS = ["home", "devices", "boost"];
 function navHTML() {
   const list = S.household ? HH_VIEWS : OP_VIEWS; let g = null, out = "";
@@ -1383,6 +1449,16 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (b.dataset.mode) return startMode(b.dataset.mode);
+  if (b.dataset.offer) { const r = await send("POST", `/api/offers/${b.dataset.offer}/accept`, {}); toast(r.status === 200 && r.data.ok !== false ? "Prioritised." : (r.data.reason || r.data.error || "Could not start it.")); poll(); return; }
+  if (b.dataset.offerNo) { await send("POST", `/api/offers/${b.dataset.offerNo}/dismiss`, {}); poll(); return; }
+  if (b.id === "nl-go" || b.id === "nl-ok") {
+    const text = $("nl-text").value.trim(); if (!text) return;
+    const r = await send("POST", "/api/intents/parse", {text, confirm: b.id === "nl-ok"});
+    const d = r.data || {};
+    if (b.id === "nl-ok") { set("nl-out", d.ok ? "Done. It ends by itself." : esc(d.reason || d.error || "Not started.")); if (d.ok) { $("nl-text").value = ""; poll(); } return; }
+    set("nl-out", d.ok ? `I understood: <b>${esc(d.understood)}</b> <button class="btn small" type="button" id="nl-ok">Start it</button>` : esc(d.reason || d.error || "I could not understand that."));
+    return;
+  }
   if (b.dataset.unsched) { await send("DELETE", "/api/schedules/" + b.dataset.unsched); poll(); return; }
   if (b.dataset.f) { S.flowFilter = b.dataset.f; document.querySelectorAll("[data-f]").forEach(x => x.setAttribute("aria-pressed", x.dataset.f === S.flowFilter)); render(); return; }
   if (b.dataset.dir) { S.polDir = b.dataset.dir; document.querySelectorAll("[data-dir]").forEach(x => x.setAttribute("aria-pressed", x.dataset.dir === S.polDir)); render(); return; }

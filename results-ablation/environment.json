@@ -1,0 +1,20 @@
+{
+ "testbed": {
+  "down_mbit": 100,
+  "up_mbit": 20,
+  "isp_buffer_ms": 250,
+  "base_rtt_ms": 20,
+  "netem": false,
+  "cake": false,
+  "fq_codel": false,
+  "kernel": "6.18.44-fc-v726",
+  "ipv6": false,
+  "tcp_cc": "cubic",
+  "delay_method": "userspace-tun",
+  "delayline_pid": 373
+ },
+ "started": "2026-11-23 12:46:51",
+ "kernel": "6.18.44-fc-v726",
+ "python": "3.13.18",
+ "profile": null
+}

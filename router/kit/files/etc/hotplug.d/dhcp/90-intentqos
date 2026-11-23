@@ -1,0 +1,20 @@
+#!/bin/sh
+# IntentQoS device identity: record what a device tells the DHCP server about itself.
+# OpenWrt's dnsmasq runs /usr/lib/dnsmasq/dhcp-script.sh, which calls `hotplug-call dhcp` with
+# ACTION, MACADDR, IPADDR, HOSTNAME; dnsmasq's own DNSMASQ_* variables are inherited:
+#   DNSMASQ_REQUESTED_OPTIONS  parameter request list (option 55), comma separated
+#   DNSMASQ_VENDOR_CLASS       vendor class (option 60, IPv4)
+#   DNSMASQ_MUD_URL            Manufacturer Usage Description URL (RFC 8520), if the device sends one
+# The engine (intentqos/identity.py) reads the file. tmpfs only; nothing leaves the router.
+[ "$ACTION" = "add" ] || [ "$ACTION" = "update" ] || exit 0
+[ -n "$IPADDR" ] || exit 0
+OUT=/tmp/intentqos/dhcp.jsonl
+mkdir -p /tmp/intentqos
+esc() { printf '%s' "$1" | tr -d '"\\' | tr -cd '[:print:]' | cut -c1-200; }
+printf '{"ip":"%s","mac":"%s","hostname":"%s","opts":"%s","vendor":"%s","mud":"%s","t":%s}\n' \
+	"$(esc "$IPADDR")" "$(esc "$MACADDR")" "$(esc "${HOSTNAME:-$DNSMASQ_SUPPLIED_HOSTNAME}")" \
+	"$(esc "$DNSMASQ_REQUESTED_OPTIONS")" "$(esc "$DNSMASQ_VENDOR_CLASS")" "$(esc "$DNSMASQ_MUD_URL")" \
+	"$(date +%s)" >> "$OUT"
+# keep the file small: renewals append a line each time
+if [ "$(wc -c < "$OUT")" -gt 262144 ]; then tail -n 500 "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"; fi
+exit 0

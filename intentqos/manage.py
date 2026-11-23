@@ -34,6 +34,14 @@ MANAGED_KEYS: dict[str, tuple] = {
     "estimator.enabled": ("bool", None, None, False),
     "estimator.reflectors": ("iplist", 1, 8, False),
     "watchdog.timeout_s": ("float", 1.0, 30.0, False),
+    "outcome.enabled": ("bool", None, None, True),
+    "outcome.gate": ("bool", None, None, True),
+    "outcome.safe_tuning": ("bool", None, None, False),
+    "enforce.l4s": ("bool", None, None, False),
+    "enforce.flow_offload": ("enum", ("off", "software-bulk", "hardware-bulk"), None, False),
+    "cellular.enabled": ("bool", None, None, False),
+    "weak_labels.fetch_ms365": ("bool", None, None, True),
+    "classifier.adaptive_conformal": ("bool", None, None, True),
 }
 
 
@@ -152,6 +160,14 @@ def apply_live(eng, changes: dict, version: int | None = None, profile: str | No
             eng.intents.max_duration = v
         elif k == "intents.max_boost_fraction":
             eng.intents.max_boost = v
+        elif k == "outcome.enabled":
+            eng.outcome.enabled = bool(v)
+        elif k == "outcome.gate":
+            eng.outcome.gate_on = bool(v)
+        elif k == "weak_labels.fetch_ms365":
+            eng.classifier.weak.fetch = bool(v)
+        elif k == "classifier.adaptive_conformal":
+            eng.classifier.adaptive = bool(v)
         applied.append(k)
     eng.managed.save(vals, version, profile, by)
     eng.emit("config", f"managed config v{eng.managed.doc['version']} from {by}: "

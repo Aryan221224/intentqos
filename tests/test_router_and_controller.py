@@ -131,10 +131,10 @@ class TestController(unittest.TestCase):
         g, r = self.gws[0]
         cmds = self.ctl.take_commands(g["id"])
         self.assertEqual(cmds[0]["kind"], "apply_config")
-        a = cmds[0]["args"]
-        payload = {k: a[k] for k in ("version", "profile", "set")}
-        self.assertTrue(ed25519.verify(bytes.fromhex(r["release_pubkey"]), canonical(payload), bytes.fromhex(a["signature"])))
-        self.assertEqual(a["set"]["link.down_mbit"], 100)          # plan rate comes from billing
+        env = cmds[0]["args"]["envelope"]
+        from intentqos import release
+        self.assertIsNone(release.check_instruction(env, "config", r["device_id"], bytes.fromhex(r["release_pubkey"]), 0))
+        self.assertEqual(env["body"]["set"]["link.down_mbit"], 100)          # plan rate comes from billing
 
     def test_request_signatures_and_replay(self):
         g, r = self.gws[0]

@@ -26,10 +26,34 @@ def export(src: str, dst: str, release: str | None = None) -> dict:
     b = joblib.load(src)
     if b.get("features") != FEATURE_NAMES:
         raise SystemExit("model was trained on a different feature set")
-    model = b["model"]
     classes = [str(c) for c in b["classes"]]
     k = len(classes)
     blobs, members = [], []
+    phases_in = b.get("phases") or [{"name": "all", "max_age": None, "model": b["model"], "qhat": b["qhat"],
+                                     "cal_scores": []}]
+    phases, seen = [], {}
+    for ph in phases_in:
+        if id(ph["model"]) not in seen:                 # a phase without its own forest shares one: store it once
+            a0 = len(members)
+            _members(ph["model"], k, blobs, members)
+            seen[id(ph["model"])] = [a0, len(members)]
+        phases.append({"name": ph["name"], "max_age": ph["max_age"], "members": seen[id(ph["model"])],
+                       "qhat": float(ph["qhat"]), "cal_scores": list(ph.get("cal_scores") or [])})
+    meta = dict(b.get("meta", {}))
+    meta["exported_from"] = os.path.basename(src)
+    if release:
+        meta["release"] = release
+    hdr = {"classes": classes, "features": FEATURE_NAMES, "qhat": float(b["qhat"]), "alpha": float(b["alpha"]),
+           "members": members, "phases": phases, "meta": meta}
+    hj = json.dumps(hdr, separators=(",", ":"), default=str).encode()
+    body = MAGIC + struct.pack("<I", len(hj)) + hj + b"".join(blobs)
+    with open(dst, "wb") as f:
+        f.write(body)
+    return {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(), "trees": sum(len(m["trees"]) for m in members),
+            "nodes": sum(sum(m["trees"]) for m in members), "phases": len(phases)}
+
+
+def _members(model, k: int, blobs: list, members: list) -> None:
     for cc in model.calibrated_classifiers_:
         rf = cc.estimator
         if list(rf.classes_) != list(range(k)):
@@ -49,18 +73,6 @@ def export(src: str, dst: str, release: str | None = None) -> dict:
         cals = [{"x": [float(v) for v in c.X_thresholds_], "y": [float(v) for v in c.y_thresholds_]}
                 for c in cc.calibrators]
         members.append({"trees": trees, "calibrators": cals})
-    meta = dict(b.get("meta", {}))
-    meta["exported_from"] = os.path.basename(src)
-    if release:
-        meta["release"] = release
-    hdr = {"classes": classes, "features": FEATURE_NAMES, "qhat": float(b["qhat"]), "alpha": float(b["alpha"]),
-           "members": members, "meta": meta}
-    hj = json.dumps(hdr, separators=(",", ":"), default=str).encode()
-    body = MAGIC + struct.pack("<I", len(hj)) + hj + b"".join(blobs)
-    with open(dst, "wb") as f:
-        f.write(body)
-    return {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(), "trees": sum(len(m["trees"]) for m in members),
-            "nodes": sum(sum(m["trees"]) for m in members)}
 
 
 def check(src: str, dst: str, dataset: str, n: int = 2000) -> float:
@@ -72,10 +84,13 @@ def check(src: str, dst: str, dataset: str, n: int = 2000) -> float:
             if len(rows) >= n:
                 break
     X = np.asarray(rows, dtype=float)
-    ref = b["model"].predict_proba(X)
     tm = TreeModel(dst)
-    got = np.asarray([tm.proba(list(x)) for x in rows])
-    return float(np.abs(ref - got).max())
+    worst = 0.0
+    for i, ph in enumerate(b.get("phases") or [{"model": b["model"]}]):
+        ref = ph["model"].predict_proba(X)
+        got = np.asarray([tm.proba(list(x), i) for x in rows])
+        worst = max(worst, float(np.abs(ref - got).max()))
+    return worst
 
 
 def main() -> int:

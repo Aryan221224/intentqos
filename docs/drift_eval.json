@@ -1,0 +1,97 @@
+{
+ "model": "flowclf.joblib",
+ "trained_on": {
+  "train": 9228,
+  "calibration": 2342,
+  "test": 3887
+ },
+ "replayed": "dataset_b.jsonl",
+ "note": "emulation testbed traffic; feedback from ground-truth labels",
+ "new_sessions": {
+  "rows": 6917,
+  "target_coverage": 0.9,
+  "accuracy": {
+   "phase_wise": 0.9702,
+   "single": 0.9639
+  },
+  "early_flow_accuracy": {
+   "phase_wise": 0.9491,
+   "single": 0.9282,
+   "rows": 432
+  },
+  "fixed_conformal": {
+   "coverage": 0.9628,
+   "abstain_rate": 0.0184,
+   "mean_set_size": 0.982
+  },
+  "adaptive_conformal": {
+   "coverage": 0.9688,
+   "abstain_rate": 0.0146,
+   "mean_set_size": 0.995,
+   "feedback_share": 1.0,
+   "final_alpha": [
+    0.089,
+    0.1,
+    0.064
+   ]
+  }
+ },
+ "new_sessions_synthetic_shift": {
+  "rows": 6917,
+  "target_coverage": 0.9,
+  "accuracy": {
+   "phase_wise": 0.7823,
+   "single": 0.7567
+  },
+  "early_flow_accuracy": {
+   "phase_wise": 0.7014,
+   "single": 0.7083,
+   "rows": 432
+  },
+  "fixed_conformal": {
+   "coverage": 0.7185,
+   "abstain_rate": 0.1256,
+   "mean_set_size": 0.874
+  },
+  "adaptive_conformal": {
+   "coverage": 0.8349,
+   "abstain_rate": 0.1288,
+   "mean_set_size": 1.106,
+   "feedback_share": 1.0,
+   "final_alpha": [
+    0.021,
+    0.0655,
+    0.0535
+   ]
+  }
+ },
+ "new_sessions_synthetic_shift_10pct_feedback": {
+  "rows": 6917,
+  "target_coverage": 0.9,
+  "accuracy": {
+   "phase_wise": 0.7823,
+   "single": 0.7567
+  },
+  "early_flow_accuracy": {
+   "phase_wise": 0.7014,
+   "single": 0.7083,
+   "rows": 432
+  },
+  "fixed_conformal": {
+   "coverage": 0.7185,
+   "abstain_rate": 0.1256,
+   "mean_set_size": 0.874
+  },
+  "adaptive_conformal": {
+   "coverage": 0.8074,
+   "abstain_rate": 0.1222,
+   "mean_set_size": 1.053,
+   "feedback_share": 0.1,
+   "final_alpha": [
+    0.037,
+    0.0645,
+    0.021
+   ]
+  }
+ }
+}

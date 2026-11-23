@@ -63,8 +63,14 @@ def to_config(u: dict, root: str = DEFAULT_ROOT) -> dict:
         "estimator": {"enabled": e.get("estimator", "1") == "1", "reflectors": lst(e, "reflector", ["1.1.1.1", "8.8.8.8", "9.9.9.9"])},
         "classifier": {"mode": e.get("classifier", "ml"), "model_path": f"{root}/models/flowclf.iqm",
                        "overrides_path": "/etc/intentqos/overrides.json", "corrections_path": "/tmp/intentqos/corrections.jsonl"},
-        "capture": {"backend": "auto", "helper_path": "/usr/sbin/iq-capture"},
-        "enforce": {"backend": e.get("backend", "auto"), "nat": e.get("nat", "1") == "1"},
+        # capture "ebpf" = kernel flow engine (needs tc with BPF support: opkg install tc-bpf or tc-full + kmod-sched-bpf)
+        "capture": {"backend": e.get("capture", "auto"), "helper_path": "/usr/sbin/iq-capture",
+                    "bpf_object": f"{root}/" + ("iq-flow-eb.bpf.o" if sys.byteorder == "big" else "iq-flow.bpf.o")},
+        "enforce": {"backend": e.get("backend", "auto"), "nat": e.get("nat", "1") == "1",
+                    "l4s": e.get("l4s", "1") == "1", "flow_offload": e.get("flow_offload", "off")},
+        "outcome": {"enabled": e.get("outcome", "1") == "1"},
+        "identity": {"dhcp_hook_path": "/tmp/intentqos/dhcp.jsonl"},
+        "cellular": {"enabled": e.get("cellular", "0") == "1"},
         "api": {"listen": e.get("api_listen", "192.168.1.1:8080"),
                 "require_auth": e.get("require_auth", "1") == "1",      # on by default on a router
                 "key_file": "/etc/intentqos/admin.key"},
@@ -75,9 +81,11 @@ def to_config(u: dict, root: str = DEFAULT_ROOT) -> dict:
     }
     if a.get("enabled", "0") == "1":
         cfg["agent"] = {k: a[k] for k in ("controller_url", "claim_code", "release_pubkey", "ca_file", "client_cert", "client_key",
-                                          "serial") if a.get(k)}
+                                          "serial", "helper_url") if a.get(k)}
         cfg["agent"].update(state_path="/etc/intentqos/agent.json", models_dir="/etc/intentqos/models",
-                            telemetry_interval_s=num(a, "telemetry_interval_s", 15))
+                            telemetry_interval_s=num(a, "telemetry_interval_s", 15),
+                            # the engine API listens on the LAN address, not on loopback
+                            engine_api="http://" + cfg["api"]["listen"], discover=a.get("discover", "0") == "1")
     return cfg
 
 

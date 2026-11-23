@@ -17,7 +17,7 @@ is exercised end-to-end by the scenarios in `testbed/scenarios.py`.
 | **Privacy boundary** | `AF_PACKET` with a 96-byte snap length; only Ethernet/VLAN, IPv4/IPv6 (+ extension headers) and TCP/UDP header fields are parsed. A unit test changes payload bytes and checks the parse result is identical. Nothing is decrypted, stored or logged from payload. |
 | **Failure handling** | socket errors → counted, thread reopens the socket with exponential back-off (0.5–5 s). Kernel drops are exposed on `/metrics` (`capture_kernel_drops_total`). While capture is down, the policy keeps the last labels and the shaper keeps running. |
 | **Success condition** | per-flow byte counts match the generator's sent bytes; LAN↔LAN traffic is ignored; both directions merge into one flow (unit tests `TestCapture`). |
-| **Production path** | eBPF at the TC hook (TCX, Linux ≥ 6.6) writing per-flow counters into a BPF hash map, so packets are never copied to user space. |
+| **Kernel flow engine** | `capture.backend = ebpf`: `router/iq-flow.bpf.c` at the tc hook keeps the same per-flow window statistics in a BPF LRU map and applies the engine's verdicts (mark, priority, DSCP); `iq-capture -e` reads the map each window and prints the same lines, so this module cannot tell the modes apart. Falls back to the packet ring if tc cannot load it. Emulation-tested against the packet ring (round trips within 0.01 ms). |
 
 ## 2. Traffic classifier — `classifier.py`, `features.py`, `ml/train.py`
 
@@ -26,7 +26,7 @@ is exercised end-to-end by the scenarios in `testbed/scenarios.py`.
 | **Inputs** | active flows; 27 header-only features (`features.FEATURE_NAMES`): packet-size statistics, inter-arrival timing, direction ratio, ON/OFF burst structure, early-flow statistics, protocol number. Ports and addresses are deliberately **not** features. |
 | **Outputs** | per flow: `label ∈ {voip, gaming, video, streaming, web, bulk}`, `confidence` (isotonic-calibrated), conformal prediction set, `source ∈ {user, ml, ml-hold, rules, rules-fallback}` (`ml-hold`: the model is unsure but the class the flow earned from a confident decision is still in its prediction set, so the flow keeps it), and the *committed* label that drives enforcement. |
 | **Baseline** | `RuleClassifier`, qosify-style: UDP with average packet < 500 B → voice, UDP larger → video, TCP above 100 pps for 5 s → bulk, otherwise best effort. |
-| **ML** | random forest (60 trees, depth 14) + isotonic calibration. Split-conformal threshold at α = 0.10: if the prediction set has more than one class the model **abstains** and the rule label is used. |
+| **ML** | random forest (60 trees, depth 14) + isotonic calibration. Split-conformal threshold at α = 0.10: if the prediction set has more than one class the model **abstains** and the rule label is used. 2.0: a forest per flow-age phase (0–2 s, 2–10 s, older) where it beats the single forest on calibration data; one-sided adaptive conformal inference (sets widen when labelled outcomes show misses); weak labels for UDP flows to Microsoft 365 "Optimize" ranges; a per-session vote before falling back to rules. |
 | **State** | per flow: `unlabelled → provisional → committed`. A new label must persist 2 ticks (1 s) before it moves a flow (anti-flap). User corrections commit immediately. |
 | **Correction loop** | `POST /api/flows/label` or the dashboard menu → override for that flow or for the same device + protocol + remote port; applied on the next tick; the header features are appended to `data/corrections.jsonl`; `ml/train.py --corrections` folds them in (5× weight). |
 | **Drift** | Page-Hinkley detector on the abstention stream. An increase raises a `drift` event telling the operator to collect corrections and retrain. |
@@ -129,5 +129,27 @@ is exercised end-to-end by the scenarios in `testbed/scenarios.py`.
 | **Inputs** | agent telemetry, events and results; staff actions; subscriber actions; BSS calls (northbound API) |
 | **Outputs** | alerts, incidents, diagnoses, signed configs and models, rollout decisions, reports (CSV), notifications, webhooks, audit log |
 | **States** | per home: online / offline, alert set, config and model versions; per rollout: stage n of N → completed / halted / rolled back; per incident: open → investigating → identified → resolved |
-| **Failure handling** | rollout guard halts and rolls back on a significant delay regression (Mann-Whitney) or apply failures; incident correlation needs ≥ 25 % and ≥ 3 homes on one OLT; replayed or stale agent requests rejected (nonce cache, 5-minute window) |
+| **Failure handling** | rollout guard halts and rolls back on a significant delay regression (always-valid sequential test; Mann-Whitney also reported) or apply failures; incident correlation needs ≥ 25 % and ≥ 3 homes on one OLT; replayed or stale agent requests rejected (nonce cache, 5-minute window) |
 | **Success condition** | lab: OLT incident opened for 30 of 31 homes; bad model halted 33 s into stage 1 with 20 homes rolled back; good model reached 100 % |
+
+---
+
+## IntentQoS 2.0 modules
+
+Each has unit tests in `tests/test_innovations.py` or `tests/test_innovations_fleet.py` (the kernel engine in
+`tests/test_kernel_engine.py`, root only).
+
+| Module | Inputs | Outputs | Failure handling |
+|---|---|---|---|
+| `experience.py` | flow windows with passive RTT, ECN, DSCP, retransmissions, frame bursts; queue delays; probe RTTs | per app session: QoO, latency percentiles and whether measured or estimated, call tier, video bitrate class; per device in-home RTT; path ΔQ | flows without timestamps get an estimate from queue + path, labelled "estimated" |
+| `qoo.py`, `deltaq.py` | latency percentiles, loss, rate; delay samples | QoO 0–100 and the limiting measure; distributions, composition, G/S/V | missing measures are skipped, not guessed |
+| `wifi.py` | per-device packet gaps, in-home RTT, `iw` station data, ARP | per device: Wi-Fi / line / far end / idle, with the reason; RFC 8325 QoS Map Set | fewer than 100 packets/s → "idle" (no verdict) |
+| `identity.py` | DHCP hook lines (requested options, vendor class, MUD URL), leases, names | device type and its source | no hook → names and makers only; fingerprints only from an operator-supplied file |
+| `cellular.py` | ModemManager signal (RSRP/RSRQ/SINR) | a rate ceiling for the shaper on a mobile link; fade alerts | off by default; command errors leave rates alone |
+| `outcome.py` | experience snapshot, queue model, candidate policy settings | chosen headroom and bulk share; refusal of plans that hurt protected apps; optional safe tuning | off → classic policy; rate cuts are never refused |
+| `offers.py`, `nlintent.py` | live apps, line load, leases; plain text | boost offers (accept/dismiss); a drafted lease for confirmation | a draft must pass the lease schema, budget and admission control |
+| `camara.py` | CAMARA QoD v1 requests | sessions backed by leases, with CAMARA error codes | refusals map to CAMARA codes; sessions end with their lease |
+| `privagg.py` | live apps' QoO | a QoO histogram as two additive secret shares | lost helper share drops the home from that batch only |
+| `release.py` | signed instructions; model signatures | accept or a reason (stale, expired, another gateway, signature, kind) | anything not verified is refused and logged |
+| `usp.py` | engine snapshot | TR-181 `Device.X_IntentQoS_` values and schema | absent values are null |
+| `weaklabels.py` | Microsoft 365 endpoint list (opt-in fetch) or a local file | call labels for matching UDP flows | no list → no weak labels |

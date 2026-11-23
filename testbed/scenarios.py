@@ -30,6 +30,8 @@ ARMS = {
     # the same, with the operator's "bulk-friendly" profile: bulk keeps 12 % and half of the remainder
     "adaptive_ml_bulk": ["classifier.mode=ml", "policy.floor_fraction.bulk=0.12", "policy.remainder_bulk_share=0.5"],
     "adaptive_ml_intent": ["classifier.mode=ml"],
+    # IntentQoS 2.0 ablation: the same engine with the experience-driven (outcome) controller switched off
+    "adaptive_ml_no_outcome": ["classifier.mode=ml", "outcome.enabled=false"],
 }
 
 

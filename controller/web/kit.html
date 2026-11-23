@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntentQoS Home Kit</title>
+<link rel="icon" href="/app/icon-192.png">
+<style>
+@font-face{font-family:"Plex";src:url(/fonts/plex-sans-var.woff) format("woff");font-weight:100 700;font-stretch:85% 100%;font-display:swap}
+@font-face{font-family:"Plex Mono";src:url(/fonts/plex-mono-400.woff) format("woff");font-weight:400;font-display:swap}
+:root{
+  --canvas:#F3F4F6; --surface:#FFFFFF; --sunken:#ECEEF2; --border:#D8DCE3; --text:#1B2130; --text-2:#576173; --text-3:#8790A0;
+  --act:#2459C4; --act-soft:#E7EEFB; --ok:#1C7C52; --ok-soft:#E1F3EA; --warn:#C25A0C; --warn-soft:#FDEFE2; --bad:#C0321D; --bad-soft:#FCE9E5;
+  --brand:#1D2B5E; --mar:#F2A93B;
+  --sans:"Plex",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:"Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --canvas:#12151B; --surface:#1A1E26; --sunken:#151820; --border:#2C323E; --text:#E4E7EE; --text-2:#A3ABBA; --text-3:#7A8394;
+  --act:#6E9BF0; --act-soft:#1C2A45; --ok:#58C493; --ok-soft:#14301F; --warn:#F0A060; --warn-soft:#3A2614; --bad:#F07A62; --bad-soft:#3A1C17; color-scheme:dark}}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--text);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+a{color:var(--act);text-decoration:none} a:hover{text-decoration:underline}
+header{display:flex;align-items:center;gap:14px;padding:12px 24px;background:var(--brand);color:#fff}
+header b{font-size:16px;font-weight:600} header span{opacity:.75}
+header nav{margin-left:auto;display:flex;gap:16px} header nav a{color:#fff;opacity:.9}
+main{max-width:1180px;margin:0 auto;padding:20px 24px 40px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.card h2{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--text-2);letter-spacing:.01em}
+.pin{grid-column:span 4} .phone{grid-column:span 4} .flow{grid-column:span 4}
+.devices{grid-column:span 8} .reports{grid-column:span 4} .wide{grid-column:span 12}
+@media (max-width:900px){.pin,.phone,.flow,.devices,.reports{grid-column:span 12}}
+.pinv{font:600 44px/1 var(--mono);letter-spacing:.08em;margin:6px 0 8px;color:var(--text)}
+.muted{color:var(--text-2)} .small{font-size:12.5px} .mono{font-family:var(--mono);font-size:12.5px}
+.row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
+.row:first-of-type{border-top:0}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--text-3)}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+.tag{font-size:11.5px;border-radius:99px;padding:1px 8px;background:var(--sunken);color:var(--text-2)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)} .tag.warn{background:var(--warn-soft);color:var(--warn)}
+.grow{flex:1;min-width:0}
+#qr{display:flex;justify-content:center;padding:6px 0 10px} #qr svg{width:180px;height:180px;background:#fff;border-radius:8px;padding:8px}
+input{font:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);width:100%;box-sizing:border-box}
+button{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--act);background:var(--act);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--act)}
+.steps{margin:0;padding-left:18px} .steps li{margin:4px 0}
+.steps li.done{color:var(--ok)}
+.empty{padding:14px 0;color:var(--text-3)}
+dialog{border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);max-width:760px;width:90%}
+table{border-collapse:collapse;width:100%} td,th{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;font-size:13px}
+th{color:var(--text-2);font-weight:500}
+</style>
+</head>
+<body>
+<header>
+  <b>IntentQoS Home Kit</b><span id="brand">Operator Console</span>
+  <nav><a href="/ops/" target="_blank">Operator console</a><a href="/app/" target="_blank">Phone app preview</a></nav>
+</header>
+<main>
+  <section class="card pin">
+    <h2>Pairing PIN</h2>
+    <div class="pinv" id="pin">······</div>
+    <div class="muted small">Type this in <b>IntentQoS Router Setup</b> and <b>IntentQoS Test Kit</b> when they ask. A new PIN is made each time the console starts.</div>
+    <div class="small muted" style="margin-top:10px">This laptop on the home network: <span class="mono" id="addrs">…</span></div>
+  </section>
+  <section class="card phone">
+    <h2>Phone app</h2>
+    <div id="qr"></div>
+    <div class="small" style="text-align:center"><a id="appurl" class="mono" href="#" target="_blank">…</a></div>
+    <div class="small muted" style="margin-top:8px">Phone on the router's Wi-Fi: scan, open, then <b>Add to Home screen</b>. Sign in with <b class="mono" id="hhphone">…</b>; <span id="otpnote">the one-time code appears on the phone.</span></div>
+  </section>
+  <section class="card flow">
+    <h2>Setup checklist</h2>
+    <ol class="steps" id="steps">
+      <li id="s1">Operator Console running (this page)</li>
+      <li id="s2">Router paired (IntentQoS Router Setup)</li>
+      <li id="s3">Router online and reporting</li>
+      <li id="s4">Phone signed in to the app</li>
+      <li id="s5">Test Kit paired and a test run</li>
+    </ol>
+  </section>
+  <section class="card devices">
+    <h2>Devices in this kit</h2>
+    <div id="devs"><div class="empty">No router yet. Run <b>IntentQoS Router Setup</b> on any laptop connected to the router.</div></div>
+  </section>
+  <section class="card reports">
+    <h2>Test reports</h2>
+    <div id="reps"><div class="empty">No reports yet. Run <b>IntentQoS Test Kit</b> on the test laptop.</div></div>
+  </section>
+  <section class="card wide">
+    <h2>Household</h2>
+    <div style="display:grid;grid-template-columns:2fr 2fr auto;gap:10px;align-items:end;max-width:640px">
+      <label class="small muted">Name<input id="hname"></label>
+      <label class="small muted">Mobile number (app sign-in)<input id="hph" inputmode="numeric" maxlength="10"></label>
+      <button id="hsave">Save</button>
+    </div>
+    <div class="small muted" id="hmsg" style="margin-top:6px">Fictional by default. The app signs in with this number.</div>
+  </section>
+</main>
+<dialog id="dlg"><div id="dlgbody"></div><div style="text-align:right;margin-top:12px"><button class="ghost" onclick="dlg.close()">Close</button></div></dialog>
+<script src="/kit/qrcode.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const ago = t => { if (!t) return "never"; const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? `${s | 0} s ago` : s < 3600 ? `${s / 60 | 0} min ago` : `${s / 3600 | 0} h ago`; };
+let lastApp = "", household = null;
+async function j(method, path, body) {
+  const r = await fetch(path, {method, headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.status);
+  return d;
+}
+function qr(url) {
+  if (url === lastApp || typeof qrcode === "undefined") return;
+  lastApp = url;
+  const q = qrcode(0, "M"); q.addData(url); q.make();
+  $("qr").innerHTML = q.createSvgTag({cellSize: 4, margin: 0, scalable: true});
+}
+function step(id, done) { $(id).classList.toggle("done", !!done); }
+async function refresh() {
+  let st;
+  try { st = await j("GET", "/v1/kit/status"); } catch (e) { $("devs").innerHTML = `<div class="empty">Console not answering: ${esc(e.message)}</div>`; return; }
+  $("pin").textContent = (st.pin || "").replace(/(\d{3})(\d{3})/, "$1 $2");
+  $("addrs").textContent = st.addresses.join(", ");
+  const app = st.app_urls[0]; $("appurl").textContent = app; $("appurl").href = app; qr(app);
+  household = st.household;
+  $("hhphone").textContent = st.household.phone.replace(/(\d{5})(\d{5})/, "$1 $2");
+  $("otpnote").textContent = st.demo_otp ? "the one-time code appears on the phone (demo mode, no SMS)." : "a code is sent by SMS.";
+  if (document.activeElement !== $("hname") && document.activeElement !== $("hph")) { $("hname").value = st.household.name; $("hph").value = st.household.phone; }
+  const rows = [];
+  for (const r of st.routers) {
+    const cls = r.online ? "ok" : r.enrolled ? "warn" : "bad";
+    const state = r.online ? "online" : r.enrolled ? `last seen ${ago(r.last_seen)}` : "paired, waiting for the router to enrol";
+    rows.push(`<div class="row"><span class="dot ${cls}"></span><div class="grow"><b>${esc(r.name)}</b> <span class="mono muted">${esc(r.serial)}</span><br>
+      <span class="small muted">${esc(state)} · ${esc(r.info.firmware || "")} · plan ${esc(r.info.down_mbit)}/${esc(r.info.up_mbit)} Mbit/s · engine ${esc(r.engine_version || r.info.version || "?")}</span></div>
+      ${r.console ? `<a class="small" href="${esc(r.console)}" target="_blank">router console</a>` : ""}
+      ${r.gateway_id ? `<a class="small" href="/ops/#home/${r.gateway_id}" target="_blank">in operator console</a>` : ""}</div>`);
+  }
+  for (const t of st.testkits) rows.push(`<div class="row"><span class="dot ok"></span><div class="grow"><b>${esc(t.name)}</b> <span class="tag">Test Kit</span><br><span class="small muted">last active ${ago(t.last)}</span></div></div>`);
+  $("devs").innerHTML = rows.length ? rows.join("") : `<div class="empty">No router yet. Run <b>IntentQoS Router Setup</b> on any laptop connected to the router.</div>`;
+  $("reps").innerHTML = st.results.length ? st.results.map(r => `<div class="row"><span class="dot ${r.verdict === "better" ? "ok" : r.verdict === "worse" ? "bad" : "warn"}"></span>
+    <div class="grow"><a href="#" data-id="${esc(r.id)}">${esc(r.title || r.id)}</a><br><span class="small muted">${esc(r.by)} · ${ago(r.uploaded)}${r.summary ? " · " + esc(r.summary) : ""}</span></div></div>`).join("")
+    : `<div class="empty">No reports yet. Run <b>IntentQoS Test Kit</b> on the test laptop.</div>`;
+  step("s1", true); step("s2", st.routers.length); step("s3", st.routers.some(r => r.online)); step("s5", st.results.length);
+  try { const s = await j("GET", "/v1/kit/phone"); step("s4", s.signed_in); } catch (e) { /* older controller */ }
+}
+$("reps").addEventListener("click", async e => {
+  const a = e.target.closest("a[data-id]"); if (!a) return; e.preventDefault();
+  const r = await j("GET", `/v1/kit/results/${a.dataset.id}`);
+  const rows = (r.scenarios || []).map(s => `<tr><td>${esc(s.name)}</td><td>${esc(s.metric)}</td><td>${esc(s.off)}</td><td>${esc(s.on)}</td><td>${esc(s.change)}</td></tr>`).join("");
+  $("dlgbody").innerHTML = `<h3 style="margin-top:0">${esc(r.title)}</h3><p class="muted small">${esc(r.uploaded_by)} · ${new Date(r.uploaded * 1000).toLocaleString()} · ${esc(r.router || "")}</p>
+    <table><tr><th>Scenario</th><th>Measure</th><th>QoS off</th><th>IntentQoS on</th><th>Change</th></tr>${rows}</table>
+    <p class="small muted">${esc(r.note || "")}</p>`;
+  $("dlg").showModal();
+});
+$("hsave").onclick = async () => {
+  try { await j("POST", "/v1/kit/household", {name: $("hname").value, phone: $("hph").value}); $("hmsg").textContent = "Saved. Sign in to the app with the new number."; }
+  catch (e) { $("hmsg").textContent = e.message; }
+};
+refresh(); setInterval(refresh, 3000);
+// IntentQoS Operator Console keeps running while this window is open (it stops when the window is closed)
+const hb = (location.hash.match(/hb=(\d+)/) || [])[1];
+if (hb) { const ping = () => fetch(`http://127.0.0.1:${hb}/hb`, {mode: "no-cors"}).catch(() => {}); ping(); setInterval(ping, 3000);
+  document.querySelector("header nav").insertAdjacentHTML("beforeend", '<span style="opacity:.7">Closing this window stops the console</span>'); }
+</script>
+</body>
+</html>

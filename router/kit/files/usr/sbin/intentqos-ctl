@@ -1,0 +1,12 @@
+#!/bin/sh
+# intentqos-ctl status | key | logs | version
+case "${1:-status}" in
+	key) cat /etc/intentqos/admin.key 2>/dev/null; echo ;;
+	logs) logread -e intentqos | tail -n "${2:-50}" ;;
+	version) cat /usr/lib/intentqos/VERSION ;;
+	status)
+		L=$(uci -q get intentqos.engine.api_listen)
+		R=0; wget -q -T 2 -O /dev/null "http://$L/api/healthz" 2>/dev/null && R=1
+		echo "{\"version\":\"$(cat /usr/lib/intentqos/VERSION 2>/dev/null)\",\"running\":$R,\"console\":\"http://$L/\",\"agent\":\"$(uci -q get intentqos.agent.enabled)\",\"controller\":\"$(uci -q get intentqos.agent.controller_url)\",\"enrolled\":$([ -f /etc/intentqos/agent.json ] && echo 1 || echo 0)}" ;;
+	*) echo "usage: intentqos-ctl status|key|logs [n]|version"; exit 1 ;;
+esac

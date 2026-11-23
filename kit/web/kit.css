@@ -1,0 +1,47 @@
+/* shared look of the IntentQoS kit windows (matches the operator console) */
+@font-face{font-family:"KitSans";src:local("Segoe UI"),local("Inter"),local("Roboto")}
+:root{--canvas:#F3F4F6;--surface:#FFFFFF;--sunken:#ECEEF2;--border:#D8DCE3;--text:#1B2130;--text-2:#576173;--text-3:#8790A0;
+  --act:#2459C4;--act-soft:#E7EEFB;--ok:#1C7C52;--ok-soft:#E1F3EA;--warn:#C25A0C;--warn-soft:#FDEFE2;--bad:#C0321D;--bad-soft:#FCE9E5;
+  --brand:#1D2B5E;--mar:#F2A93B;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,Consolas,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root{--canvas:#12151B;--surface:#1A1E26;--sunken:#151820;--border:#2C323E;--text:#E4E7EE;--text-2:#A3ABBA;
+  --text-3:#7A8394;--act:#6E9BF0;--act-soft:#1C2A45;--ok:#58C493;--ok-soft:#14301F;--warn:#F0A060;--warn-soft:#3A2614;--bad:#F07A62;--bad-soft:#3A1C17;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--canvas);color:var(--text);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+header{display:flex;align-items:center;gap:12px;padding:12px 22px;background:var(--brand);color:#fff}
+header img{width:26px;height:26px;border-radius:6px}
+header b{font-size:16px;font-weight:600}
+header .sub{opacity:.75}
+main{max-width:980px;margin:0 auto;padding:20px 22px 40px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;font-weight:600}
+.muted{color:var(--text-2)} .small{font-size:12.5px} .mono{font-family:var(--mono);font-size:12.5px}
+label{display:block;font-size:12.5px;color:var(--text-2);margin:8px 0 3px}
+input,select{font:inherit;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);width:100%}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--act);outline-offset:1px}
+button{font:inherit;padding:8px 16px;border-radius:7px;border:1px solid var(--act);background:var(--act);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--act)}
+button.danger{background:var(--bad);border-color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media (max-width:700px){.grid2,.grid3{grid-template-columns:1fr}}
+.steps{display:flex;gap:6px;margin:0 0 16px;padding:0;list-style:none;flex-wrap:wrap}
+.steps li{padding:5px 12px;border-radius:99px;background:var(--sunken);color:var(--text-2);font-size:12.5px}
+.steps li.on{background:var(--act);color:#fff} .steps li.done{background:var(--ok-soft);color:var(--ok)}
+.note{padding:10px 12px;border-radius:8px;background:var(--act-soft);font-size:13px}
+.note.warn{background:var(--warn-soft);color:var(--warn)} .note.bad{background:var(--bad-soft);color:var(--bad)} .note.ok{background:var(--ok-soft);color:var(--ok)}
+.log{font:12px/1.45 var(--mono);background:var(--sunken);border-radius:8px;padding:10px 12px;max-height:260px;overflow:auto;white-space:pre-wrap}
+.log .ok{color:var(--ok)} .log .warn{color:var(--warn)} .log .bad{color:var(--bad)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:13.5px}
+.kv dt{color:var(--text-2)} .kv dd{margin:0}
+.big{font-size:22px;font-weight:600}
+.pill{display:inline-block;font-size:11.5px;border-radius:99px;padding:1px 9px;background:var(--sunken);color:var(--text-2)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.hidden{display:none!important}
+table{border-collapse:collapse;width:100%} th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;font-size:13.5px} th{color:var(--text-2);font-weight:500}
+canvas{width:100%;height:220px;background:var(--sunken);border-radius:8px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--act);border-radius:50%;animation:s 0.8s linear infinite;vertical-align:-2px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}

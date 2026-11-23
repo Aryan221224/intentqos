@@ -4,7 +4,7 @@ Reference implementation for the Tata Elxsi TELIPORT Season 4 case study
 "Adaptive QoS Engine for Mixed Home Broadband Traffic".
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 # Traffic classes produced by the classifier (header-only, no payload inspection)
 LABELS = ("voip", "gaming", "video", "streaming", "web", "bulk")

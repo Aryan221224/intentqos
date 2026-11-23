@@ -26,6 +26,7 @@ import argparse
 import collections
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import platform
@@ -37,16 +38,18 @@ import time
 import urllib.error
 import urllib.request
 
-from . import __version__, ed25519
+from . import __version__, ed25519, privagg, release
 from . import config as C
 
 LEVELS = ("basic", "standard", "diagnostic")
 # Local engine endpoints the controller may reach through the relay. Everything else is refused.
 RELAY_GET = ("/api/state", "/api/history", "/api/system", "/api/setup-check", "/api/inspect", "/api/model",
-             "/api/modes", "/api/schedules", "/api/devices", "/api/usage", "/api/config", "/api/healthz")
-RELAY_POST = ("/api/intents", "/api/flows/label", "/api/classifier/mode", "/api/safe", "/api/rollback",
-              "/api/automation", "/api/modes/", "/api/schedules", "/api/devices/")
-RELAY_DELETE = ("/api/intents/", "/api/schedules/")
+             "/api/modes", "/api/schedules", "/api/devices", "/api/usage", "/api/config", "/api/healthz",
+             "/api/experience", "/api/offers", "/api/usp", "/camara/qos-profiles/", "/camara/quality-on-demand/v1/sessions/")
+RELAY_POST = ("/api/intents", "/api/intents/parse", "/api/flows/label", "/api/classifier/mode", "/api/safe", "/api/rollback",
+              "/api/automation", "/api/modes/", "/api/schedules", "/api/devices/", "/api/offers/",
+              "/camara/quality-on-demand/v1/")
+RELAY_DELETE = ("/api/intents/", "/api/schedules/", "/camara/quality-on-demand/v1/sessions/")
 
 
 def canonical(obj) -> bytes:
@@ -90,6 +93,14 @@ class Agent:
         self.interval = float(a.get("telemetry_interval_s", 15))
         self.max_buffer = int(a.get("buffer_records", 480))         # 2 h at 15 s
         self.pubkey = bytes.fromhex(a["release_pubkey"]) if a.get("release_pubkey") else None
+        # offline release keys that must sign a model's identity (TUF "targets"); empty = the online key alone
+        self.release_keys = [bytes.fromhex(k) for k in (a.get("release_pubkeys") or []) if k]
+        self.release_threshold = max(1, int(a.get("release_threshold", 1)))
+        # separately operated helper aggregator for private fleet statistics (IETF DAP "helper"); empty = home kit
+        self.helper_url = (a.get("helper_url") or "").rstrip("/")
+        # the helper is run by another party: verify it against the system's public CAs, not the operator CA
+        self.helper_http = urllib.request.build_opener(urllib.request.ProxyHandler({}),
+                                                       urllib.request.HTTPSHandler(context=ssl.create_default_context()))
         self.hw_model = a.get("hw_model", platform.machine())
         ctx = ssl.create_default_context(cafile=C.resolve(cfg, a["ca_file"]) if a.get("ca_file") else None)
         if a.get("client_cert"):
@@ -114,6 +125,10 @@ class Agent:
         self.connected = False
         self.last_ok = None
         self.dropped = 0
+        self.discover = bool(a.get("discover"))       # home kit: find the Operator Console again if its address changes
+        self._last_discover = 0.0
+        if self.discover and self.st.get("controller_url") and self.st.get("paired_url") == self.url:
+            self.url = self.st["controller_url"]       # learned after pairing (the console laptop moved)
 
     # ------------------------------------------------------------------ plumbing
     def _save(self) -> None:
@@ -153,6 +168,87 @@ class Agent:
             raw = r.read()
             return json.loads(raw) if r.headers.get("Content-Type", "").startswith("application/json") else raw
 
+    def _send_helper(self, body: dict) -> None:
+        """Post the helper share to the helper aggregator; a lost share only drops this home from that batch."""
+        req = urllib.request.Request(self.helper_url + "/upload", method="POST", data=canonical(body),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with self.helper_http.open(req, timeout=10) as r:
+                r.read()
+        except (OSError, urllib.error.URLError):
+            pass
+
+    @staticmethod
+    def _experience_summary(st: dict) -> dict:
+        """Outcome-level telemetry: what the household experienced, not just what the line did."""
+        xp = st.get("experience") or {}
+        gsv = (xp.get("path") or {}).get("gsv") or {}
+        out = st.get("outcome") or {}
+        where: dict[str, int] = {}
+        for v in ((st.get("bottlenecks") or {}).get("devices") or {}).values():
+            where[v.get("where", "idle")] = where.get(v.get("where", "idle"), 0) + 1
+        apps = xp.get("apps") or []
+        worst = min((a for a in apps if a.get("qoo") is not None), key=lambda a: a["qoo"], default=None)
+        lan99 = [d["lan_rtt_ms"].get("99") or d["lan_rtt_ms"].get(99) for d in (xp.get("devices") or {}).values()
+                 if d.get("lan_rtt_ms")]
+        return {"g": gsv.get("g"), "v50": gsv.get("v_p50"), "v99": gsv.get("v_p99"), "loss": gsv.get("loss"),
+                "objective": out.get("objective"), "worst_protected": out.get("worst_protected"),
+                "worst": {"label": worst["label"], "qoo": worst["qoo"]} if worst else None,
+                "gated": out.get("gated", 0), "bottlenecks": where,
+                "lan_rtt_p99_max": max((x for x in lan99 if x is not None), default=None),
+                "l4s": (st.get("l4s") or {}).get("flows", 0), "offers": len(st.get("offers") or []),
+                "camara": st.get("camara_sessions", 0)}
+
+    def rediscover(self) -> bool:
+        """Home kit: the Operator Console laptop may have a new address (DHCP). Ask the home network where it is
+        now and switch only if the new address passes TLS with our operator CA, so nobody else can redirect us."""
+        if not self.discover or time.monotonic() - self._last_discover < 30:
+            return False
+        self._last_discover = time.monotonic()
+        answers = []
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            s.settimeout(1.5)
+            # the home network's own broadcast address: 255.255.255.255 would leave by the WAN (the default route)
+            targets = {"255.255.255.255"}
+            for net in self.cfg.get("interfaces", {}).get("lan_subnets", []):
+                try:
+                    targets.add(str(ipaddress.ip_network(net, strict=False).broadcast_address))
+                except ValueError:
+                    pass
+            for t in targets:
+                try:
+                    s.sendto(b"IQKIT-DISCOVER", (t, 47815))
+                except OSError:
+                    pass
+            t_end = time.monotonic() + 2.0
+            while time.monotonic() < t_end:
+                try:
+                    data, _ = s.recvfrom(2048)
+                    answers.append(json.loads(data))
+                except (socket.timeout, ValueError):
+                    break
+            s.close()
+        except OSError:
+            return False
+        for ans in answers:
+            url = str(ans.get("https", "")).rstrip("/")
+            if not url.startswith("https://") or url == self.url:
+                continue
+            try:
+                with self.https.open(url + "/healthz", timeout=5) as r:     # verified against the operator CA
+                    if r.status != 200:
+                        continue
+            except Exception:  # noqa: BLE001
+                continue
+            print(f"agent: Operator Console moved: {self.url} -> {url}", flush=True)
+            self.st["paired_url"] = self.st.get("paired_url") or self.cfg.get("agent", {}).get("controller_url", "").rstrip("/")
+            self.url = self.st["controller_url"] = url
+            self._save()
+            return True
+        return False
+
     # ------------------------------------------------------------------ enrolment
     def enroll(self) -> None:
         while self.running and not self.st.get("device_id"):
@@ -170,6 +266,8 @@ class Agent:
                 print(f"agent: enrolled as {r['device_id']}", flush=True)
             except Exception as e:  # noqa: BLE001
                 print(f"agent: enrolment failed ({e}); retrying", flush=True)
+                if not isinstance(e, urllib.error.HTTPError) and self.rediscover():
+                    continue
                 time.sleep(10)
         if not self.pubkey and self.st.get("release_pubkey"):
             self.pubkey = bytes.fromhex(self.st["release_pubkey"])
@@ -235,6 +333,19 @@ class Agent:
                          or (st["classifier"].get("model_meta") or {}).get("trained_at")},
             "level": self.level(),
         }
+        rec["xp"] = self._experience_summary(st)
+        hist = privagg.qoo_histogram((st.get("experience") or {}).get("apps"))
+        if any(hist):
+            leader, helper = privagg.split(hist)
+            rec["agg"] = {"task": "qoo_hist_v1", "leader": leader}
+            if self.helper_url:
+                self._send_helper({"task": "qoo_hist_v1", "device": self.st.get("device_id"), "t": rec["t"],
+                                   "share": helper})
+            else:
+                # no separate helper configured (home kit): both shares go to the console, which then holds both
+                # roles; this demonstrates the data flow but is not private against the console. Flagged so.
+                rec["agg"]["helper"] = helper
+                rec["agg"]["demo_both_shares"] = True
         evs = [x for x in st["events"] if x.get("seq", 0) > self.last_event_seq]
         if evs:
             self.last_event_seq = max(x.get("seq", 0) for x in evs)
@@ -263,19 +374,37 @@ class Agent:
         except ValueError:
             return False
 
+    def _accept(self, args: dict, kind: str) -> tuple[dict | None, str | None]:
+        """Check a signed release envelope (signature, gateway binding, sequence, expiry) and return its body.
+        The sequence number is recorded only after the instruction was carried out."""
+        env = args.get("envelope")
+        why = release.check_instruction(env, kind, self.st.get("device_id"), self.pubkey,
+                                        int(self.st.get("release_seq") or 0))
+        if why:
+            return None, why
+        return env["body"], None
+
+    def _done(self, args: dict) -> None:
+        self.st["release_seq"] = max(int(self.st.get("release_seq") or 0), int(args["envelope"]["seq"]))
+        self._save()
+
     def execute(self, cmd: dict) -> dict:
         kind, args = cmd.get("kind"), cmd.get("args") or {}
         try:
             if kind == "relay":
                 return self._relay(args)
             if kind == "apply_config":
-                payload = {k: args[k] for k in ("version", "profile", "set")}
-                if not self._verify(payload, args.get("signature")):
-                    return {"ok": False, "error": "signature check failed: config not applied"}
+                body, why = self._accept(args, "config")
+                if why:
+                    return {"ok": False, "error": f"config not applied: {why}"}
+                payload = {k: body[k] for k in ("version", "profile", "set")}
+                if int(payload["version"]) <= int(self.st.get("config_version") or 0) and not body.get("reapply"):
+                    return {"ok": False, "error": f"config not applied: version {payload['version']} is not newer "
+                                                  f"than the installed {self.st.get('config_version')}"}
                 code, r = self._engine("POST", "/api/config", {**payload, "by": f"controller ({args.get('by', 'operator')})"})
                 if code == 200:
                     self.st["config_version"] = payload["version"]
-                    self._save()
+                    self._done(args)
                 return {"ok": code == 200, "engine": r}
             if kind == "install_model":
                 return self._install_model(args)
@@ -329,10 +458,15 @@ class Agent:
         code, body = self._engine(method, path, a.get("body"))
         return {"ok": True, "status": code, "body": body}
 
-    def _install_model(self, a: dict) -> dict:
+    def _install_model(self, args: dict) -> dict:
+        a, why = self._accept(args, "model")
+        if why:
+            return {"ok": False, "error": f"model not installed: {why}"}
         payload = {k: a[k] for k in ("version", "sha256", "size")}
-        if not self._verify(payload, a.get("signature")):
-            return {"ok": False, "error": "signature check failed: model not installed"}
+        keys, k = (self.release_keys, self.release_threshold) if self.release_keys else ([self.pubkey], 1)
+        ok, detail = release.verify_threshold(payload, a.get("targets_sigs") or [], keys, k)
+        if not ok:
+            return {"ok": False, "error": f"model not installed: release signatures: {detail}"}
         blob = self._ctl("GET", f"/v1/agent/blob/{a['sha256']}", timeout=60)
         if hashlib.sha256(blob).hexdigest() != a["sha256"] or len(blob) != int(a["size"]):
             return {"ok": False, "error": "downloaded model does not match its signed hash"}
@@ -350,7 +484,7 @@ class Agent:
         engine_prev = (r or {}).get("previous")
         self.st.update(prev_model_path=prev or (engine_prev if engine_prev != path else None), model_path=path,
                        model_version=a["version"])
-        self._save()
+        self._done(args)
         return {"ok": True, "version": a["version"], "path": path, "previous": self.st["prev_model_path"]}
 
     def _line_test(self, a: dict) -> dict:
@@ -375,7 +509,7 @@ class Agent:
         th = threading.Thread(target=sampler, daemon=True)
         th.start()
         try:
-            with self.http.open(f"{url}?seconds={secs}", timeout=secs + 10) as r:
+            with self.http.open(f"{url}{'&' if '?' in url else '?'}seconds={secs:g}", timeout=secs + 10) as r:
                 while True:
                     b = r.read(65536)
                     if not b:
@@ -469,6 +603,8 @@ class Agent:
                 if self.connected:
                     print(f"agent: controller unreachable ({e}); buffering telemetry", flush=True)
                 self.connected = False
+                if self.rediscover():
+                    continue
                 time.sleep(min(backoff, self.interval))
                 backoff = min(120.0, backoff * 2)
                 continue

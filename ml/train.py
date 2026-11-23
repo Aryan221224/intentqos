@@ -129,6 +129,8 @@ def main(argv=None) -> int:
     ap.add_argument("--trees", type=int, default=60)
     ap.add_argument("--depth", type=int, default=14)
     ap.add_argument("--corrections", default=None)
+    ap.add_argument("--phases", default="2,10",
+                    help="flow-age boundaries (s) for phase-wise forests, e.g. '2,10'; '' = one forest for all ages")
     a = ap.parse_args(argv)
 
     from sklearn.calibration import CalibratedClassifierCV
@@ -159,29 +161,77 @@ def main(argv=None) -> int:
     Y = lambda rs: np.asarray([cidx[r["label"]] for r in rs])           # noqa: E731
 
     t0 = time.time()
-    rf = RandomForestClassifier(n_estimators=a.trees, max_depth=a.depth, min_samples_leaf=2,
-                                class_weight="balanced_subsample", n_jobs=2, random_state=a.seed)
-    model = CalibratedClassifierCV(rf, method="isotonic", cv=3)
-    model.fit(X(train), Y(train))
-    for cc in model.calibrated_classifiers_:
-        cc.estimator.n_jobs = 1      # per-tick batches are small: thread start-up costs more than it saves
+
+    def fit(rs):
+        rf_ = RandomForestClassifier(n_estimators=a.trees, max_depth=a.depth, min_samples_leaf=2,
+                                     class_weight="balanced_subsample", n_jobs=2, random_state=a.seed)
+        m_ = CalibratedClassifierCV(rf_, method="isotonic", cv=3)
+        m_.fit(X(rs), Y(rs))
+        for cc in m_.calibrated_classifiers_:
+            cc.estimator.n_jobs = 1      # per-tick batches are small: thread start-up costs more than it saves
+        return m_
+
+    def conformal(m_, rs):
+        P_ = m_.predict_proba(X(rs))
+        sc_ = 1.0 - P_[np.arange(len(rs)), Y(rs)]
+        k_ = math.ceil((len(sc_) + 1) * (1 - a.alpha)) / len(sc_)
+        q_ = float(np.quantile(sc_, min(1.0, k_), method="higher"))
+        keep = np.sort(sc_)[np.linspace(0, len(sc_) - 1, min(600, len(sc_))).astype(int)]
+        return q_, [round(float(v), 5) for v in keep]
+
+    single = fit(train)                                   # one forest for all ages (the 1.x model)
     raw = RandomForestClassifier(n_estimators=a.trees, max_depth=a.depth, min_samples_leaf=2,
                                  class_weight="balanced_subsample", n_jobs=2, random_state=a.seed).fit(X(train), Y(train))
+    bounds = [float(x) for x in a.phases.split(",") if x.strip()]
+    edges = [0.0] + bounds + [None]
+    phases = []
+    for i in range(len(edges) - 1):
+        lo, hi = edges[i], edges[i + 1]
+        inb = lambda r: r["age"] >= lo and (hi is None or r["age"] < hi)  # noqa: E731
+        tr = [r for r in train if r.get("session") == "corr" or inb(r)]
+        ca = [r for r in cal if inb(r)]
+        ok = len(tr) >= 300 and len(ca) >= 60 and {r["label"] for r in tr} >= set(classes)
+        m = fit(tr) if ok and bounds else single
+        cal_acc = None
+        if m is not single:
+            # keep the phase's own forest only if it beats the single forest on this phase's CALIBRATION rows
+            # (the test sessions are not looked at for this choice)
+            yc = Y(ca)
+            own_acc = float(np.mean(m.predict_proba(X(ca)).argmax(axis=1) == yc))
+            one_acc = float(np.mean(single.predict_proba(X(ca)).argmax(axis=1) == yc))
+            cal_acc = {"own": round(own_acc, 4), "single": round(one_acc, 4)}
+            if own_acc <= one_acc:
+                m = single
+        q, scores = conformal(m, ca if ok and bounds else cal)
+        phases.append({"name": f"{lo:g}-{hi:g}s" if hi is not None else f">={lo:g}s", "max_age": hi, "model": m,
+                       "qhat": q, "cal_scores": scores, "own": m is not single,
+                       "rows": {"train": len(tr), "calibration": len(ca)}, "cal_accuracy": cal_acc})
+    model = phases[-1]["model"]
+    qhat = phases[-1]["qhat"]
     train_s = time.time() - t0
 
-    # split-conformal threshold on the calibration sessions
-    Pc = model.predict_proba(X(cal))
-    sc = 1.0 - Pc[np.arange(len(cal)), Y(cal)]
-    k = math.ceil((len(sc) + 1) * (1 - a.alpha)) / len(sc)
-    qhat = float(np.quantile(sc, min(1.0, k), method="higher"))
+    def phase_idx(age):
+        for i_, ph in enumerate(phases):
+            if ph["max_age"] is None or age < ph["max_age"]:
+                return i_
+        return len(phases) - 1
 
     # ---------------- evaluation on held-out sessions ----------------
-    Pt = model.predict_proba(X(test))
+    Pt = np.zeros((len(test), len(classes)))
+    qts = np.zeros(len(test))
+    for i_, ph in enumerate(phases):
+        idx = [j for j, r in enumerate(test) if phase_idx(r["age"]) == i_]
+        if idx:
+            Pt[idx] = ph["model"].predict_proba(X([test[j] for j in idx]))
+            qts[idx] = ph["qhat"]
+    Ps = single.predict_proba(X(test))
     yt = Y(test)
     pred = [classes[i] for i in Pt.argmax(axis=1)]
     truth = [r["label"] for r in test]
     rule = [r["rule"] for r in test]
-    sets = [[classes[j] for j, p in enumerate(row) if 1 - p <= qhat] for row in Pt]
+    sets = [[classes[j] for j, p in enumerate(row) if 1 - p <= qts[i_]] for i_, row in enumerate(Pt)]
+    pred_single = [classes[i] for i in Ps.argmax(axis=1)]
+    early = [i for i, r in enumerate(test) if r["age"] < (bounds[0] if bounds else 2.0)]
     abstain = [len(s) != 1 for s in sets]
     hybrid = [rule[i] if abstain[i] else pred[i] for i in range(len(test))]
     cover = float(np.mean([truth[i] in sets[i] for i in range(len(test))]))
@@ -227,6 +277,15 @@ def main(argv=None) -> int:
         "calibration": {"ece_raw_rf": round(ece(raw.predict_proba(X(test)), yt), 4),
                         "ece_calibrated": round(ece(Pt, yt), 4)},
         "per_flow_timeline": timeline,
+        "phases": [{"name": ph["name"], "max_age": ph["max_age"], "own_forest": ph["own"], "rows": ph["rows"],
+                    "calibration_accuracy": ph["cal_accuracy"],
+                    "qhat": round(ph["qhat"], 4)} for ph in phases],
+        "phase_wise_vs_single": {
+            "macro_f1": {"phase_wise": round(ml_f1, 4), "single": round(macro_f1(truth, pred_single, LABELS)[0], 4)},
+            "early_flow_accuracy": {
+                "phase_wise": round(float(np.mean([truth[i] == pred[i] for i in early])), 4) if early else None,
+                "single": round(float(np.mean([truth[i] == pred_single[i] for i in early])), 4) if early else None,
+                "rows": len(early)}},
         "confusion_ml": conf_m,
         "top_features": [[f, round(float(v), 4)] for f, v in top_feat],
         "payload_bytes_used": 0,
@@ -234,14 +293,16 @@ def main(argv=None) -> int:
     }
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     joblib.dump({"model": model, "classes": classes, "qhat": qhat, "alpha": a.alpha, "features": FEATURE_NAMES,
-                 "meta": {k_: report[k_] for k_ in ("trained_at", "rows", "model", "tin_level_accuracy", "conformal")}},
+                 "phases": [{k_: ph[k_] for k_ in ("name", "max_age", "model", "qhat", "cal_scores")} for ph in phases],
+                 "meta": {k_: report[k_] for k_ in ("trained_at", "rows", "model", "tin_level_accuracy", "conformal",
+                                                    "phases")}},
                 a.out, compress=3)
     with open(a.out.replace(".joblib", ".report.json"), "w") as f:
         json.dump(report, f, indent=1)
     _plot_confusion(conf_m, classes, os.path.join(ROOT, "docs/img/classifier_confusion.png"))
     _markdown(report, os.path.join(ROOT, "docs/CLASSIFIER_REPORT.md"))
     print(json.dumps({k_: report[k_] for k_ in ("rows", "label_level", "tin_level_accuracy", "conformal", "calibration",
-                                                  "inference_ms_per_32_flows")}, indent=1))
+                                                  "inference_ms_per_32_flows", "phases", "phase_wise_vs_single")}, indent=1))
     print(json.dumps(timeline, indent=1))
     return 0
 

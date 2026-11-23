@@ -4,7 +4,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=intentqos
-PKG_VERSION:=1.0.0
+PKG_VERSION:=2.0.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=IntentQoS project
@@ -16,7 +16,7 @@ define Package/intentqos
   CATEGORY:=Network
   TITLE:=IntentQoS adaptive QoS engine (intent-aware, latency-driven)
   DEPENDS:=+python3-light +python3-email +python3-urllib +python3-openssl +python3-logging \
-           +tc-full +kmod-sched-core +kmod-sched-cake +kmod-sched-htb +nftables +iq-capture
+           +tc-full +kmod-sched-core +kmod-sched-cake +nftables +iq-capture
   PKGARCH:=all
 endef
 
@@ -47,6 +47,9 @@ define Package/intentqos/install
 	$(INSTALL_CONF) ./files/intentqos.config $(1)/etc/config/intentqos
 	$(INSTALL_BIN) ./files/intentqos.init $(1)/etc/init.d/intentqos
 	$(INSTALL_BIN) ./files/intentqos-uci $(1)/usr/sbin/intentqos-uci
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/dhcp
+	$(INSTALL_BIN) ./src/kit/files/etc/hotplug.d/dhcp/90-intentqos $(1)/etc/hotplug.d/dhcp/90-intentqos
+	$(CP) ./src/iq-flow.bpf.o ./src/iq-flow-eb.bpf.o $(1)/usr/lib/intentqos/ 2>/dev/null || true
 endef
 
 $(eval $(call BuildPackage,iq-capture))

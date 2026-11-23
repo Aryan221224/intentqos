@@ -17,6 +17,13 @@ teams, and a branded app for its subscribers.
 | **Fleet controller** | the ISP's network operations and support desk | `IntentQoS Operator Console.exe` or http://localhost:8088/ops/ |
 | **Subscriber app** | the household, in English or Hindi | `SampleNet Home App.exe` or http://localhost:8088/app/ |
 
+**New in 2.0.** The loop now steers by each app's predicted Quality of Outcome (IETF method) instead of delay
+alone, senses round trips passively from TCP timestamps and QUIC spin bits, tells Wi-Fi from line
+bottlenecks per device, offers boosts before anyone asks, accepts requests in plain words, speaks CAMARA
+Quality-on-Demand at the router and at the operator, keeps fleet statistics private by secret sharing, and
+the Test Kit reports QoO, RPM and home-network capacity. Gateway console → **Experience** shows it live.
+What was measured, and what is emulation or simulated: [`INNOVATIONS.md`](INNOVATIONS.md).
+
 ## See it running
 
 - **Windows 10/11 with WSL 2:** double-click `dist/IntentQoS Demo (all three).exe`. The first start

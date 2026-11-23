@@ -1,0 +1,195 @@
+{
+ "s1_iso_during_call": {
+  "call audio down, delay p99 (ms)": {
+   "outcome_on_median": 30.14,
+   "outcome_off_median": 35.52,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.248,
+   "on": [
+    21.72,
+    31.49,
+    28.82,
+    31.45
+   ],
+   "off": [
+    41.6,
+    32.59,
+    38.46,
+    16.46
+   ]
+  },
+  "call audio down, MOS": {
+   "outcome_on_median": 4.36,
+   "outcome_off_median": 4.36,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.564,
+   "on": [
+    4.36,
+    4.36,
+    4.36,
+    4.36
+   ],
+   "off": [
+    4.36,
+    4.36,
+    4.36,
+    4.36
+   ]
+  },
+  "call video down, delay p99 (ms)": {
+   "outcome_on_median": 30.39,
+   "outcome_off_median": 35.9,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.248,
+   "on": [
+    22.23,
+    31.53,
+    29.24,
+    31.62
+   ],
+   "off": [
+    42.22,
+    32.85,
+    38.94,
+    16.23
+   ]
+  },
+  "ISO download goodput (Mbit/s)": {
+   "outcome_on_median": 78.8,
+   "outcome_off_median": 78.14,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.773,
+   "on": [
+    81.02,
+    73.98,
+    78.98,
+    78.63
+   ],
+   "off": [
+    74.17,
+    78.29,
+    77.99,
+    81.23
+   ]
+  },
+  "cloud backup goodput (Mbit/s)": {
+   "outcome_on_median": 13.97,
+   "outcome_off_median": 13.97,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.564,
+   "on": [
+    13.9,
+    14.04,
+    14.23,
+    13.14
+   ],
+   "off": [
+    13.16,
+    13.68,
+    14.25,
+    14.28
+   ]
+  }
+ },
+ "s3_tvs_and_gaming": {
+  "game down, delay p99 (ms)": {
+   "outcome_on_median": 44.46,
+   "outcome_off_median": 44.69,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.773,
+   "on": [
+    42.24,
+    53.58,
+    38.07,
+    46.67
+   ],
+   "off": [
+    81.0,
+    38.91,
+    45.57,
+    43.81
+   ]
+  },
+  "game down, jitter (ms)": {
+   "outcome_on_median": 1.38,
+   "outcome_off_median": 0.48,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.386,
+   "on": [
+    1.72,
+    0.41,
+    1.2,
+    1.56
+   ],
+   "off": [
+    0.17,
+    0.78,
+    0.18,
+    4.02
+   ]
+  },
+  "TV mean bitrate (Mbit/s)": {
+   "outcome_on_median": 14.4,
+   "outcome_off_median": 13.76,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 0.564,
+   "on": [
+    11.88,
+    14.26,
+    14.54,
+    14.86
+   ],
+   "off": [
+    11.75,
+    13.9,
+    13.62,
+    15.68
+   ]
+  },
+  "TV rebuffering (s, total)": {
+   "outcome_on_median": 0.0,
+   "outcome_off_median": 0.0,
+   "n": [
+    4,
+    4
+   ],
+   "p_mw": 1.0,
+   "on": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "off": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ }
+}

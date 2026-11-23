@@ -41,6 +41,21 @@ and the console asks for it once per browser session. The agent reads the same f
 Checks: `/etc/init.d/intentqos status`; `tc -s qdisc show dev br-lan` shows `cake` or `htb`;
 `nft list table inet intentqos`; `curl http://192.168.1.1:8080/api/setup-check`.
 
+### Any OpenWrt firmware, opkg or apk (the home-kit payload)
+
+`router/build_payload.py` builds `intentqos-router-<version>.tar.gz`, which works on OpenWrt 21.02 to 25.12,
+GL.iNet firmware and prplOS, on ARM64, ARMv7, MIPS (little-endian) and x86-64. Its installer:
+* pulls Python, `tc` and nftables from the router's own feed;
+* detects the LAN and WAN devices and the LAN subnet;
+* turns off flow offloading and the router's own QoS while IntentQoS runs, and restores them on uninstall.
+**IntentQoS Router Setup** does all of this over SSH from a laptop ([KIT.md](KIT.md)). By hand:
+
+```sh
+scp intentqos-router-1.1.0.tar.gz root@192.168.8.1:/tmp/
+ssh root@192.168.8.1 'cd /tmp && tar xzf intentqos-router-1.1.0.tar.gz && sh intentqos-router/install.sh --down 100 --up 100'
+ssh root@192.168.8.1 'sh /usr/lib/intentqos/uninstall.sh'          # to remove it again (--purge: also settings and key)
+```
+
 ### prplOS LCM / any container runtime
 
 `router/container/Dockerfile`: Alpine + Python, the engine, the model and the static helper. Run with

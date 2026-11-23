@@ -14,6 +14,16 @@
   then ML (or rules), anti-flap commit logic, and a Page-Hinkley drift detector
   on the abstention rate that raises an observable event.
 
+IntentQoS 2.0 additions:
+* phase-wise forests (treemodel.py): a flow is judged by the forest for its age;
+* adaptive conformal inference (Gibbs and Candes, NeurIPS 2021): split conformal assumes tomorrow's
+  traffic looks like the calibration data. Homes drift, so alpha is re-tuned online from feedback,
+  alpha_{t+1} = alpha_t + gamma (alpha_target - miss_t), which keeps the long-run miss rate near the
+  target without that assumption. Feedback comes from household corrections, weak labels
+  (weaklabels.py) and labels that settled over a flow's life (marked as self-checks in the stats);
+* when the model abstains: a call-service weak label, then the confident label of another flow in the
+  same app session (same device, protocol and remote network), then the rules.
+
 Inputs : flows (capture.Flow) at each policy tick.
 Outputs: {flow_id: Decision(label, confidence, source, set, committed)}.
 Failure: model missing/corrupt -> rules only (logged); a bad prediction can be
@@ -32,6 +42,7 @@ from dataclasses import dataclass, field
 from . import LABEL_TO_TIN, LABELS
 from .capture import Flow
 from .features import FEATURE_NAMES, flow_features, recent_avg_len, recent_pps
+from .weaklabels import CALL_SET, WeakLabels
 
 
 @dataclass
@@ -107,17 +118,73 @@ class MLClassifier:
         self.meta = b.get("meta", {})
         self.path = path
 
-    def predict(self, X: list[list[float]]):
+    @property
+    def phases(self) -> list[dict]:
         if self.runtime == "pure-python":
-            return self.model.predict(X)
+            return self.model.phases
+        return [{"name": "all", "max_age": None, "qhat": self.qhat, "cal_scores": []}]
+
+    def predict(self, X: list[list[float]], ages=None, qhats: dict | None = None):
+        """[(label, prob, prediction_set, phase)]."""
+        if self.runtime == "pure-python":
+            return self.model.predict(X, ages, qhats)
         import numpy as np
         P = self.model.predict_proba(np.asarray(X, dtype=float))
+        q = (qhats or {}).get(0, self.qhat)
         out = []
         for p in P:
-            pset = [self.classes[i] for i, pi in enumerate(p) if 1.0 - pi <= self.qhat]
+            pset = [self.classes[i] for i, pi in enumerate(p) if 1.0 - pi <= q]
             j = int(p.argmax())
-            out.append((self.classes[j], float(p[j]), pset))
+            out.append((self.classes[j], float(p[j]), pset, 0))
         return out
+
+
+class AdaptiveConformal:
+    """Adaptive conformal inference (Gibbs & Candes 2021) on top of stored split-conformal scores.
+
+    One-sided: the miscoverage level only moves BELOW its target (wider sets) when labelled outcomes show the
+    sets missing the truth too often, and drifts back up to the target as they recover. It never goes above
+    the target. Plain ACI also narrows sets when the model over-covers, which on our held-out replay cut
+    coverage from 0.96 to the 0.90 target but raised abstentions from 1.8 % to 8.3 %; on a gateway an
+    abstention means a rules fallback, so the spare coverage is kept (ml/eval_drift.py, docs/drift_eval.json)."""
+
+    def __init__(self, target: float, cal_scores: list[float], qhat: float, gamma: float = 0.005):
+        self.target = target
+        self.alpha = target
+        self.gamma = gamma
+        self.scores = sorted(cal_scores or [])
+        self.qhat0 = qhat
+        self.n = self.misses = 0
+        self.by_source: dict[str, list[int]] = {}
+
+    def qhat(self) -> float:
+        if not self.scores:
+            return self.qhat0
+        import math
+        n = len(self.scores)
+        k = min(n, max(1, math.ceil((n + 1) * (1.0 - self.alpha))))
+        return self.scores[k - 1]
+
+    def feedback(self, covered: bool, source: str) -> None:
+        miss = 0 if covered else 1
+        self.alpha = min(self.target, max(0.005, self.alpha + self.gamma * (self.target - miss)))
+        self.n += 1
+        self.misses += miss
+        s = self.by_source.setdefault(source, [0, 0])
+        s[0] += 1
+        s[1] += miss
+
+    def info(self) -> dict:
+        return {"alpha": round(self.alpha, 4), "target": self.target, "qhat": round(self.qhat(), 4),
+                "feedback": self.n, "miss_rate": round(self.misses / self.n, 4) if self.n else None,
+                "by_source": {k: {"n": v[0], "misses": v[1]} for k, v in self.by_source.items()}}
+
+
+def _session_key(f: Flow) -> tuple:
+    """Flows of one app session: same device, protocol and remote network (/24, /48)."""
+    r = f.remote_ip
+    net = r.rsplit(".", 1)[0] if "." in r else ":".join(r.split(":")[:3])
+    return (f.lan_ip, f.proto, net)
 
 
 class PageHinkley:
@@ -170,14 +237,31 @@ class Classifier:
         self.restored = self._load_labels(float(c.get("restore_max_age_s", 120)))
         self._labels_saved = 0.0
         self.drift = PageHinkley()
-        self.stats = {"ml": 0, "rules": 0, "abstain": 0, "user": 0, "drift_alarms": 0}
+        self.stats = {"ml": 0, "rules": 0, "abstain": 0, "user": 0, "drift_alarms": 0, "weak": 0, "session": 0}
+        self.aci: list[AdaptiveConformal] = []
+        self.adaptive = bool(c.get("adaptive_conformal", True))
+        self.weak = WeakLabels(cfg, resolve)
+        self.history: dict[str, list] = {}   # fid -> recent (phase, prediction set) for settled-label feedback
         if self.mode == "ml":
             path = resolve(c["model_path"])
             try:
                 self.ml = MLClassifier(path)
+                self._init_aci()
             except Exception as e:   # noqa: BLE001 -- any load failure => rules
                 self.model_error = f"{type(e).__name__}: {e}"
                 self.emit("classifier", f"ML model unavailable ({self.model_error}); using rule baseline", "warn")
+
+    def _init_aci(self) -> None:
+        self.aci = [AdaptiveConformal(self.ml.alpha, ph.get("cal_scores") or [], ph["qhat"]) for ph in self.ml.phases]
+
+    def _qhats(self) -> dict | None:
+        if not self.adaptive or not self.aci:
+            return None
+        return {i: a.qhat() for i, a in enumerate(self.aci)}
+
+    def _feedback(self, phase: int, pset: list, truth: set, source: str) -> None:
+        if self.aci and 0 <= phase < len(self.aci):
+            self.aci[phase].feedback(bool(set(pset) & truth), source)
 
     # ----- user corrections ------------------------------------------------
     def _load_overrides(self) -> dict:
@@ -234,6 +318,8 @@ class Classifier:
             self._save_overrides()
             st = self.state.setdefault(f.id(), {})
             st.update({"committed": label, "pending": None, "pending_n": 0})
+            for ph, pset in self.history.pop(f.id(), [])[-3:]:      # the household told us the truth
+                self._feedback(ph, pset, {label}, "household")
         # keep the corrected example (header features only) for the next retraining run
         os.makedirs(os.path.dirname(self.corrections_path), exist_ok=True)
         with open(self.corrections_path, "a") as fh:
@@ -274,9 +360,21 @@ class Classifier:
             else:
                 out[fid] = Decision(rl, 1.0, "rules", [rl])
         if ml_batch:
-            for f, (lab, conf, pset) in zip(ml_flows, self.ml.predict(ml_batch)):
+            preds = self.ml.predict(ml_batch, [now - f.first for f in ml_flows], self._qhats())
+            sessions: dict[tuple, str] = {}
+            for f, (lab, conf, pset, _ph) in zip(ml_flows, preds):
+                if len(pset) == 1:
+                    sessions.setdefault(_session_key(f), lab)
+            for f, (lab, conf, pset, ph) in zip(ml_flows, preds):
                 fid = f.id()
                 abstain = len(pset) != 1
+                h = self.history.setdefault(fid, [])
+                if len(h) < 6 or self.stats["ml"] % 7 == 0:       # a few sets per flow, spread over its life
+                    h.append((ph, pset))
+                    del h[:-6]
+                wl = self.weak.lookup(f.remote_ip, f.proto)
+                if wl is not None:
+                    self._feedback(ph, pset, set(wl.get("labels") or CALL_SET), "weak-label")
                 if self.drift.update(1.0 if abstain else 0.0):
                     self.stats["drift_alarms"] += 1
                     self.emit("drift", "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; "
@@ -289,6 +387,15 @@ class Classifier:
                     self.stats["abstain"] += 1
                     self.stats["held"] = self.stats.get("held", 0) + 1
                     out[fid] = Decision(st["committed"], conf, "ml-hold", pset)
+                elif abstain and wl is not None and f.proto == 17:
+                    self.stats["abstain"] += 1
+                    self.stats["weak"] += 1
+                    pick = next((c for c in pset if c in CALL_SET), "video")
+                    out[fid] = Decision(pick, conf, "weak-label", pset)
+                elif abstain and _session_key(f) in sessions and (not pset or sessions[_session_key(f)] in pset):
+                    self.stats["abstain"] += 1
+                    self.stats["session"] += 1
+                    out[fid] = Decision(sessions[_session_key(f)], conf, "session", pset)
                 elif abstain:
                     self.stats["abstain"] += 1
                     out[fid] = Decision(rule_cache[fid], conf, "rules-fallback", pset)
@@ -342,14 +449,23 @@ class Classifier:
         alive = {f.id() for f in flows}
         for fid in list(self.state):
             if fid not in live and fid not in alive:
-                self.state.pop(fid, None)
+                st = self.state.pop(fid, None) or {}
                 self.rules.forget(fid)
+                hist = self.history.pop(fid, [])
+                # a label the model held confidently until the flow ended is a (self-checked) answer for the
+                # prediction sets made along the way
+                if st.get("ml_committed") and st.get("committed") and len(hist) >= 3:
+                    for ph, pset in hist:
+                        self._feedback(ph, pset, {st["committed"]}, "settled (self-check)")
         if time.time() - self._labels_saved >= 5.0:
             self.save_labels()
         return out
 
     def info(self) -> dict:
         return {"mode": self.mode, "model_loaded": self.ml is not None, "model_error": self.model_error,
+                "phases": [{"name": p["name"], "max_age": p["max_age"]} for p in self.ml.phases] if self.ml else [],
+                "adaptive_conformal": [a.info() for a in self.aci] if self.adaptive else None,
+                "weak_labels": {"entries": len(self.weak.nets), **self.weak.meta},
                 "model_meta": self.ml.meta if self.ml else None,
                 "model_runtime": self.ml.runtime if self.ml else None, "model_path": self.ml.path if self.ml else None,
                 "alpha": self.ml.alpha if self.ml else None, "stats": dict(self.stats),

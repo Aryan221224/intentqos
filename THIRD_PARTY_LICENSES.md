@@ -22,6 +22,9 @@ separate program, a build-time tool, or prior work whose *documented ideas* we r
 | Mukta (Ek Type) | OFL-1.1 | **bundled, subset, Latin + Devanagari**: subscriber app (`controller/web/fonts/`, licence `OFL-Mukta.txt`) |
 | Go toolchain | BSD-3-Clause | build time only: the Windows launchers; the exes contain the Go runtime (BSD-3-Clause) |
 | rsrc (akavel) | MIT | build time only: icons in the Windows launchers; not redistributed |
+| python-build-standalone (Astral), CPython 3.12 | PSF-2.0 (CPython); bundled OpenSSL Apache-2.0, SQLite public domain, libffi MIT, zlib Zlib, others as listed in its `LICENSE.txt` | **bundled, trimmed**: the private Python runtime inside `IntentQoS Operator Console` (licence files kept inside the runtime) |
+| golang.org/x/crypto, golang.org/x/sys | BSD-3-Clause | **compiled into** the home-kit programs (SSH client for Router Setup; Windows APIs) |
+| qrcode-generator (Kazuhiko Arase) | MIT | **bundled**: the phone QR code on the kit page (`controller/web/vendor/qrcode.js`, licence header kept) |
 | fontTools | MIT | build time only: subsetting the fonts |
 
 ## Prior work credited (ideas re-implemented, no code copied)

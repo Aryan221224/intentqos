@@ -30,16 +30,25 @@ from urllib.parse import parse_qs, urlparse
 
 from . import security as S
 from .core import CONSENT_DEFAULT, Controller, jdump, jload, mask_phone, now
+from .kit import Kit, local_ip_for
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-WEB = {"/ops/": os.path.join(HERE, "web", "ops.html"), "/app/": os.path.join(HERE, "web", "app.html")}
+WEB = {"/ops/": os.path.join(HERE, "web", "ops.html"), "/app/": os.path.join(HERE, "web", "app.html"),
+       "/kit/": os.path.join(HERE, "web", "kit.html")}
+PWA = {"/app/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
+       "/app/sw.js": ("sw.js", "text/javascript; charset=utf-8"),
+       "/app/icon-192.png": ("icon-192.png", "image/png"), "/app/icon-512.png": ("icon-512.png", "image/png"),
+       "/app/icon-maskable-512.png": ("icon-maskable-512.png", "image/png")}
+# what phones and other home devices may open on the kit's plain-HTTP listener (everything else: this computer only)
+LAN_OK = ("/app", "/app/", "/v1/app/", "/fonts/", "/healthz", "/v1/kit/where")
 CONSOLE = os.path.join(ROOT, "intentqos", "web", "console.html")
 SIM_CONTROL = "http://127.0.0.1:8095/scenario"
 FONT_DIRS = (os.path.join(HERE, "web", "fonts"), os.path.join(ROOT, "intentqos", "web", "fonts"))
 SUPPORT_RELAY_WRITE = ("/api/intents", "/api/devices/", "/api/modes/", "/api/schedules", "/api/flows/label")
 DEFAULTS = {"listen": "0.0.0.0:8443", "tls_cert": "", "tls_key": "", "data_dir": "controller/data",
             "telemetry_interval_s": 15, "demo_otp": False, "lab_quick_login": False, "ui_listen": "", "auto_notify_outages": True, "test_server": "",
+            "kit": {"enabled": False},
             "brand": {"name": "SampleNet Fibre", "short": "SampleNet", "support_phone": "1800-000-000",
                       "grievance_email": "grievance@samplenet.example", "accent": "#3987e5"},
             "retention": {"raw_hours": 48, "rollup_days": 90, "events_days": 90}}
@@ -206,9 +215,26 @@ def make_handler(ctl: Controller):
             qs = {k: v[0] for k, v in parse_qs(u.query).items()}
             try:
                 raw = self._raw() if method in ("POST", "PUT", "DELETE") else b""
+                if getattr(self.server, "plain_http", False) and not self._loopback() \
+                        and not any(p == x or (x.endswith("/") and p.startswith(x)) for x in LAN_OK):
+                    raise HTTPError(403, "this page is only available on the Operator Console computer; "
+                                         "phones use /app/")
                 if p.startswith("/v1/agent/"):
                     return self._agent(method, p, qs, raw)
                 body = json.loads(raw or b"{}") if raw else {}
+                if p in PWA and method == "GET":
+                    fn, ctype = PWA[p]
+                    with open(os.path.join(HERE, "web", "pwa", fn), "rb") as f:
+                        return self._send(200, f.read(), ctype, {"Cache-Control": "no-cache"})
+                if p == "/kit":
+                    return self._send(302, b"", headers={"Location": "/kit/"})
+                if p == "/kit/" and not self._loopback():
+                    raise HTTPError(403, "the kit page is only available on the Operator Console computer")
+                if p == "/kit/qrcode.js" and method == "GET":
+                    with open(os.path.join(HERE, "web", "vendor", "qrcode.js"), "rb") as f:
+                        return self._send(200, f.read(), "text/javascript; charset=utf-8", {"Cache-Control": "max-age=86400"})
+                if p.startswith("/v1/kit/"):
+                    return self._kitapi(method, p, qs, body)
                 if p.startswith("/v1/"):
                     self._csrf()
                 if p in ("/", "/ops"):
@@ -245,6 +271,8 @@ def make_handler(ctl: Controller):
                     return self._appapi(method, p, qs, body)
                 if p.startswith("/v1/nb/"):
                     return self._nbapi(method, p, qs, body)
+                if p.startswith("/camara/"):
+                    return self._camara_nb(method, p, body)
                 if p.startswith("/v1/"):
                     return self._ops(method, p, qs, body)
                 return self._send(404, {"error": "not found"})
@@ -374,6 +402,11 @@ def make_handler(ctl: Controller):
                 return self._send(200, ctl.fleet_summary())
             if p == "/v1/fleet/trend":
                 return self._send(200, ctl.fleet_trend(float(qs.get("hours", 6))))
+            if p == "/v1/fleet/qoo-private":
+                return self._send(200, ctl.fleet_private_qoo(float(qs.get("hours", 1))))
+            if p == "/v1/camara/sessions":
+                return self._send(200, {"sessions": ctl.camara.list(),
+                                        "access_network": "simulated" if getattr(ctl.camara.net, "simulated", False) else "live"})
             if p == "/v1/fleet/olts":
                 rows = db.q("SELECT s.region, s.pop, s.olt, COUNT(*) homes, SUM(g.online) online FROM gateways g JOIN subscribers s "
                             "ON s.id=g.subscriber_id WHERE g.device_id IS NOT NULL GROUP BY s.olt ORDER BY s.region, s.olt")
@@ -743,9 +776,12 @@ def make_handler(ctl: Controller):
                 body_out = r.get("body")
                 if path == "/api/state" and isinstance(body_out, dict):
                     body_out = {k: body_out.get(k) for k in ("t", "grade", "devices", "intents", "estimator", "config",
-                                                            "budget", "schedules", "paused", "loss_pct")}
+                                                            "budget", "schedules", "paused", "loss_pct", "offers")}
+                    xp = (r.get("body") or {}).get("experience") or {}
+                    body_out["experience"] = {"apps": [{k: a.get(k) for k in ("ip", "device", "label", "qoo")}
+                                                       for a in (xp.get("apps") or [])]}
                 return self._send(r.get("status", 200), body_out)
-            m = re.fullmatch(r"/v1/app/live(/api/(?:intents|devices|modes|schedules)(?:/.*)?)", p)
+            m = re.fullmatch(r"/v1/app/live(/api/(?:intents|devices|modes|schedules|offers)(?:/.*)?)", p)
             if m and method in ("POST", "PUT", "DELETE"):
                 path = m.group(1)
                 if path.startswith("/api/intents") and method == "POST":
@@ -758,6 +794,46 @@ def make_handler(ctl: Controller):
                 if r.get("offline"):
                     raise HTTPError(503, "your router is offline")
                 return self._send(r.get("status", 200), r.get("body"))
+            raise HTTPError(404, "not found")
+
+        # ------------------------------------------------------------ home kit
+        def _kitapi(self, method, p, qs, body):
+            kit = ctl.kit
+            if p == "/v1/kit/where":
+                return self._send(200, kit.where(local_ip_for(self._ip())) if kit.enabled else {"service": "intentqos-console",
+                                                                                                "kit": False})
+            if not kit.enabled:
+                raise HTTPError(404, "kit mode is off")
+            auth = self.headers.get("Authorization", "")
+            if p == "/v1/kit/pair" and method == "POST":
+                return self._send(200, kit.pair(body, self._ip()))
+            if p == "/v1/kit/status" and method == "GET":
+                if not self._loopback():
+                    kit.token_ok(auth)
+                return self._send(200, kit.status(self._loopback()))
+            if p == "/v1/kit/phone" and method == "GET":
+                if not self._loopback():
+                    raise HTTPError(403, "this computer only")
+                sid = db.val("SELECT id FROM subscribers WHERE account=?", (kit.household()["account"],))
+                n = db.val("SELECT count(*) FROM sessions WHERE kind='app' AND principal=? AND expires > ?", (sid, now())) if sid else 0
+                return self._send(200, {"signed_in": bool(n)})
+            if p == "/v1/kit/results" and method == "POST":
+                return self._send(200, kit.save_result(kit.token_ok(auth), body))
+            m = re.fullmatch(r"/v1/kit/results/([0-9a-f-]+)", p)
+            if m and method == "GET":
+                if not self._loopback():
+                    kit.token_ok(auth)
+                return self._send(200, kit.result(m.group(1)))
+            if p == "/v1/kit/household" and method == "POST":
+                if not self._loopback():
+                    raise HTTPError(403, "change the household on the Operator Console computer")
+                name, phone = str(body.get("name", "")).strip()[:60], re.sub(r"\D", "", str(body.get("phone", "")))
+                if len(phone) != 10:
+                    raise HTTPError(400, "the mobile number needs 10 digits")
+                db.set_meta("kit_household", {"name": name or "Household", "phone": phone})
+                acct = kit.household()["account"]
+                db.x("UPDATE subscribers SET name=?, phone=? WHERE account=?", (name or "Household", phone, acct))
+                return self._send(200, {"ok": True, "household": kit.household()})
             raise HTTPError(404, "not found")
 
         # ------------------------------------------------------------ northbound
@@ -797,7 +873,31 @@ def make_handler(ctl: Controller):
                                             "ORDER BY id DESC LIMIT 100"))
             if p == "/v1/nb/qoe":
                 return self._send(200, ctl.fleet_summary())
+            if p == "/v1/nb/qoo-private":
+                return self._send(200, ctl.fleet_private_qoo(float(qs.get("hours", 1))))
             raise HTTPError(404, "not found")
+
+        def _camara_nb(self, method, p, body):
+            """CAMARA QoD v1 for applications, API-key authenticated; home + (simulated) access network."""
+            from intentqos.camara import PROFILES, CamaraError, profile_doc
+            k = self._nb()
+            nb = ctl.camara
+            try:
+                if p == "/camara/qos-profiles/v1/qos-profiles" and method == "GET":
+                    return self._send(200, [profile_doc(n) for n in PROFILES])
+                if p == "/camara/quality-on-demand/v1/sessions" and method == "POST":
+                    return self._send(201, nb.create(body, k["name"]))
+                m = re.fullmatch(r"/camara/quality-on-demand/v1/sessions/(op-[0-9a-f]+)(/extend)?", p)
+                if m and method == "GET" and not m.group(2):
+                    return self._send(200, nb.get(m.group(1), k["name"]))
+                if m and method == "POST" and m.group(2):
+                    return self._send(200, nb.extend(m.group(1), body, k["name"]))
+                if m and method == "DELETE" and not m.group(2):
+                    nb.delete(m.group(1), k["name"])
+                    return self._send(204, b"", "application/json")
+                raise CamaraError(404, "NOT_FOUND", "no such CAMARA resource")
+            except CamaraError as e:
+                return self._send(e.status, e.body())
 
     return H
 
@@ -820,6 +920,7 @@ def load_config(path: str | None) -> dict:
 
 def serve(cfg: dict) -> None:
     ctl = Controller(cfg)
+    ctl.kit = Kit(ctl, cfg)
     host, port = cfg["listen"].rsplit(":", 1)
     srv = ThreadingHTTPServer((host, int(port)), make_handler(ctl))
     srv.daemon_threads = True
@@ -832,13 +933,15 @@ def serve(cfg: dict) -> None:
     ui = cfg.get("ui_listen") or ""
     if ui:
         uhost, uport = ui.rsplit(":", 1)
-        if uhost not in ("127.0.0.1", "localhost", "::1"):
-            raise SystemExit("ui_listen serves plain HTTP and must be a loopback address (127.0.0.1:PORT)")
+        if uhost not in ("127.0.0.1", "localhost", "::1") and not ctl.kit.enabled:
+            raise SystemExit("ui_listen serves plain HTTP and must be a loopback address (127.0.0.1:PORT) "
+                             "unless [kit] enabled = true (then home devices get only the app)")
         usrv = ThreadingHTTPServer((uhost, int(uport)), make_handler(ctl))
         usrv.daemon_threads = True
         usrv.plain_http = True
         threading.Thread(target=usrv.serve_forever, daemon=True).start()
-        print(f"IntentQoS controller consoles on http://{uhost}:{uport}/ops/ and /app/ (this machine only)", flush=True)
+        print(f"IntentQoS controller consoles on http://{uhost}:{uport}/ops/ and /app/ "
+              f"({'phones on the home network: /app/ only' if ctl.kit.enabled else 'this machine only'})", flush=True)
 
     def house():
         while True:
@@ -848,6 +951,7 @@ def serve(cfg: dict) -> None:
                 print(f"housekeeping error: {e}", file=sys.stderr, flush=True)
             time.sleep(15)
     threading.Thread(target=house, daemon=True).start()
+    ctl.kit.start()
     print(f"IntentQoS controller on {'https' if cfg.get('tls_cert') else 'http'}://{host}:{port}/ "
           f"(release key {ctl.key.pub_hex[:16]}…)", flush=True)
     srv.serve_forever()

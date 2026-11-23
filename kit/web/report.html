@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+body{margin:0;background:#F3F4F6;color:#1B2130;font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+header{background:#1D2B5E;color:#fff;padding:16px 28px} header h1{margin:0;font-size:19px;font-weight:600} header div{opacity:.8;font-size:13px}
+main{max-width:900px;margin:0 auto;padding:20px 24px 40px}
+.card{background:#fff;border:1px solid #D8DCE3;border-radius:10px;padding:16px 20px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 8px} table{border-collapse:collapse;width:100%} th,td{padding:6px 8px;border-bottom:1px solid #E3E6EC;text-align:left}
+th{color:#576173;font-weight:500;font-size:13px} .muted{color:#576173;font-size:12.5px} .on{color:#1C7C52;font-weight:600} .off{font-weight:600}
+.legend span{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px 0 12px;vertical-align:-1px}
+@media print{body{background:#fff}.card{break-inside:avoid}}
+</style></head>
+<body>
+<header><h1>{{.Title}}</h1><div>IntentQoS Test Kit {{.Version}} · router {{.Router}} · measured from {{.Machine}} · {{.Started.Format "2 Jan 2006 15:04"}}</div></header>
+<main>
+<div class="card"><h2>Summary</h2>
+<table><tr><th>Test</th><th>Measure</th><th>IntentQoS off / before</th><th>IntentQoS on / after</th><th>Change</th></tr>
+{{range .Scenarios}}<tr><td>{{index . "name"}}</td><td class="muted">{{index . "metric"}}</td><td class="off">{{index . "off"}}</td><td class="on">{{index . "on"}}</td><td>{{index . "change"}}</td></tr>{{end}}
+</table></div>
+{{range .Results}}{{$r := .}}<div class="card"><h2>{{.Name}}</h2><div class="muted">{{.Desc}}</div>
+<div class="legend muted" style="margin:6px 0"><span style="background:#9AA5B1"></span>IntentQoS off (p50 {{pct .Off.P50}}, p95 {{pct .Off.P95}}, p99 {{pct .Off.P99}} ms; ↓ {{pct .Off.DownMbps}} ↑ {{pct .Off.UpMbps}} Mbit/s; {{pct .Off.Loss}} % timeouts)
+<span style="background:#1C7C52"></span>IntentQoS on (p50 {{pct .On.P50}}, p95 {{pct .On.P95}}, p99 {{pct .On.P99}} ms; ↓ {{pct .On.DownMbps}} ↑ {{pct .On.UpMbps}} Mbit/s; {{pct .On.Loss}} % timeouts)</div>
+{{if .Home}}{{with .Home}}
+{{if .Capacity}}<table style="margin-top:8px"><tr><th>Home network capacity</th><th>Loss</th><th>Delay range p95</th><th>Per second (Mbit/s)</th></tr>
+<tr><td class="on">{{pct .Capacity.MaxMbps}} Mbit/s</td><td>{{pct .Capacity.LossPct}} %</td><td>{{pct .Capacity.RangeMsP95}} ms</td><td class="muted">{{range .Capacity.SubMbps}}{{pct .}} {{end}}</td></tr></table>
+<div class="muted">{{.Capacity.Method}}</div>{{end}}
+{{if .RPM}}<table style="margin-top:8px"><tr><th>Responsiveness to the console</th><th>Foreign / loaded</th><th>TCP · TLS · HTTP (ms)</th><th>Loaded GET (ms)</th><th>Confidence</th></tr>
+<tr><td class="on">{{printf "%.0f" .RPM.RPM}} RPM</td><td>{{printf "%.0f" .RPM.Foreign}} / {{printf "%.0f" .RPM.Loaded}}</td><td>{{pct .RPM.TCPms}} · {{pct .RPM.TLSms}} · {{pct .RPM.HTTPms}}</td><td>{{pct .RPM.LoadedMs}}</td><td>{{.RPM.Confidence}}</td></tr></table>{{end}}
+{{if .Error}}<div class="muted">Not measured: {{.Error}}</div>{{end}}
+{{end}}{{else}}
+{{chart .Off.Samples .On.Samples 0.0}}
+{{if and .Off.Quality .On.Quality}}
+<table style="margin-top:10px"><tr><th>What it means for</th><th>Quality of Outcome, off</th><th>on</th><th class="muted">limited by (on)</th></tr>
+{{range $i, $q := .On.Quality.QoO}}<tr><td>{{$q.App}}</td><td class="off">{{with index $r.Off.Quality.QoO $i}}{{printf "%.0f" .QoO}}{{end}}</td><td class="on">{{printf "%.0f" $q.QoO}}</td><td class="muted">{{$q.Worst}}</td></tr>{{end}}
+</table>
+<div class="muted">Quality of Outcome (IETF draft-ietf-ippm-qoo): 100 = works perfectly, 0 = unusable, from this test's delay percentiles and timeouts against each app's requirement (the same values the router uses).</div>
+<table style="margin-top:10px"><tr><th></th><th>Floor G</th><th>Queueing V p50 / p99</th><th>Jitter mean / p90</th><th>Delay p90</th><th>TRAI reference</th></tr>
+<tr><td>off</td><td>{{pct .Off.Quality.G}} ms</td><td>{{pct .Off.Quality.V50}} / {{pct .Off.Quality.V99}} ms</td><td>{{pct .Off.Quality.JitterMean}} / {{pct .Off.Quality.JitterP90}} ms</td><td>{{pct .Off.Quality.P90}} ms</td><td>{{if index .Off.Quality.TRAI "latency_within"}}latency within{{else}}latency above{{end}}, {{if index .Off.Quality.TRAI "jitter_within"}}jitter within{{else}}jitter above{{end}}</td></tr>
+<tr><td>on</td><td>{{pct .On.Quality.G}} ms</td><td class="on">{{pct .On.Quality.V50}} / {{pct .On.Quality.V99}} ms</td><td>{{pct .On.Quality.JitterMean}} / {{pct .On.Quality.JitterP90}} ms</td><td>{{pct .On.Quality.P90}} ms</td><td>{{if index .On.Quality.TRAI "latency_within"}}latency within{{else}}latency above{{end}}, {{if index .On.Quality.TRAI "jitter_within"}}jitter within{{else}}jitter above{{end}}</td></tr>
+</table>
+<div class="muted">ΔQ: G is the lowest round trip seen (distance and routing), V what queues add above it. {{index .On.Quality.TRAI "note"}}</div>
+{{end}}
+{{if and .Off.RPM .On.RPM}}<table style="margin-top:10px"><tr><th>Responsiveness</th><th>off</th><th>on</th><th class="muted">loaded GET off / on (ms)</th></tr>
+<tr><td>RPM (higher is better)</td><td class="off">{{printf "%.0f" .Off.RPM.RPM}}</td><td class="on">{{printf "%.0f" .On.RPM.RPM}}</td><td class="muted">{{pct .Off.RPM.LoadedMs}} / {{pct .On.RPM.LoadedMs}}</td></tr></table>
+<div class="muted">{{.On.RPM.Note}}{{if .On.RPM.Confidence}}; confidence {{.Off.RPM.Confidence}} / {{.On.RPM.Confidence}}{{end}}.</div>{{end}}
+{{end}}</div>{{end}}
+{{range .Failover}}<div class="card"><h2>Fibre → 4G failover (IntentQoS {{.QoS}})</h2>
+<div class="muted">Before the switch: p99 {{pct .Before.P99}} ms (↓ {{pct .Before.DownMbps}} ↑ {{pct .Before.UpMbps}} Mbit/s). After: p99 {{pct .After.P99}} ms, p50 {{pct .After.P50}} ms (↓ {{pct .After.DownMbps}} ↑ {{pct .After.UpMbps}} Mbit/s).</div>
+{{chart .Samples nil .SwitchT}}</div>{{end}}
+<div class="card muted">{{.Note}}</div>
+</main></body></html>

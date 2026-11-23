@@ -35,6 +35,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from controller.server import load_config  # noqa: E402
 from intentqos.agent import canonical, sign_request  # noqa: E402
+from intentqos import privagg  # noqa: E402
 
 DEV_SETS = {
     "light": [("Phone", "phone"), ("Phone", "phone"), ("TV", "tv")],
@@ -163,6 +164,31 @@ class Fleet:
                "versions": {"engine": "1.0.0", "agent": "1.0.0", "config": h.config_version, "model": h.model},
                "level": h.level, "simulated": True, "events": h.events[-5:]}
         h.events = []
+        # simulated passive ΔQ: the path floor is the home's base delay; congestion at the OLT adds V on most
+        # homes of that OLT, a line fault adds V on this home only, a weak Wi-Fi slows the LAN round trip
+        g = round(h.base_add + 8 + r.uniform(0, 3), 1)
+        v99 = round(r.uniform(2, 8) * (1 + load) + (r.uniform(40, 120) if cong else 0)
+                    + (r.uniform(35, 80) if h.s.get("line_fault") else 0), 1)
+        wifi_weak = h.s["household"] in ("family", "streamer") and r.random() < 0.15
+        apps = []
+        for lbl, n in (("voip", 1 if h.s["household"] == "wfh" else 0), ("video", 1 if load > 0.5 else 0),
+                       ("gaming", 1 if h.s["household"] == "gamer" and load > 0.4 else 0),
+                       ("streaming", 2 if load > 0.3 else 0), ("web", 2), ("bulk", 1 if load > 0.6 else 0)):
+            for _ in range(n):
+                q = max(0.0, min(100.0, 100 - v99 * (1.2 if lbl in ("voip", "gaming") else 0.5) - (25 if wifi_weak else 0)
+                                 + r.uniform(-5, 5)))
+                apps.append({"label": lbl, "qoo": round(q, 1)})
+        worst = min(apps, key=lambda a: a["qoo"]) if apps else None
+        rec["xp"] = {"g": g, "v50": round(v99 * 0.3, 1), "v99": v99, "loss": round(rec["loss_d"] / 100, 4),
+                     "objective": round(sum(a["qoo"] for a in apps) / len(apps), 1) if apps else None,
+                     "worst_protected": min((a["qoo"] for a in apps if a["label"] in ("voip", "video", "gaming")), default=None),
+                     "worst": worst, "gated": 0, "bottlenecks": {"wifi": 1} if wifi_weak else {"line": 1} if busy else {},
+                     "lan_rtt_p99_max": round(r.uniform(25, 60), 1) if wifi_weak else round(r.uniform(1, 6), 1),
+                     "l4s": 0, "offers": 0, "camara": 0}
+        hist = privagg.qoo_histogram(apps)
+        if any(hist):
+            leader, helper = privagg.split(hist, rnd=lambda: r.getrandbits(61) % privagg.PRIME)
+            rec["agg"] = {"task": "qoo_hist_v1", "leader": leader, "helper": helper, "demo_both_shares": True}
         if h.level in ("standard", "diagnostic"):
             rec["dev"] = [{"ip": d["ip"], "name": d["name"], "type": d["type"],
                            "act": r.choice(ACT) if r.random() < load else "Idle", "kd": round(ach / len(h.devs) * r.uniform(0, 2), 1),
@@ -174,6 +200,8 @@ class Fleet:
     # ---------------------------------------------------------------- commands
     def execute(self, h: Home, c: dict) -> dict:
         k, a = c["kind"], c.get("args") or {}
+        if isinstance(a.get("envelope"), dict):
+            a = a["envelope"].get("body") or {}       # simulated homes trust the envelope (the real agent checks it)
         if k == "apply_config":
             h.config_version = a.get("version", h.config_version)
             h.events.append({"t": time.time(), "kind": "config", "level": "info", "msg": f"managed config v{h.config_version} applied"})

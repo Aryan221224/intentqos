@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntentQoS Operator Console</title><link rel="stylesheet" href="/kit.css"><link rel="icon" href="/icon.png"></head>
+<body>
+<header><img src="/icon.png" alt=""><b>IntentQoS Operator Console</b><span class="sub">starting</span></header>
+<main>
+  <div class="card">
+    <h2 id="stage"><span class="spin"></span> Starting…</h2>
+    <div class="muted small">The first start unpacks the console and creates its database and certificates (about half a minute). Later starts take a few seconds.</div>
+    <ol id="steps" class="small muted" style="margin:12px 0 0 0;padding-left:18px"></ol>
+  </div>
+  <div id="warn" class="note warn hidden"></div>
+  <div id="err" class="card hidden"><h2 style="color:var(--bad)">The console could not start</h2><div id="errmsg"></div>
+    <div class="log" id="tail" style="margin-top:10px"></div>
+    <p class="small muted">Logs: the <span class="mono">IntentQoS\logs</span> folder in your local app data. Close this window and start the console again to retry.</p></div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+setInterval(() => fetch("/hb").catch(() => {}), 3000); fetch("/hb");
+async function poll() {
+  try {
+    const s = await (await fetch("/status")).json();
+    $("steps").innerHTML = (s.steps || []).map(x => `<li>${esc(x)}</li>`).join("");
+    if (s.warnings && s.warnings.length) { $("warn").classList.remove("hidden"); $("warn").innerHTML = s.warnings.map(esc).join("<br>"); }
+    if (s.error) { $("err").classList.remove("hidden"); $("errmsg").textContent = s.error; $("tail").textContent = s.log_tail || ""; $("stage").textContent = "Stopped"; return; }
+    if (s.ready && s.kit_url) { $("stage").textContent = "Ready"; location.href = s.kit_url; return; }
+    $("stage").innerHTML = `<span class="spin"></span> ${esc(s.stage || "Starting…")}`;
+  } catch (e) { /* program still starting */ }
+  setTimeout(poll, 700);
+}
+poll();
+</script>
+</body></html>

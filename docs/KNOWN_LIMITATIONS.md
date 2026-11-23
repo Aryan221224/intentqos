@@ -36,9 +36,14 @@ engine selects CAKE automatically; re-run `make eval` there to get CAKE numbers.
 ## Performance and hardware
 
 - Capture runs in the C helper `iq-capture` (TPACKET_V3 ring, 96-byte kernel-side truncation,
-  per-flow aggregation), with the Python capture as fallback. Every packet still crosses into user
-  space once. **Production path:** eBPF at the TC hook (TCX, Linux ≥ 6.6) aggregating per-flow
-  counters in a BPF map, so packets never leave the kernel.
+  per-flow aggregation), with the Python capture as fallback; every packet crosses into user space once.
+  2.0 adds an opt-in kernel flow engine (`capture.backend = ebpf`: eBPF at tc, per-flow statistics in a BPF
+  map, verdicts applied in the kernel). It was verified only on Linux 6.18 (x86-64) in emulation; it needs
+  tc built with libbpf (OpenWrt `tc-bpf`/`tc-full`), its programs cost about 176 ns per packet there, and on a
+  LAN that is not a bridge its in-home round trips include the router's own download queue.
+- The 2.0 classifier model is 1.55 MB (three forests: one per flow-age phase where it helped, plus the
+  single forest), up from 0.87 MB; on routers with very little flash, export it without phases
+  (`ml/train.py --phases ""`).
 - **No physical router was used.** The router build ran natively on x86-64 and as aarch64 + musl
   under qemu-user emulation (with the installed `.ipk` and a UCI-generated config). qemu-user lacks
   `PACKET_RX_RING` and `SO_TIMESTAMPNS`, so the emulated run used the x86-64 helper and user-space

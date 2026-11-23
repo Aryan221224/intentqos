@@ -31,9 +31,16 @@ from .manage import Managed, UsageMeter
 from .enforce import Enforcer, FlowMarker, choose_backend, safe_plan
 from .estimator import CapacityEstimator
 from .features import recent_rates
+from .camara import QoDSessions
+from .cellular import CellularCeiling
+from .experience import ExperienceTracker
+from .identity import Identity
 from .intents import IntentManager
 from .metrics import Events, History, demand_normalised_jain
+from .offers import Offers
+from .outcome import OutcomeController
 from .policy import decide, demand_by_tin, flow_tins, shield, significant
+from .wifi import BottleneckLocator
 
 
 class Engine:
@@ -61,10 +68,24 @@ class Engine:
         self.backend = choose_backend(cfg, self.lan, self.wan)
         self.marker = FlowMarker(self.backend, cfg, I["lan_subnets"])
         self.enforcer = Enforcer(self.backend, self.marker, self.emit)
+        self.xp = ExperienceTracker(cfg)                     # how each app is doing (header-only)
+        self.locator = BottleneckLocator(cfg)                # Wi-Fi, line or upstream, per device
+        self.identity = Identity(cfg)                        # device types from DHCP and MAC
+        self.cell = CellularCeiling(cfg)                     # radio-aware ceiling when the router has a modem
+        self.outcome = OutcomeController(cfg, self.xp, self.backend.name)
+        self.offers = Offers()                               # proactive boost offers (household decides)
+        self.qod = QoDSessions(self)                         # CAMARA-shaped Quality-on-Demand sessions
+        self.idents: dict = {}
+        self._last_ident = 0.0
+        self._last_fade = 0.0
+        self.probe_base_ms = cfg["estimator"]["probe_interval_ms"]
+        self.passive_rtt_ps = 0.0
         self.scheduler = Scheduler(os.path.join(state_dir, "schedules.json"), self.intents, self.emit)
         self.grade = GradeTracker()
         self.proc = ProcStats()
         self.paused = False                 # operator hold: safe baseline, no adaptive changes
+        self.bypass_until: float | None = None   # A/B test window: no shaping at all until this wall time
+        self.bypass_by = None
         self.apply_log: collections.deque = collections.deque(maxlen=200)
         self._last_sched = 0.0
         self.history = History()
@@ -110,6 +131,7 @@ class Engine:
         self.capture = make_capture(self.cfg, self.lan, self.table, self.emit)
         if not hasattr(self.capture, "proc"):
             self.capture.start()
+        self.marker.attach_kernel(self.capture)
         self.estimator.start()
         self.running = True
         self.emit("engine", f"IntentQoS {__version__} started: backend={self.backend.name}"
@@ -220,14 +242,64 @@ class Engine:
         return ach
 
     def tick(self, now: float) -> None:
+        with self.lock:
+            if self.bypass_until is not None:
+                if time.time() < self.bypass_until:
+                    self._heartbeat()              # alive and deliberately not shaping: the watchdog stays quiet
+                    return
+                self.set_bypass(False, who="timer")
+            self._tick(now)
+
+    def set_bypass(self, on: bool, minutes: float = 5.0, who: str = "operator") -> dict:
+        """Bounded 'no QoS' window for before/after measurements: all shaping and flow marks are removed
+        and come back by themselves when the window ends (at most 30 minutes), or when it is switched off."""
+        with self.lock:
+            if on:
+                minutes = max(0.25, min(30.0, float(minutes)))
+                if self.bypass_until is None:
+                    self.backend.teardown()
+                    self.marker.teardown()
+                    self._log_apply(time.time(), "bypass", self.enforcer.applied, self.enforcer.applied, [],
+                                    f"shaping removed for a test by {who}")
+                self.bypass_until = time.time() + minutes * 60
+                self.bypass_by = who
+                self.emit("engine", f"no-QoS test window for {minutes:g} min ({who}): shaping removed, "
+                                    "comes back automatically", "warn")
+            elif self.bypass_until is not None:
+                self.bypass_until, self.bypass_by = None, None
+                plan = decide(self.cfg, {"down": self.estimator.down.rate, "up": self.estimator.up.rate},
+                              _zero_demand(), self.active_intents)
+                shield(self.cfg, plan, None, self._bounds(), 0)
+                self.enforcer.setup(plan)
+                for ip, d in list(self.devreg.data.items()):
+                    pu = d.get("paused_until")
+                    if pu is not None and (pu == 0 or pu > time.time()):
+                        self.marker.pause(ip, None if pu == 0 else pu - time.time())
+                self.prev_stats = self.prev_t = None
+                self.emit("engine", f"no-QoS test window ended ({who}): shaping restored", "info")
+            return {"bypass": self.bypass_until is not None, "until": self.bypass_until, "by": self.bypass_by}
+
+    def _tick(self, now: float) -> None:
         wall = time.time()
         ach = self._read_stats(now)
         rd, ru = self.estimator.tick(now, ach["down"], ach["up"])
+        rd, ru = self._cellular(now, rd, ru)
         if now - self._last_policy >= WINDOW_S - 1e-3:
             self._last_policy = now
             self._policy_step(now, wall)
-        plan = decide(self.cfg, {"down": rd, "up": ru}, self.demand or _zero_demand(), self.active_intents)
+        dem = self.demand or _zero_demand()
+        plan = decide(self.outcome.cfg_for(self.cfg), {"down": rd, "up": ru}, dem, self.active_intents)
         rep = shield(self.cfg, plan, self.enforcer.applied, self._bounds(), self.enforcer.changes_last_minute())
+        if not rep.held and self.enforcer.applied and significant(plan, self.enforcer.applied,
+                                                                   self.cfg["policy"]["apply_threshold"]):
+            why = self.outcome.gate(plan, self.enforcer.applied, dem, self.active_intents)
+            if why:
+                # keep the applied guarantees (scaled to the new rate); rate changes still go through
+                for d in ("down", "up"):
+                    old = self.enforcer.applied[d]
+                    k = plan[d]["rate"] / old["rate"] if old["rate"] else 1.0
+                    plan[d]["guarantee"] = {t: v * k for t, v in old["guarantee"].items()}
+                rep.interventions.append(why)
         if rep.interventions:
             self.shield_count += len(rep.interventions)
             self.last_shield = (rep.interventions + self.last_shield)[:10]
@@ -247,6 +319,48 @@ class Engine:
         self._heartbeat()
         if now - self._last_policy < 1e-6:
             self._record(wall, ach)
+
+    def _cellular(self, now: float, rd: float, ru: float) -> tuple[float, float]:
+        """Respect the radio's capacity on a cellular WAN; cut ahead of a sharp fade."""
+        c = self.cell.poll(now)
+        if not c:
+            return rd, ru
+        e = self.estimator
+        if c["fade"] and now - self._last_fade > 5.0:
+            self._last_fade = now
+            e.down.rate = max(e.down.min, e.down.rate * 0.8)
+            e.up.rate = max(e.up.min, e.up.rate * 0.8)
+            self.emit("estimator", f"cellular fade (SINR {c['sinr']:.0f} dB): rates cut ahead of the queue", "info")
+        cap = c["ceiling_kbit"]
+        e.down.rate = min(e.down.rate, max(e.down.min, cap))
+        e.up.rate = min(e.up.rate, max(e.up.min, cap * 0.5))
+        return e.down.rate, e.up.rate
+
+    def _experience_step(self, now: float, wall: float, flows: list) -> None:
+        names = self.devices
+        self.locator.update(flows, self.xp.lan, wall)
+        self.xp.update(flows, self.decisions, self.flow_tin, self.estimator, self.tin_view, self.enforcer.applied,
+                       self.loss_rt, names, self.locator.locate)
+        self.outcome.step(self.cfg, {"down": self.estimator.down.rate, "up": self.estimator.up.rate},
+                          self.demand or _zero_demand(), self.active_intents, self.enforcer.applied, now,
+                          self.estimator)
+        for o in self.offers.consider(self.xp.snapshot.get("apps", []), self.snapshot.get("devices", []),
+                                      self.estimator, self.active_intents, names, wall):
+            self.emit("offer", f"offered a boost for {o['device']}: {o['reason']}", "info")
+        # passive-first probing: when real TCP flows give plenty of RTT samples, probe the reflectors less
+        n = sum(getattr(f.hist[-1], "rw_n", 0) for f in flows if f.hist)
+        self.passive_rtt_ps = 0.8 * self.passive_rtt_ps + 0.2 * (n / WINDOW_S)
+        pr = self.estimator.prober
+        if pr is not None:
+            busy = self.passive_rtt_ps >= 10.0 and self.estimator.down.state not in ("bloat", "probe", "rebaseline")
+            pr.interval = (self.probe_base_ms * (3 if busy else 1)) / 1000.0
+        if now - self._last_ident >= 10.0:
+            self._last_ident = now
+            self.classifier.weak.maybe_refresh()
+            try:
+                self.idents = self.identity.refresh()
+            except Exception as ex:  # noqa: BLE001
+                self.emit("identity", f"device identity error: {ex}", "warn")
 
     def _policy_step(self, now: float, wall: float) -> None:
         self.table.roll_windows(now)
@@ -280,6 +394,10 @@ class Engine:
             self.marker.refresh(self.flow_tin)
         for it in acts:
             self.intents.assure(it, self._device_measure(it.target))
+        try:
+            self._experience_step(now, wall, flows)
+        except Exception as ex:  # noqa: BLE001 -- experience sensing must never stop shaping
+            self.emit("experience", f"experience sensing error ({type(ex).__name__}: {ex})", "error")
 
     def _device_measure(self, ip: str) -> dict:
         fl = [f for f in self.flows if f.lan_ip == ip]
@@ -432,7 +550,9 @@ class Engine:
             d["kbps_up"] = round(d["kbps_up"], 1)
             d["kbps_dn"] = round(d["kbps_dn"], 1)
             reg = self.devreg.get(d["ip"])
-            d["type"] = reg.get("type", "other")
+            auto = self.idents.get(d["ip"], {})
+            d["type"] = reg.get("type") or auto.get("type", "other")
+            d["type_source"] = "household" if reg.get("type") else (auto.get("why") or "")
             d["activity"] = activity(d["labels"])
             pu = reg.get("paused_until")
             d["paused"] = pu is not None and (pu == 0 or pu > time.time())
@@ -489,6 +609,7 @@ class Engine:
             "capture": self.capture.stats(),
             "grade": self.grade.summary(),
             "paused": self.paused,
+            "bypass": ({"until": self.bypass_until, "by": self.bypass_by} if self.bypass_until else None),
             "apply_log": list(self.apply_log)[:60],
             "schedules": self.scheduler.items,
             "budget": {"daily_min": self.intents.budget_min, "max_lease_s": self.intents.max_duration,
@@ -497,6 +618,17 @@ class Engine:
             "floors": dict(self.cfg["policy"]["floor_fraction"]),
             "proc": self.proc.sample(),
             "managed": {k: v for k, v in self.managed.doc.items() if k != "set"},
+            "experience": self.xp.snapshot,
+            "bottlenecks": self.locator.snapshot(),
+            "identity": self.idents,
+            "outcome": self.outcome.info(),
+            "l4s": {"mode": self.backend.l4s_mode(),
+                    "flows": sum(1 for a in self.xp.snapshot.get("apps", []) if a.get("l4s"))},
+            "cellular": self.cell.last or None,
+            "offers": self.offers.open(wall),
+            "camara_sessions": len(self.qod.sessions),
+            "probing": {"interval_ms": round((self.estimator.prober.interval if self.estimator.prober else 0) * 1000),
+                        "passive_rtt_per_s": round(self.passive_rtt_ps, 1)},
         }
 
     # ------------------------------------------------------------------ API actions
@@ -515,6 +647,7 @@ class Engine:
         with self.classifier.lock:
             self.classifier.ml = m
             self.classifier.model_error = None
+            self.classifier._init_aci()                # a new model starts from its own calibration
         self.cfg["classifier"]["model_path"] = path
         self.emit("model", f"classifier model switched to {os.path.basename(path)} "
                            f"({m.meta.get('trained_at', '?')}; previous {os.path.basename(old) if old else 'none'})", "info")

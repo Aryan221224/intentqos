@@ -87,7 +87,7 @@ class TestCapture(unittest.TestCase):
     def test_ipv4_tcp_udp_vlan(self):
         f = eth_ipv4("192.168.1.10", "1.2.3.4", 6, 40000, 443, 1500, flags=0x02)
         p = parse_frame(bytearray(f), len(f), len(f))
-        self.assertEqual(p, (4, "192.168.1.10", "1.2.3.4", 6, 40000, 443, 1500, 0x02))
+        self.assertEqual(p[:8], (4, "192.168.1.10", "1.2.3.4", 6, 40000, 443, 1500, 0x02))
         f = eth_ipv4("1.2.3.4", "192.168.1.10", 17, 3478, 50000, 200, vlan=True)
         p = parse_frame(bytearray(f), len(f), len(f))
         self.assertEqual(p[:7], (4, "1.2.3.4", "192.168.1.10", 17, 3478, 50000, 200))

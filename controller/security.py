@@ -7,7 +7,7 @@ import os
 import threading
 import time
 
-from intentqos import ed25519
+from intentqos import ed25519, release
 from intentqos.agent import canonical, sign_request
 
 ROLES = {
@@ -98,6 +98,24 @@ class ReleaseKey:
 
     def sign(self, payload: dict) -> str:
         return ed25519.sign(self.seed, canonical(payload)).hex()
+
+    def offline_seeds(self) -> list[bytes]:
+        """Extra release keys (release-offline-*.key beside the online key) for k-of-n model signing. In
+        production these stay offline and sign on a separate machine; files here are a lab stand-in."""
+        d = os.path.dirname(self.path) or "."
+        out = []
+        for n in sorted(os.listdir(d)):
+            if n.startswith("release-offline-") and n.endswith(".key"):
+                with open(os.path.join(d, n)) as f:
+                    out.append(bytes.fromhex(f.read().strip()))
+        return out
+
+    def targets_sigs(self, payload: dict) -> list[dict]:
+        """Signatures over a model's identity {version, sha256, size}: the online key plus any offline keys."""
+        return [release.sign_with(s, payload) for s in [self.seed] + self.offline_seeds()]
+
+    def instruction(self, kind: str, device: str, seq: int, body: dict) -> dict:
+        return release.make_instruction(self.seed, kind, device, seq, body)
 
     @property
     def pub_hex(self) -> str:

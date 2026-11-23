@@ -12,6 +12,12 @@ its trees (node count) and its per-class isotonic calibrators. Each tree is stor
 feature (int16, -1 = leaf), threshold (float64), left/right child (int32), plus a leaf table of
 class fractions (float32, one row per node).
 
+Phase-wise models (IntentQoS 2.0): the header may hold "phases", each with the flow ages it covers,
+the slice of members (forests) it uses, its own conformal threshold and its calibration scores. A flow
+is then judged by the forest trained on flows of its age, after NetBeacon's multi-phase design (Zhou
+et al., USENIX Security 2023): the first packets, the first seconds and steady state look different.
+Files without "phases" behave as one phase.
+
 Exactness: tests/test_treemodel.py checks the probabilities against scikit-learn on held-out data.
 """
 from __future__ import annotations
@@ -89,11 +95,31 @@ class TreeModel:
             self.members.append((trees, cals))
         if off != len(data):
             raise ValueError("model file has trailing or missing bytes")
+        n = len(self.members)
+        self.phases = []
+        for ph in hdr.get("phases") or [{"name": "all", "max_age": None, "members": [0, n], "qhat": self.qhat,
+                                         "cal_scores": hdr.get("cal_scores")}]:
+            a, b = ph["members"]
+            if not 0 <= a < b <= n:
+                raise ValueError("model phase refers to missing members")
+            self.phases.append({"name": ph.get("name", "all"), "max_age": ph.get("max_age"), "members": (a, b),
+                                "qhat": float(ph.get("qhat", self.qhat)),
+                                "cal_scores": sorted(ph.get("cal_scores") or [])})
 
-    def proba(self, x) -> list[float]:
+    def phase_of(self, age: float | None) -> int:
+        if age is None:
+            return len(self.phases) - 1
+        for i, ph in enumerate(self.phases):
+            if ph["max_age"] is None or age < ph["max_age"]:
+                return i
+        return len(self.phases) - 1
+
+    def proba(self, x, phase: int | None = None) -> list[float]:
         k = len(self.classes)
         acc = [0.0] * k
-        for trees, cals in self.members:
+        a, b = self.phases[phase if phase is not None else -1]["members"] if self.phases else (0, len(self.members))
+        members = self.members[a:b]
+        for trees, cals in members:
             raw = [0.0] * k
             for t in trees:
                 b = t.leaf(x) * k
@@ -106,14 +132,17 @@ class TreeModel:
             p = [1.0 / k] * k if s == 0 else [min(1.0, v / s) if v / s <= 1.0 + 1e-5 else v / s for v in p]
             for c in range(k):
                 acc[c] += p[c]
-        n = len(self.members)
-        return [a / n for a in acc]
+        n = len(members)
+        return [v / n for v in acc]
 
-    def predict(self, X):
+    def predict(self, X, ages=None, qhats: dict | None = None):
+        """[(label, prob, prediction_set, phase)]; `qhats` (phase -> threshold) overrides the stored ones."""
         out = []
-        for x in X:
-            p = self.proba(x)
-            pset = [self.classes[i] for i, pi in enumerate(p) if 1.0 - pi <= self.qhat]
+        for i, x in enumerate(X):
+            ph = self.phase_of(ages[i] if ages is not None else None)
+            p = self.proba(x, ph)
+            q = (qhats or {}).get(ph, self.phases[ph]["qhat"])
+            pset = [self.classes[c] for c, pi in enumerate(p) if 1.0 - pi <= q]
             j = max(range(len(p)), key=p.__getitem__)
-            out.append((self.classes[j], float(p[j]), pset))
+            out.append((self.classes[j], float(p[j]), pset, ph))
         return out

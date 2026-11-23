@@ -10,7 +10,11 @@ import threading
 import time
 import urllib.request
 
+from intentqos import release
 from . import security as S
+from .seqtest import SequentialGuard
+from .privagg import Aggregators
+from .camara_nb import CamaraNorthbound
 from .db import DB
 
 GRADE_ORDER = ["A+", "A", "B", "C", "D", "F"]
@@ -98,12 +102,22 @@ def mann_whitney_p(a: list[float], b: list[float]) -> float:
     return max(0.0, min(1.0, math.erfc(z / math.sqrt(2))))
 
 
+def model_sigs(m: dict) -> list[dict]:
+    """The release signatures stored for a model (a JSON list of {keyid, sig}; older rows hold one hex string)."""
+    v = jload(m.get("signature"), None)
+    return v if isinstance(v, list) else []
+
+
 class Controller:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         os.makedirs(cfg["data_dir"], exist_ok=True)
         self.db = DB(os.path.join(cfg["data_dir"], "controller.db"))
         self.key = S.ReleaseKey(os.path.join(cfg["data_dir"], "release.key"))
+        for m in self.db.q("SELECT id, signature FROM models"):     # older databases: one bare hex signature
+            if m["signature"] and not str(m["signature"]).startswith("["):
+                self.db.x("UPDATE models SET signature=? WHERE id=?",
+                          (jdump([{"keyid": release.keyid(self.key.pub), "sig": m["signature"]}]), m["id"]))
         self.nonces = S.NonceCache()
         self.cv = threading.Condition()
         self.cmd_events: dict[int, threading.Event] = {}
@@ -113,6 +127,9 @@ class Controller:
         self.ingest_count = 0
         self.started = now()
         self.lock = threading.Lock()
+        self.seq = SequentialGuard()
+        self.agg = Aggregators(self.db, cfg.get("agg_helper_url", ""))
+        self.camara = CamaraNorthbound(self)
 
     # ================================================================== audit / helpers
     def audit(self, actor: str, actor_type: str, action: str, target: str = "", detail=None, ip: str = "") -> None:
@@ -165,6 +182,9 @@ class Controller:
         t = now()
         recs = [r for r in body.get("records", []) if isinstance(r, dict) and r.get("t")]
         if recs:
+            scope = (self.sub_of(g) or {}).get("olt") or "unassigned"
+            for r in recs:                    # secret shares never sit next to the home's telemetry
+                self.agg.take(g, scope, r)
             self.db.many("INSERT INTO telemetry (gw, t, rec) VALUES (?,?,?)", [(g["id"], r["t"], jdump(r)) for r in recs])
             last = recs[-1]
             self.db.x("INSERT INTO latest (gw, t, rec) VALUES (?,?,?) ON CONFLICT(gw) DO UPDATE SET t=excluded.t, rec=excluded.rec",
@@ -192,11 +212,30 @@ class Controller:
         level = "standard" if consent.get("quality_improvement") else "basic"
         return {"commands": cmds, "interval": self.interval(), "level": level}
 
+    SIGNED_KINDS = {"apply_config": "config", "install_model": "model"}
+
+    def next_release_seq(self) -> int:
+        with self.lock:
+            n = int(self.db.meta("release_seq") or 0) + 1
+            self.db.set_meta("release_seq", n)
+            return n
+
     def take_commands(self, gw_id: int) -> list[dict]:
         rows = self.db.q("SELECT id, kind, args FROM commands WHERE gw=? AND status='pending' ORDER BY id", (gw_id,))
-        if rows:
-            self.db.many("UPDATE commands SET status='sent', sent=? WHERE id=?", [(now(), r["id"]) for r in rows])
-        return [{"id": r["id"], "kind": r["kind"], "args": jload(r["args"], {})} for r in rows]
+        if not rows:
+            return []
+        self.db.many("UPDATE commands SET status='sent', sent=? WHERE id=?", [(now(), r["id"]) for r in rows])
+        dev = self.db.val("SELECT device_id FROM gateways WHERE id=?", (gw_id,)) or ""
+        out = []
+        for r in rows:
+            args = jload(r["args"], {})
+            kind = self.SIGNED_KINDS.get(r["kind"])
+            if kind and "body" in args:
+                # TUF-style instruction: bound to this gateway, monotonic sequence, short expiry
+                args = {"envelope": self.key.instruction(kind, dev, self.next_release_seq(), args["body"]),
+                        "by": args.get("by")}
+            out.append({"id": r["id"], "kind": r["kind"], "args": args})
+        return out
 
     def wait(self, g: dict, timeout: float) -> dict:
         end = now() + min(30.0, timeout)
@@ -286,7 +325,8 @@ class Controller:
         ver = int(g["desired_config_version"] or 0) + 1
         payload = {"version": ver, "profile": name, "set": st}
         self.db.x("UPDATE gateways SET desired_config_version=? WHERE id=?", (ver, gw_id))
-        return self.enqueue(gw_id, "apply_config", {**payload, "signature": self.key.sign(payload), "by": by}, by, rollout_id)
+        # signed at delivery (take_commands): the envelope then carries a fresh sequence number and expiry
+        return self.enqueue(gw_id, "apply_config", {"body": payload, "by": by}, by, rollout_id)
 
     # ================================================================== alerts & incidents
     def _streak(self, gw_id: int, rule: str, active: bool) -> int:
@@ -452,7 +492,7 @@ class Controller:
         if self.db.one("SELECT id FROM rollouts WHERE status IN ('running','paused')"):
             raise ValueError("another rollout is running; finish or halt it first")
         gr = {"max_p95_increase_ms": 5.0, "max_p95_increase_rel": 0.2, "p_value": 0.05, "max_failure_rate": 0.05,
-              "auto_rollback": True, **(guardrails or {})}
+              "auto_rollback": True, "test": "msprt", **(guardrails or {})}
         rid = self.db.x("INSERT INTO rollouts (kind, target, name, stages, stage, status, guardrails, created_by, created, "
                         "stage_started, previous) VALUES (?,?,?,?,0,'running',?,?,?,?,'{}')",
                         (kind, str(target), name, jdump(stages), jdump(gr), by, now(), now()))
@@ -478,8 +518,9 @@ class Controller:
             else:
                 prev[str(g["id"])] = g["model_version"]
                 m = self.db.one("SELECT * FROM models WHERE version=?", (r["target"],))
-                self.enqueue(g["id"], "install_model", {"version": m["version"], "sha256": m["sha256"], "size": m["size"],
-                                                        "signature": m["signature"]}, f"rollout {r['name']}", rid)
+                self.enqueue(g["id"], "install_model", {"body": {"version": m["version"], "sha256": m["sha256"],
+                                                                 "size": m["size"], "targets_sigs": model_sigs(m)},
+                                                        "by": f"rollout {r['name']}"}, f"rollout {r['name']}", rid)
         self.db.x("UPDATE rollouts SET previous=?, stage=?, stage_started=? WHERE id=?", (jdump(prev), stage, now(), rid))
 
     def rollout_eval(self, rid: int) -> dict:
@@ -498,15 +539,19 @@ class Controller:
         n_fail = sum(1 for m in members.values() if m["status"] == "failed")
         fail_rate = n_fail / max(1, len(members))
         gr = jload(r["guardrails"], {})
+        # always-valid p (mSPRT): the guard looks at every tick, which a fixed-sample test does not allow
+        p_seq = self.seq.update((rid, r["stage"]), canary, control, float(gr.get("max_p95_increase_ms", 5.0)))
+        p_use = p_seq if gr.get("test", "msprt") == "msprt" else p
         breach = []
         if mc is not None and mk is not None:
             inc = mc - mk
-            if inc > gr["max_p95_increase_ms"] and inc > gr["max_p95_increase_rel"] * max(mk, 1) and p < gr["p_value"]:
+            if inc > gr["max_p95_increase_ms"] and inc > gr["max_p95_increase_rel"] * max(mk, 1) and p_use < gr["p_value"]:
                 breach.append(f"delay added under load got worse on updated homes: median p95 {mc:.1f} ms vs {mk:.1f} ms "
-                              f"on the rest (p = {p:.3g})")
+                              f"on the rest (always-valid p = {p_seq:.3g}; fixed-sample p = {p:.3g})")
         if fail_rate > gr["max_failure_rate"]:
             breach.append(f"{n_fail} of {len(members)} homes failed to apply the update")
         return {"canary_n": len(canary), "control_n": len(control), "canary_p95": mc, "control_p95": mk, "p": p,
+                "p_seq": p_seq, "looks": self.seq.looks.get((rid, r["stage"]), 0), "test": gr.get("test", "msprt"),
                 "fail": n_fail, "members": len(members), "breach": breach,
                 "acked": sum(1 for m in members.values() if m["status"] in ("ok", "failed"))}
 
@@ -589,6 +634,7 @@ class Controller:
         self.db.x("DELETE FROM rollup5 WHERE t < ?", (t - r.get("rollup_days", 90) * 86400,))
         self.db.x("DELETE FROM events WHERE t < ?", (t - r.get("events_days", 90) * 86400,))
         self.db.x("DELETE FROM sessions WHERE expires < ?", (t,))
+        self.agg.prune(r.get("agg_days", 7) * 86400)
 
     def fleet_summary(self) -> dict:
         t = now()
@@ -630,6 +676,17 @@ class Controller:
                 "incidents": self.db.q("SELECT * FROM incidents WHERE status != 'resolved' ORDER BY opened DESC"),
                 "rollout": self.db.one("SELECT id, name, kind, status, stage, stages FROM rollouts ORDER BY id DESC LIMIT 1"),
                 "regions": regions, "ingest_per_s": round(rate, 1)}
+
+    def fleet_private_qoo(self, hours: float = 1.0) -> dict:
+        """QoO histograms per OLT, released only through the two-aggregator path for batches of 5+ homes."""
+        olts = [r["olt"] or "unassigned" for r in self.db.q("SELECT DISTINCT s.olt FROM subscribers s JOIN gateways g ON "
+                                                             "g.subscriber_id=s.id WHERE g.device_id IS NOT NULL")]
+        demo = not self.agg.helper_url
+        return {"batches": self.agg.fleet(sorted(set(olts)), hours), "hours": hours,
+                "helper": self.agg.helper_url or "local (both roles on this console)",
+                "privacy": ("Demonstration: this console holds both shares, so it is not private against the console; "
+                            "set agg_helper_url to a separately operated helper for real separation") if demo else
+                           "Two parties: neither aggregator alone sees a home's histogram (no Prio3 validity proofs yet)"}
 
     def fleet_trend(self, hours: float = 6) -> list[dict]:
         rows = self.db.q("SELECT t, COUNT(*) n, SUM(CASE WHEN grade IN ('C','D','F') THEN 1 ELSE 0 END) poor, "
@@ -754,7 +811,67 @@ class Controller:
         for k in ("blind", "drift", "lease_degraded", "cpu_high", "watchdog_trip", "apply_failures"):
             if k in alerts:
                 ev.append(alerts[k]["detail"])
-        return {"verdict": verdict, "where": where, "evidence": ev, "actions": actions, "t": now()}
+        loc = self.localise(gw_id, rec, sub)
+        if loc and where == "in-home-wifi-or-device" and loc["segment"] != "unknown":
+            verdict = loc["summary"]
+            where = {"home-wifi": "in-home-wifi-or-device", "access": "home-line", "olt": "network",
+                     "upstream": "upstream-or-usage", "none": where}.get(loc["segment"], where)
+        return {"verdict": verdict, "where": where, "evidence": ev, "actions": actions, "localisation": loc, "t": now()}
+
+    def localise(self, gw_id: int, rec: dict, sub: dict) -> dict | None:
+        """Which segment adds the delay: home Wi-Fi, access line, the OLT/aggregation, or upstream?
+
+        ΔQ splits a path's delay into G (the floor: distance and routing) and V (what queues add above it).
+        The gateway measures both passively for the internet path and the LAN round trip per device. Comparing
+        this home with the other homes on its OLT separates causes: V high here only = this home's access line
+        or usage; V high on most of the OLT = shared congestion at the OLT or aggregation; G raised on many homes
+        = a routing or peering change upstream; a slow LAN round trip with steady packets = Wi-Fi.
+        """
+        xp = rec.get("xp") or {}
+        if not xp:
+            return None
+        ev, seg = [], "none"
+        peers = []
+        if sub.get("olt"):
+            for r in self.db.q("SELECT l.rec FROM latest l JOIN gateways g ON g.id=l.gw JOIN subscribers s ON "
+                               "s.id=g.subscriber_id WHERE s.olt=? AND g.id != ? AND l.t > ?", (sub["olt"], gw_id, now() - 900)):
+                x = (jload(r["rec"], {}) or {}).get("xp") or {}
+                if x.get("v99") is not None or x.get("g") is not None:
+                    peers.append(x)
+        pv = median([p["v99"] for p in peers if p.get("v99") is not None])
+        pg = median([p["g"] for p in peers if p.get("g") is not None])
+        v99, g = xp.get("v99"), xp.get("g")
+        wifi = (xp.get("bottlenecks") or {}).get("wifi", 0)
+        lan = xp.get("lan_rtt_p99_max")
+        if g is not None:
+            ev.append(f"Internet path floor G {g} ms" + (f" (OLT peers median {pg} ms)" if pg is not None else ""))
+        if v99 is not None:
+            ev.append(f"Queueing above the floor V p99 {v99} ms" + (f" (OLT peers median {pv} ms)" if pv is not None else ""))
+        if lan is not None:
+            ev.append(f"Slowest in-home round trip p99 {lan} ms; {wifi} device(s) limited by Wi-Fi")
+        busy_peers = sum(1 for p in peers if (p.get("v99") or 0) > 30)
+        if len(peers) >= 3 and busy_peers >= 0.5 * len(peers) and (v99 or 0) > 30:
+            seg = "olt"
+            summ = (f"Queueing delay is high on {busy_peers + 1} of {len(peers) + 1} homes on {sub['olt']}: shared congestion "
+                    "at the OLT or aggregation, not this home.")
+        elif g is not None and pg is not None and len(peers) >= 3 and g > pg + 20:
+            seg = "upstream"
+            summ = (f"This home's path floor is {round(g - pg)} ms above its OLT peers while queueing is normal: a routing or "
+                    "peering difference upstream.")
+        elif len(peers) >= 3 and v99 is not None and v99 > 30 and pv is not None and pv < 15:
+            seg = "access"
+            summ = ("Queueing delay is high on this home only while its OLT peers are fine: this home's access line or its own "
+                    "heavy use.")
+        elif wifi and (lan or 0) > 15:
+            seg = "home-wifi"
+            summ = (f"The internet path is healthy; {wifi} device(s) are limited by Wi-Fi (steady packets, {lan} ms round trip "
+                    "inside the home).")
+        elif v99 is None and g is None:
+            seg, summ = "unknown", "Not enough passive delay samples yet to locate the cause."
+        else:
+            summ = "No segment adds notable delay right now."
+        return {"segment": seg, "summary": summ, "evidence": ev, "peers": len(peers),
+                "method": "ΔQ G/V decomposition (passive TCP timestamps) compared with homes on the same OLT"}
 
     # ================================================================== consumer app services
     def notify(self, sub_id: int, kind: str, title: str, body: str, ref: str = "") -> None:

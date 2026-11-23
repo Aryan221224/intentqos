@@ -26,7 +26,7 @@ import zlib
 from . import profile as PR
 from . import testbed as TB
 from .runner import Run
-from .scenarios import SCENARIOS
+from .scenarios import ARMS, SCENARIOS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -69,8 +69,8 @@ def main(argv=None) -> int:
         for seed in range(a.first_seed, a.first_seed + a.seeds):
             for sname in scen:
                 fn, arms = SCENARIOS[sname]
-                if a.arms:
-                    arms = [x for x in a.arms.split(",") if x in arms]
+                if a.arms:   # a scenario's own arms, plus ablation arms named explicitly (e.g. adaptive_ml_no_outcome)
+                    arms = [x for x in a.arms.split(",") if x in arms or (x in ARMS and x.startswith("adaptive_ml_no_"))]
                 order = list(arms)
                 random.Random(seed * 1000 + zlib.crc32(sname.encode()) % 997).shuffle(order)
                 for arm in order:

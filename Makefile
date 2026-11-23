@@ -11,10 +11,19 @@ help:
 
 router:             ## cross-compile the capture helper (needs musl cross toolchains in MUSL_CROSS=…/bin dirs) + host build
 	cc -O2 -Wall -Wextra -o router/iq-capture router/iq-capture.c
-	@for t in aarch64-unknown-linux-musl:aarch64 armv7-unknown-linux-musleabihf:armv7 mipsel-unknown-linux-musl:mipsel x86_64-unknown-linux-musl:x86_64; do \
-	  tc=$${t%%:*}; n=$${t##*:}; cc=$(MUSL_CROSS)/$$tc/bin/$$tc-gcc; \
+	@if command -v clang >/dev/null; then \
+	  inc=$$(ls -d /usr/include/$$(uname -m)-linux-gnu 2>/dev/null | head -1); \
+	  clang -O2 -g -Wall -target bpfel $${inc:+-I$$inc} -c router/iq-flow.bpf.c -o router/iq-flow.bpf.o && \
+	  clang -O2 -g -Wall -target bpfeb $${inc:+-I$$inc} -c router/iq-flow.bpf.c -o router/iq-flow-eb.bpf.o && \
+	  { s=$$(command -v llvm-strip || true); [ -n "$$s" ] && $$s -g router/iq-flow.bpf.o router/iq-flow-eb.bpf.o; true; } && \
+	  echo "built kernel flow engine (bpfel, bpfeb)"; else echo "skip kernel flow engine (no clang)"; fi
+	@for t in aarch64-unknown-linux-musl:aarch64:aarch64-linux-musl: armv7-unknown-linux-musleabihf:armv7:arm-linux-musleabihf:-mcpu=cortex_a7 \
+	         mipsel-unknown-linux-musl:mipsel:mipsel-linux-musleabi:-mcpu=mips32r2+-msoft-float x86_64-unknown-linux-musl:x86_64:x86_64-linux-musl:; do \
+	  tc=$$(echo $$t | cut -d: -f1); n=$$(echo $$t | cut -d: -f2); zt=$$(echo $$t | cut -d: -f3); zf=$$(echo $$t | cut -d: -f4 | tr + ' '); \
+	  cc=$(MUSL_CROSS)/$$tc/bin/$$tc-gcc; \
 	  if [ -x "$$cc" ]; then $$cc -O2 -static -s -Wall -o router/bin/iq-capture.$$n router/iq-capture.c && echo "built $$n"; \
-	  else echo "skip $$n (no $$cc)"; fi; done
+	  elif $(PY) -m ziglang version >/dev/null 2>&1; then $(PY) -m ziglang cc -target $$zt $$zf -O2 -static -s -Wall -o router/bin/iq-capture.$$n router/iq-capture.c && echo "built $$n (zig cc)"; \
+	  else echo "skip $$n (no $$cc; pip install ziglang to cross-compile with zig)"; fi; done
 
 ipk:                ## OpenWrt packages in router/dist/
 	$(PY) router/build_ipk.py

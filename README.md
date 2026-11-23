@@ -12,6 +12,27 @@ logged and reversible, and an independent watchdog restores a safe state if the 
 
 **Reviewing this project? Start with [`docs/JUDGES.md`](docs/JUDGES.md)** (five minutes).
 
+**New in 2.0** ([`docs/INNOVATIONS.md`](docs/INNOVATIONS.md) has what each one does, what was measured, and
+what is emulation or simulated):
+
+* The control loop chooses its settings by predicted **Quality of Outcome** of the live apps and refuses plans
+  that would hurt a call, a game or a boosted device.
+* **Experience sensing from headers**: passive round trips from TCP timestamps (split into internet and
+  in-home parts) and QUIC spin bits, ECN and L4S, retransmissions, video frame bursts; per-app QoO and ΔQ.
+* An opt-in **kernel flow engine** (eBPF at tc) that keeps the same per-flow statistics without copying
+  packets to user space and applies class decisions before netfilter.
+* A **whole-home bottleneck locator** (Wi-Fi or the line, per device) and an RFC 8325 Wi-Fi QoS map.
+* An **L4S lane**, `cake_mq` and DualPI2 support where the kernel has them.
+* A **drift-aware classifier**: per-phase forests by flow age, one-sided adaptive conformal sets, weak labels.
+* The **Test Kit** reports QoO, ΔQ, RPM (IETF responsiveness), home-network capacity (RFC 9097 method) and a
+  percentile summary next to TRAI's 2024 reference values.
+* **CAMARA Quality-on-Demand** at the router and at the operator (the access-network part is simulated),
+  proactive boost offers, and requests in plain words (English and some Hindi) confirmed before they apply.
+* **Private fleet statistics** (two secret shares, totals only for 5+ homes), TUF-style signed instructions,
+  always-valid sequential rollout tests, a TR-181 data model, and ΔQ fault localisation.
+
+![Gateway console, Experience view](docs/img/gateway-experience.png)
+
 | Gateway console (on the router) | Operator console (at the ISP) | Subscriber app (on the phone) |
 |---|---|---|
 | ![Gateway console, Monitor](docs/img/gateway-monitor.png) | ![Operator console, fleet overview](docs/img/ops-overview.png) | ![Subscriber app, home](docs/img/app-home.png) |
@@ -24,6 +45,7 @@ help, account and the Hindi home screen in the app. All taken from the running l
 
 | Where | How |
 |---|---|
+| **Real router and devices** (home kit) | One program per device: `IntentQoS Operator Console.exe` on the operator laptop, `IntentQoS Router Setup.exe` installs onto the GL.iNet/OpenWrt router over SSH, `IntentQoS Test Kit.exe` measures off vs on, `IntentQoS 4G Bridge.exe` for the failover test, the phone scans a QR code. They pair with a PIN and run as one system. [`docs/KIT.md`](docs/KIT.md) (build: `python3 kit/build.py`) |
 | **Windows 10/11** (WSL 2) | Double-click `dist/IntentQoS Demo (all three).exe`, or one part: `IntentQoS Gateway.exe`, `IntentQoS Operator Console.exe`, `SampleNet Home App.exe`. `Stop IntentQoS.exe` stops everything. First start installs into WSL in about a minute. [`launcher/README.md`](launcher/README.md) |
 | **Linux** (root) | `sudo scripts/stack.sh up`, then http://localhost:8090/ (gateway), http://localhost:8088/ops/ (operator), http://localhost:8088/app/ (subscriber). `sudo scripts/stack.sh down` |
 | **Nothing installed** | Open [`docs/console-replay.html`](docs/console-replay.html): the gateway console replaying a recorded session, labelled as a replay |
@@ -37,13 +59,14 @@ computer; it is off by default in the code.
 
 | Part | Runs on | Used by | What it does |
 |---|---|---|---|
-| **Gateway** | the home router (OpenWrt / prplOS, ARM or MIPS) | engineers; households through the app | classification, capacity estimation, shaping with a safety shield, intent leases, watchdog, agent. One 324 KiB `.ipk` plus a 54-82 KB static C capture helper per CPU; pure-Python model runtime. 2.7 % of a core and 25 MB on x86. [`docs/ROUTER_PROFILE.md`](docs/ROUTER_PROFILE.md) |
-| **Fleet controller** | the ISP's data centre | network operations, support desk, change management, billing systems | zero-touch enrolment, alerts, OLT incident correlation, "home or network?" diagnosis, remote console, signed config and model rollouts with an automatic statistical guard, TRAI-style QoE reports, roles and audit, northbound API and webhooks. [`docs/CONTROLLER.md`](docs/CONTROLLER.md) |
+| **Gateway** | the home router (OpenWrt / prplOS, ARM or MIPS) | engineers; households through the app | classification, capacity estimation, shaping with a safety shield, intent leases, watchdog, agent. One 601 KiB `.ipk` (most of it the phase-wise model) plus a 76-142 KB static C capture helper per CPU; pure-Python model runtime. 2.7 % of a core and 25 MB on x86 in the 1.x profile; the 2.0 engine with the experience features measured 2.0 % and 29 MB under the lab's light household load (not the same workload). [`docs/ROUTER_PROFILE.md`](docs/ROUTER_PROFILE.md) |
+| **Fleet controller** | the ISP's data centre | network operations, support desk, change management, billing systems | zero-touch enrolment, alerts, OLT incident correlation, "home or network?" diagnosis, remote console, signed config and model rollouts with an always-valid sequential guard, private per-OLT QoO statistics, CAMARA Quality-on-Demand, TRAI-style QoE reports, roles and audit, northbound API and webhooks. [`docs/CONTROLLER.md`](docs/CONTROLLER.md) |
 | **Subscriber app** | the subscriber's phone (ISP-branded, English and हिन्दी) | the household | status in plain words, what each device is using, pause, boost, speed test from the router, outage notices, plan and renewal, reports with replies, DPDP privacy controls. [`docs/CONSUMER_APP.md`](docs/CONSUMER_APP.md) |
 
 The router talks to the controller over an outbound-only, signed protocol that maps onto TR-369/USP
 ([`docs/AGENT_PROTOCOL.md`](docs/AGENT_PROTOCOL.md)). Who uses what and why: [`docs/PRODUCT.md`](docs/PRODUCT.md).
 Installing each part for real: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+On your own router and devices, without an ISP: the home kit, [`docs/KIT.md`](docs/KIT.md).
 
 | Measured in the lab | Result |
 |---|---|
