@@ -1,0 +1,232 @@
+test_same_aggregates (test_capture_helper.TestHelperMatchesPython.test_same_aggregates) ... ok
+test_same_experience_fields (test_capture_helper.TestHelperMatchesPython.test_same_experience_fields)
+TCP-timestamp RTT, ECN, DSCP, retransmissions and QUIC spin: counts must agree exactly. ... ok
+test_activity_prefers_the_most_sensitive_use (test_console.TestDevices.test_activity_prefers_the_most_sensitive_use) ... ok
+test_registry_merges_config_and_persists (test_console.TestDevices.test_registry_merges_config_and_persists) ... ok
+test_p95_ignores_one_spike_and_window_expires (test_console.TestGrade.test_p95_ignores_one_spike_and_window_expires) ... ok
+test_thresholds_match_waveform (test_console.TestGrade.test_thresholds_match_waveform) ... ok
+test_modes_are_valid_lease_requests (test_console.TestModesAndSchedules.test_modes_are_valid_lease_requests) ... ok
+test_schedule_outside_window_does_nothing (test_console.TestModesAndSchedules.test_schedule_outside_window_does_nothing) ... ok
+test_schedule_starts_one_lease_per_day_inside_its_window (test_console.TestModesAndSchedules.test_schedule_starts_one_lease_per_day_inside_its_window) ... ok
+test_sample_shape (test_console.TestProc.test_sample_shape) ... ok
+test_adaptive_conformal_widens_after_misses_and_narrows_after_hits (test_innovations.DriftProofClassifier.test_adaptive_conformal_widens_after_misses_and_narrows_after_hits) ... ok
+test_ms365_optimize_endpoints_become_call_labels (test_innovations.DriftProofClassifier.test_ms365_optimize_endpoints_become_call_labels) ... ok
+test_router_model_routes_by_flow_age (test_innovations.DriftProofClassifier.test_router_model_routes_by_flow_age) ... /home/claude/aryan221224/intentqos/intentqos/treemodel.py:52: ResourceWarning: unclosed file <_io.FileIO name=6 mode='wb' closefd=True>
+  def __init__(self, x, y):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/intentqos/treemodel.py:52: ResourceWarning: unclosed file <_io.FileIO name=8 mode='rb' closefd=True>
+  def __init__(self, x, y):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/intentqos/treemodel.py:52: ResourceWarning: unclosed file <_io.FileIO name=10 mode='rb' closefd=True>
+  def __init__(self, x, y):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_bulk_offload_ruleset (test_innovations.EnforcementCommands.test_bulk_offload_ruleset) ... ok
+test_l4s_leaf_and_cake_mq (test_innovations.EnforcementCommands.test_l4s_leaf_and_cake_mq) ... ok
+test_rtt_split_ecn_retx_and_spin (test_innovations.Experience.test_rtt_split_ecn_retx_and_spin) ... ok
+test_app_session_gets_measured_latency_and_qoo (test_innovations.ExperienceSessions.test_app_session_gets_measured_latency_and_qoo) ... ok
+test_call_frames_per_second (test_innovations.ExperienceSessions.test_call_frames_per_second) ... ok
+test_cellular_ceiling (test_innovations.IdentityAndCellular.test_cellular_ceiling) ... ok
+test_identity_rules (test_innovations.IdentityAndCellular.test_identity_rules) ... ok
+test_arguments_and_class_table (test_innovations.KernelEngineCommands.test_arguments_and_class_table) ... ok
+test_marker_hands_changes_to_the_kernel (test_innovations.KernelEngineCommands.test_marker_hands_changes_to_the_kernel) ... ok
+test_verdict_lines (test_innovations.KernelEngineCommands.test_verdict_lines) ... ok
+test_capacity_and_prediction (test_innovations.OutcomeControl.test_capacity_and_prediction) ... ok
+test_gate_refuses_a_plan_that_starves_a_call (test_innovations.OutcomeControl.test_gate_refuses_a_plan_that_starves_a_call) ... ok
+test_safe_tuner_returns_to_the_safe_setting (test_innovations.OutcomeControl.test_safe_tuner_returns_to_the_safe_setting) ... ok
+test_composition_and_queue_model (test_innovations.QoOAndDeltaQ.test_composition_and_queue_model) ... ok
+test_config_overrides (test_innovations.QoOAndDeltaQ.test_config_overrides) ... ok
+test_interpolation_and_minimum (test_innovations.QoOAndDeltaQ.test_interpolation_and_minimum) ... ok
+test_agent_refuses_replayed_config (test_innovations.ReleaseEnvelopes.test_agent_refuses_replayed_config) ... /usr/local/lib/python3.13/json/encoder.py:265: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='utf-8'>
+  def _make_iterencode(markers, _default, _encoder, _indent, _floatstr,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/json/encoder.py:265: ResourceWarning: unclosed file <_io.TextIOWrapper name=5 encoding='utf-8'>
+  def _make_iterencode(markers, _default, _encoder, _indent, _floatstr,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/json/encoder.py:265: ResourceWarning: unclosed file <_io.TextIOWrapper name=7 encoding='utf-8'>
+  def _make_iterencode(markers, _default, _encoder, _indent, _floatstr,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_expired_instruction_is_refused (test_innovations.ReleaseEnvelopes.test_expired_instruction_is_refused) ... ok
+test_other_gateway_and_tampering_are_refused (test_innovations.ReleaseEnvelopes.test_other_gateway_and_tampering_are_refused) ... ok
+test_replay_of_an_older_instruction_is_refused (test_innovations.ReleaseEnvelopes.test_replay_of_an_older_instruction_is_refused) ... ok
+test_threshold_needs_distinct_trusted_keys (test_innovations.ReleaseEnvelopes.test_threshold_needs_distinct_trusted_keys) ... ok
+test_valid_instruction_passes (test_innovations.ReleaseEnvelopes.test_valid_instruction_passes) ... ok
+test_cvt (test_innovations.WifiLocator.test_cvt) ... ok
+test_station_dump_and_qos_map (test_innovations.WifiLocator.test_station_dump_and_qos_map) ... ok
+test_sundaresan_rule (test_innovations.WifiLocator.test_sundaresan_rule) ... ok
+test_one_slow_home_points_at_its_access_line (test_innovations_fleet.Localisation.test_one_slow_home_points_at_its_access_line) ... ok
+test_raised_floor_points_upstream (test_innovations_fleet.Localisation.test_raised_floor_points_upstream) ... ok
+test_shared_congestion_points_at_the_olt (test_innovations_fleet.Localisation.test_shared_congestion_points_at_the_olt) ... ok
+test_slow_lan_round_trip_points_at_wifi (test_innovations_fleet.Localisation.test_slow_lan_round_trip_points_at_wifi) ... ok
+test_access_network_refuses_when_full_and_releases_on_home_refusal (test_innovations_fleet.OperatorCamara.test_access_network_refuses_when_full_and_releases_on_home_refusal) ... /home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fc220>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd120>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd300>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd4e0>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_session_spans_home_and_access (test_innovations_fleet.OperatorCamara.test_session_spans_home_and_access) ... ok
+test_drafter_output_must_pass_the_schema (test_innovations_fleet.PlainLanguage.test_drafter_output_must_pass_the_schema) ... ok
+test_english_requests (test_innovations_fleet.PlainLanguage.test_english_requests) ... ok
+test_hindi_words_and_requester_device (test_innovations_fleet.PlainLanguage.test_hindi_words_and_requester_device) ... ok
+test_unclear_requests_ask_back (test_innovations_fleet.PlainLanguage.test_unclear_requests_ask_back) ... ok
+test_agent_summary_reads_the_engine_snapshot (test_innovations_fleet.PrivateAggregation.test_agent_summary_reads_the_engine_snapshot) ... ok
+test_controller_releases_only_batches_of_five_homes_and_keeps_shares_out_of_telemetry (test_innovations_fleet.PrivateAggregation.test_controller_releases_only_batches_of_five_homes_and_keeps_shares_out_of_telemetry) ... ok
+test_implausible_total_is_withheld (test_innovations_fleet.PrivateAggregation.test_implausible_total_is_withheld) ... ok
+test_separate_helper_service (test_innovations_fleet.PrivateAggregation.test_separate_helper_service) ... /usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed <socket.socket fd=13, family=2, type=1, proto=0, laddr=('127.0.0.1', 45921)>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_shares_add_up_and_one_share_alone_says_nothing (test_innovations_fleet.PrivateAggregation.test_shares_add_up_and_one_share_alone_says_nothing) ... ok
+test_no_offer_on_a_quiet_line (test_innovations_fleet.ProactiveOffers.test_no_offer_on_a_quiet_line) ... ok
+test_offer_for_a_call_on_a_busy_line_then_accept (test_innovations_fleet.ProactiveOffers.test_offer_for_a_call_on_a_busy_line_then_accept) ... ok
+test_errors_use_camara_codes (test_innovations_fleet.RouterCamara.test_errors_use_camara_codes) ... ok
+test_session_lifecycle (test_innovations_fleet.RouterCamara.test_session_lifecycle) ... ok
+test_harmful_update_is_caught_early (test_innovations_fleet.SequentialRollouts.test_harmful_update_is_caught_early) ... ok
+test_harmless_update_rarely_fails_however_often_it_is_checked (test_innovations_fleet.SequentialRollouts.test_harmless_update_rarely_fails_however_often_it_is_checked) ... ok
+test_p_value_never_rises (test_innovations_fleet.SequentialRollouts.test_p_value_never_rises) ... ok
+test_tr181_paths (test_innovations_fleet.UspModel.test_tr181_paths) ... ok
+test_same_counts_and_round_trips_and_verdicts_apply (test_kernel_engine.KernelEngine.test_same_counts_and_round_trips_and_verdicts_apply) ... /usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name=20 encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name=21 encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name=23 encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name=22 encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name=24 encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/unittest/case.py:606: ResourceWarning: unclosed file <_io.TextIOWrapper name=26 encoding='utf-8'>
+  if method() is not None:
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_bad_serial_rejected (test_kit.KitMode.test_bad_serial_rejected) ... ok
+test_router_pairing_creates_gateway_plan_and_household (test_kit.KitMode.test_router_pairing_creates_gateway_plan_and_household) ... <frozen posixpath>:82: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd5d0>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+<frozen posixpath>:82: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fc220>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+<frozen posixpath>:82: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd990>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+<frozen posixpath>:82: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fda80>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+<frozen posixpath>:82: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fde40>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+<frozen posixpath>:82: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fe890>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_testkit_token_and_reports (test_kit.KitMode.test_testkit_token_and_reports) ... ok
+test_wrong_pins_lock_pairing (test_kit.KitMode.test_wrong_pins_lock_pairing) ... ok
+test_matches_tomllib_on_router_config (test_kit.MiniToml.test_matches_tomllib_on_router_config) ... ok
+test_matches_tomllib_on_shipped_configs (test_kit.MiniToml.test_matches_tomllib_on_shipped_configs) ... /home/claude/aryan221224/intentqos/tests/test_kit.py:29: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/aryan221224/intentqos/config/testbed.toml' mode='r' encoding='utf-8'>
+  self.assertEqual(C._mini_toml(open(p).read()), tomllib.load(fh), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/tests/test_kit.py:29: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/claude/aryan221224/intentqos/config/example-router.toml' mode='r' encoding='utf-8'>
+  self.assertEqual(C._mini_toml(open(p).read()), tomllib.load(fh), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_installer_scripts_parse (test_kit.RouterPayload.test_installer_scripts_parse) ... ok
+test_payload_contents (test_kit.RouterPayload.test_payload_contents) ... ok
+test_emodel_and_jitter (test_modules.TestAnalysis.test_emodel_and_jitter) ... <frozen importlib._bootstrap>:1358: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fe980>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+<frozen importlib._bootstrap>:1358: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd5d0>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_features_shape (test_modules.TestCapture.test_features_shape) ... ok
+test_flow_direction_and_canonical_key (test_modules.TestCapture.test_flow_direction_and_canonical_key) ... ok
+test_ipv4_tcp_udp_vlan (test_modules.TestCapture.test_ipv4_tcp_udp_vlan) ... ok
+test_ipv6_with_extension_header (test_modules.TestCapture.test_ipv6_with_extension_header) ... ok
+test_payload_never_parsed (test_modules.TestCapture.test_payload_never_parsed) ... ok
+test_correction_overrides_and_anti_flap (test_modules.TestClassifier.test_correction_overrides_and_anti_flap) ... ok
+test_demotion_needs_sustained_evidence (test_modules.TestClassifier.test_demotion_needs_sustained_evidence)
+A streaming flow that briefly looks like a download is not demoted; a promotion is quick. ... ok
+test_labels_survive_an_engine_restart (test_modules.TestClassifier.test_labels_survive_an_engine_restart)
+A flow decided before a restart keeps its class when the restarted engine sees it mid-stream. ... ok
+test_page_hinkley_detects_shift (test_modules.TestClassifier.test_page_hinkley_detects_shift) ... ok
+test_rules_bulk_needs_sustained_rate (test_modules.TestClassifier.test_rules_bulk_needs_sustained_rate) ... ok
+test_rules_udp (test_modules.TestClassifier.test_rules_udp) ... ok
+test_bloat_cuts_below_achieved (test_modules.TestEstimator.test_bloat_cuts_below_achieved) ... ok
+test_increase_is_bounded_and_blind_mode_caps (test_modules.TestEstimator.test_increase_is_bounded_and_blind_mode_caps) ... ok
+test_path_shift_at_the_floor_is_relearned (test_modules.TestEstimator.test_path_shift_at_the_floor_is_relearned)
+The longer path appears while we carry little traffic, so the first cuts land on the floor; the drain ... ok
+test_path_shift_is_relearned_not_chased (test_modules.TestEstimator.test_path_shift_is_relearned_not_chased)
+Failover to a longer path: delay +25 ms whatever we send. Cut a few times, then re-learn, rate back. ... ok
+test_real_queue_is_not_relearned (test_modules.TestEstimator.test_real_queue_is_not_relearned)
+A real standing queue drains when we cut: the delay falls, so no re-baseline happens. ... ok
+test_lease_lifecycle_budget_and_conflicts (test_modules.TestIntents.test_lease_lifecycle_budget_and_conflicts) ... ok
+test_water_fill (test_modules.TestIntents.test_water_fill) ... ok
+test_jain (test_modules.TestMetrics.test_jain) ... ok
+test_bulk_share_is_an_operator_setting (test_modules.TestPolicy.test_bulk_share_is_an_operator_setting)
+remainder_bulk_share moves what is left between best effort and bulk; floors still hold. ... ok
+test_floors_and_sum (test_modules.TestPolicy.test_floors_and_sum) ... ok
+test_hysteresis (test_modules.TestPolicy.test_hysteresis) ... ok
+test_shield_limits_steps_and_holds (test_modules.TestPolicy.test_shield_limits_steps_and_holds) ... ok
+test_json_is_cut_out_of_surrounding_text (test_modules.TestTcParsing.test_json_is_cut_out_of_surrounding_text) ... ok
+test_text_matches_the_json_shape (test_modules.TestTcParsing.test_text_matches_the_json_shape) ... ok
+test_lab_engine_stays_open_without_require_auth (test_router_and_controller.TestAccessControl.test_lab_engine_stays_open_without_require_auth) ... /usr/local/lib/python3.13/unittest/case.py:655: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 41391)>
+  self.doCleanups()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_router_key_guards_the_engine_api (test_router_and_controller.TestAccessControl.test_router_key_guards_the_engine_api) ... /home/claude/aryan221224/intentqos/tests/test_router_and_controller.py:241: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpmmlwo46i/data/admin.key' mode='r' encoding='utf-8'>
+  key = open(os.path.join(c["_root"], "data/admin.key")).read().strip()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/local/lib/python3.13/unittest/case.py:655: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 44397)>
+  self.doCleanups()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_staff_lockout (test_router_and_controller.TestAccessControl.test_staff_lockout) ... ok
+test_alerts_open_and_correlate_into_an_incident (test_router_and_controller.TestController.test_alerts_open_and_correlate_into_an_incident) ... ok
+test_consent_controls_telemetry_level (test_router_and_controller.TestController.test_consent_controls_telemetry_level) ... ok
+test_enrolment_rejects_bad_claim_and_pushes_signed_config (test_router_and_controller.TestController.test_enrolment_rejects_bad_claim_and_pushes_signed_config) ... ok
+test_no_offline_storm_right_after_a_restart (test_router_and_controller.TestController.test_no_offline_storm_right_after_a_restart) ... ok
+test_offline_alert_clears_after_a_long_poll_reconnect (test_router_and_controller.TestController.test_offline_alert_clears_after_a_long_poll_reconnect)
+Regression: /wait marked the gateway online first, so sync never closed the offline alert. ... ok
+test_request_signatures_and_replay (test_router_and_controller.TestController.test_request_signatures_and_replay) ... ok
+test_rollout_guard_halts_a_regression (test_router_and_controller.TestController.test_rollout_guard_halts_a_regression) ... /home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34fd6c0>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d34ff1f0>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d139b010>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d0d716c0>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d0d72a70>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d0d72b60>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d0d72d40>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/claude/aryan221224/intentqos/controller/db.py:109: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d0d72f20>
+  cur = c.execute(sql, args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_ed25519_rfc8032_vector (test_router_and_controller.TestRouterPieces.test_ed25519_rfc8032_vector) ... ok
+test_managed_config_allow_list (test_router_and_controller.TestRouterPieces.test_managed_config_allow_list) ... ok
+test_pure_python_model_matches_sklearn (test_router_and_controller.TestRouterPieces.test_pure_python_model_matches_sklearn) ... /usr/local/lib/python3.13/site-packages/joblib/numpy_pickle.py:204: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x7f85d0d73100>
+  array[i : i + read_count] = unpickler.np.frombuffer(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_uci_to_toml (test_router_and_controller.TestRouterPieces.test_uci_to_toml) ... ok
+
+----------------------------------------------------------------------
+Ran 110 tests in 14.896s
+
+OK

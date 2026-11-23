@@ -1,0 +1,10 @@
+=== RUN   TestQoOMatchesTheEngine
+--- PASS: TestQoOMatchesTheEngine (0.00s)
+=== RUN   TestTrimmedMeanDropsTheWorstFivePercent
+--- PASS: TestTrimmedMeanDropsTheWorstFivePercent (0.00s)
+=== RUN   TestAssessAndReportRender
+--- PASS: TestAssessAndReportRender (0.00s)
+=== RUN   TestLabEndpointsOnLoopback
+--- PASS: TestLabEndpointsOnLoopback (14.01s)
+PASS
+ok  	intentqos/kit	14.024s
