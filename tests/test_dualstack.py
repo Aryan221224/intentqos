@@ -64,15 +64,22 @@ class DeviceGrouping(unittest.TestCase):
         self.assertEqual(d.key("2401:4900:1c2a:5f00:51a:9f3:c2d4:8e01"), "192.168.8.7")
         self.assertEqual(d.addresses("192.168.8.5")[0], "192.168.8.5")
         self.assertEqual(len(d.addresses("192.168.8.5")), 4)
-        self.assertEqual(d.summary()["devices"], 3)
+        self.assertEqual(d.summary()["devices"], 3)   # laptop, tablet, IPv6-only sensor
 
-    def test_ipv6_only_device_keeps_its_key_when_its_address_rotates(self):
+    def test_ipv6_only_device_is_not_merged(self):
         d = self.keys()
-        first = d.key("2401:4900:1c2a:5f00:ba27:ebff:fe10:9")
-        rotated = TABLE + [("2401:4900:1c2a:5f00:77aa:1234:5678:9abc", SENSOR_MAC)]
-        d.reader = lambda: list(rotated)
-        d.refresh({}, force=True)
-        self.assertEqual(d.key("2401:4900:1c2a:5f00:77aa:1234:5678:9abc"), first)
+        self.assertEqual(d.key("2401:4900:1c2a:5f00:ba27:ebff:fe10:9"), "2401:4900:1c2a:5f00:ba27:ebff:fe10:9")
+
+    def test_one_mac_many_ipv4_addresses_is_never_merged(self):
+        # a Wi-Fi range extender in repeater mode (and the lab's client namespace): one MAC, many devices
+        ext = "c0:06:c3:aa:bb:cc"
+        rows = [("192.168.8.20", ext), ("192.168.8.21", ext), ("192.168.8.22", ext),
+                ("2401:4900:1c2a:5f00::20", ext), ("2401:4900:1c2a:5f00::21", ext)]
+        d = self.keys(rows)
+        for ip, _ in rows:
+            self.assertEqual(d.key(ip), ip)
+        self.assertEqual(d.summary()["shared_macs"], 1)
+        self.assertEqual(d.summary()["devices"], 5)
 
     def test_quiet_device_found_through_dhcp_records(self):
         # the laptop's IPv4 has aged out of the ARP table, but DHCP knows its MAC
@@ -144,6 +151,40 @@ class DeviceListIsPerDevice(unittest.TestCase):
         self.assertTrue(rows[0]["ipv6"])
         self.assertEqual(len(rows[0]["addresses"]), 3)
         self.assertEqual(rows[0]["addresses"][0], "192.168.8.5")
+
+
+class IPv6Reflectors(unittest.TestCase):
+    def test_echo_reply_without_ip_header_gives_a_round_trip(self):
+        import threading
+        import time
+        from intentqos.estimator import Prober
+        p = Prober(["1.1.1.1", "2606:4700:4700::1111"], "icmp-ts", 100)
+        self.assertEqual(p.mode["2606:4700:4700::1111"], "icmp6-echo")
+        req = p._packet(128, 42)
+        self.assertEqual(req[:2], bytes([128, 0]))
+        a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
+        b.settimeout(0.2)
+        p.pending[42] = ("2606:4700:4700::1111", time.time() - 0.012, 128)
+        p.pending[43] = ("2606:4700:4700::1111", time.time(), 128)
+        p.running = True
+        th = threading.Thread(target=p._rx, args=(b, True), daemon=True)
+        th.start()
+        a.send(bytes([135, 0, 0, 0]) + b"\0" * 20)                          # neighbour solicitation: ignored
+        a.send(bytes([129, 0, 0, 0]) + struct.pack("!HH", p.ident ^ 1, 43) + b"x" * 8)   # someone else's ping
+        a.send(bytes([129, 0, 0, 0]) + struct.pack("!HH", p.ident, 42) + req[8:])
+        for _ in range(50):
+            if p.samples:
+                break
+            time.sleep(0.02)
+        p.running = False
+        th.join(1)
+        a.close()
+        b.close()
+        self.assertEqual(len(p.samples), 1)
+        _t, r, rtt, up, down = p.samples[0]
+        self.assertEqual((r, up, down), ("2606:4700:4700::1111", None, None))
+        self.assertGreater(rtt, 10.0)
+        self.assertIn(43, p.pending)
 
 
 if __name__ == "__main__":

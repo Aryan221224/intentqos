@@ -60,7 +60,13 @@ def _wrap_ms(d: float) -> float:
 
 
 class Prober:
-    """ICMP prober (timestamp or echo). Produces samples (t, reflector, rtt_ms, up_ms, down_ms)."""
+    """ICMP prober (timestamp or echo). Produces samples (t, reflector, rtt_ms, up_ms, down_ms).
+
+    IPv6 reflectors (an address with ':') are probed with ICMPv6 echo on their own raw socket: the access link
+    is shared by both families, so either sees its queue, and IPv6 keeps the estimator seeing when the IPv4
+    path is silent (a CGNAT outage, an IPv6-only or 464XLAT mobile uplink after a 4G failover). ICMPv6 has no
+    timestamp message, so IPv6 reflectors give round trips only. Without IPv6 on the router they stay unused.
+    """
 
     def __init__(self, reflectors: list[str], method: str, interval_ms: float):
         self.reflectors = list(reflectors)
@@ -73,33 +79,56 @@ class Prober:
         self.ts_ok: dict[str, int] = {r: 0 for r in reflectors}
         self.sent: dict[str, int] = {r: 0 for r in reflectors}
         self.recv: dict[str, int] = {r: 0 for r in reflectors}
-        self.mode: dict[str, str] = {r: method for r in reflectors}
+        self.mode: dict[str, str] = {r: ("icmp6-echo" if ":" in r else method) for r in reflectors}
         self.running = False
         self.error = None
+        self.error6 = None
         self.lock = threading.Lock()
         self.sock = None
+        self.sock6 = None
+
+    def _open(self, fam: int, proto: int):
+        s = socket.socket(fam, socket.SOCK_RAW, proto)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
+            self.kernel_ts = getattr(self, "kernel_ts", True)
+        except OSError:
+            self.kernel_ts = False          # some kernels/emulators: fall back to user-space receive time
+        s.settimeout(0.5)
+        return s
 
     def start(self) -> bool:
-        try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+        v4 = [r for r in self.reflectors if ":" not in r]
+        v6 = [r for r in self.reflectors if ":" in r]
+        if v4:
             try:
-                self.sock.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
-                self.kernel_ts = True
-            except OSError:
-                self.kernel_ts = False      # some kernels/emulators: fall back to user-space receive time
-            self.sock.settimeout(0.5)
-        except OSError as e:
-            self.error = f"raw ICMP socket unavailable: {e}"
+                self.sock = self._open(socket.AF_INET, socket.IPPROTO_ICMP)
+            except OSError as e:
+                self.error = f"raw ICMP socket unavailable: {e}"
+        if v6:
+            try:
+                self.sock6 = self._open(socket.AF_INET6, socket.IPPROTO_ICMPV6)
+            except OSError as e:            # no IPv6 on this router: the IPv4 reflectors carry on alone
+                self.error6 = f"raw ICMPv6 socket unavailable: {e}"
+                if self.sock is None and self.error is None:
+                    self.error = self.error6
+        if self.sock is None and self.sock6 is None:
             return False
+        self.error = None
         self.running = True
         threading.Thread(target=self._tx, name="probe-tx", daemon=True).start()
-        threading.Thread(target=self._rx, name="probe-rx", daemon=True).start()
+        if self.sock is not None:
+            threading.Thread(target=self._rx, args=(self.sock, False), name="probe-rx", daemon=True).start()
+        if self.sock6 is not None:
+            threading.Thread(target=self._rx, args=(self.sock6, True), name="probe-rx6", daemon=True).start()
         return True
 
     def stop(self):
         self.running = False
 
     def _packet(self, typ: int, seq: int) -> bytes:
+        if typ == 128:                      # ICMPv6 echo: the kernel fills in the checksum (RFC 3542)
+            return struct.pack("!BBHHH", typ, 0, 0, self.ident, seq) + struct.pack("!d", time.time()) + b"IntentQoS-probe!"
         if typ == 13:
             body = struct.pack("!III", _ms_since_midnight_utc(time.time()), 0, 0)
         else:
@@ -114,7 +143,11 @@ class Prober:
                 # fall back to echo for reflectors that never answer timestamp requests
                 if self.mode[r] == "icmp-ts" and self.sent[r] >= 30 and self.ts_ok[r] == 0:
                     self.mode[r] = "icmp-echo"
-                typ = 13 if self.mode[r] == "icmp-ts" else 8
+                v6 = self.mode[r] == "icmp6-echo"
+                sock = self.sock6 if v6 else self.sock
+                if sock is None:
+                    continue
+                typ = 128 if v6 else 13 if self.mode[r] == "icmp-ts" else 8
                 self.seq = (self.seq + 1) & 0xFFFF
                 with self.lock:
                     self.pending[self.seq] = (r, time.time(), typ)
@@ -122,7 +155,7 @@ class Prober:
                         for k in list(self.pending)[:1000]:
                             self.pending.pop(k, None)
                 try:
-                    self.sock.sendto(self._packet(typ, self.seq), (r, 0))
+                    sock.sendto(self._packet(typ, self.seq), (r, 0, 0, 0) if v6 else (r, 0))
                     self.sent[r] += 1
                 except OSError:
                     pass
@@ -130,10 +163,11 @@ class Prober:
             if d > 0:
                 time.sleep(d)
 
-    def _rx(self):
+    def _rx(self, sock=None, v6: bool = False):
+        sock = sock or self.sock
         while self.running:
             try:
-                data, anc, _f, addr = self.sock.recvmsg(2048, socket.CMSG_SPACE(16))
+                data, anc, _f, addr = sock.recvmsg(2048, socket.CMSG_SPACE(16))
             except (socket.timeout, TimeoutError):
                 continue
             except OSError:
@@ -148,14 +182,16 @@ class Prober:
                     rx_wall = sec + nsec / 1e9
             if rx_wall is None:
                 rx_wall = time.time()
-            if len(data) < 28:
-                continue
-            ihl = (data[0] & 0x0F) * 4
-            icmp = data[ihl:]
+            if v6:                          # raw ICMPv6 sockets deliver no IP header
+                icmp = data
+            else:
+                if len(data) < 28:
+                    continue
+                icmp = data[(data[0] & 0x0F) * 4:]
             if len(icmp) < 8:
                 continue
             typ, _code, _ck, ident, seq = struct.unpack("!BBHHH", icmp[:8])
-            if ident != self.ident or typ not in (0, 14):
+            if ident != self.ident or typ not in ((129,) if v6 else (0, 14)):
                 continue
             with self.lock:
                 p = self.pending.pop(seq, None)
@@ -183,8 +219,14 @@ class Prober:
         return out
 
     def info(self) -> dict:
-        return {r: {"mode": self.mode[r], "sent": self.sent[r], "recv": self.recv[r],
-                    "timestamps": "kernel" if getattr(self, "kernel_ts", True) else "user-space"} for r in self.reflectors}
+        out = {}
+        for r in self.reflectors:
+            v6 = ":" in r
+            out[r] = {"mode": self.mode[r], "family": "IPv6" if v6 else "IPv4", "sent": self.sent[r],
+                      "recv": self.recv[r], "timestamps": "kernel" if getattr(self, "kernel_ts", True) else "user-space"}
+            if v6 and self.sock6 is None:
+                out[r]["unused"] = self.error6 or "no IPv6 on this router"
+        return out
 
 
 class Direction:

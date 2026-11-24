@@ -70,7 +70,8 @@ DEFAULTS: dict = {
     },
     "estimator": {
         "enabled": True,
-        "reflectors": ["1.1.1.1", "8.8.8.8", "9.9.9.9"],
+        "reflectors": ["1.1.1.1", "8.8.8.8", "9.9.9.9",          # IPv4: ICMP timestamp, echo fallback
+                       "2606:4700:4700::1111", "2001:4860:4860::8888"],   # IPv6 (ICMPv6 echo), used when the router has it
         "method": "icmp-ts",           # icmp-ts (one-way delay per direction) | icmp-echo (RTT only)
         "probe_interval_ms": 100,
         "tick_ms": 200,

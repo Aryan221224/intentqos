@@ -60,7 +60,7 @@ def to_config(u: dict, root: str = DEFAULT_ROOT) -> dict:
         "interfaces": {"lan": e.get("lan", "br-lan"), "wan": e.get("wan", "wan"),
                        "lan_subnets": lst(e, "lan_subnet", ["192.168.1.0/24"])},
         "link": {"down_mbit": num(e, "down_mbit", 100.0), "up_mbit": num(e, "up_mbit", 20.0)},
-        "estimator": {"enabled": e.get("estimator", "1") == "1", "reflectors": lst(e, "reflector", ["1.1.1.1", "8.8.8.8", "9.9.9.9"])},
+        "estimator": {"enabled": e.get("estimator", "1") == "1", "reflectors": lst(e, "reflector", ["1.1.1.1", "8.8.8.8", "9.9.9.9", "2606:4700:4700::1111", "2001:4860:4860::8888"])},
         "classifier": {"mode": e.get("classifier", "ml"), "model_path": f"{root}/models/flowclf.iqm",
                        "overrides_path": "/etc/intentqos/overrides.json", "corrections_path": "/tmp/intentqos/corrections.jsonl"},
         # capture "ebpf" = kernel flow engine (needs tc with BPF support: opkg install tc-bpf or tc-full + kmod-sched-bpf)

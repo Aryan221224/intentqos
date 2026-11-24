@@ -8,9 +8,13 @@ IPv4 address would not cover its IPv6 call, the device list would show the lapto
 name, and a paused tablet would keep browsing over IPv6.
 
 The kernel's neighbour table (ARP for IPv4, NDP for IPv6) says which link-layer address each LAN address
-belongs to. Addresses with the same MAC are one device. The device key is the device's IPv4 address when it
-has one (the address the household, the DHCP records and the leases already use); an IPv6-only device keeps
-the first address it was seen with, so its key does not change when its temporary address rotates.
+belongs to. An IPv6 address joins the device with the same MAC; the device key is that device's IPv4 address
+(the address the household, the DHCP records and the leases already use).
+
+One MAC is not always one device. A Wi-Fi range extender in repeater mode answers for every client behind it
+with its own MAC, and the lab puts all household devices on one interface. So IPv4 addresses are never merged
+with each other, and an IPv6 address is grouped only when its MAC has exactly one IPv4 address; otherwise it
+stays its own device (the behaviour before this module). IPv6-only devices are not grouped either.
 
 Inputs: the neighbour table (one netlink RTM_GETNEIGH dump, `ip neigh` as fallback), the DHCP records from
 identity.py (ip -> mac). Output: key(ip) -> device key. Failure: no table -> every address is its own device
@@ -97,7 +101,7 @@ class DeviceKeys:
         self.t = -1e9
         self.mac_of: dict[str, str] = {}           # ip -> mac (current table + DHCP)
         self.key_of: dict[str, str] = {}           # ip -> device key
-        self.first6: dict[str, str] = {}           # mac -> first IPv6 address seen (key of an IPv6-only device)
+        self.shared_macs = 0                       # MACs with several IPv4 addresses (extenders): not grouped
         self.source = "none"
 
     def _read(self) -> list[tuple[str, str]]:
@@ -126,17 +130,16 @@ class DeviceKeys:
             m = (r or {}).get("mac")
             if m and ":" not in ip:
                 mac_of.setdefault(ip, str(m).lower())
-        v4_of: dict[str, str] = {}
-        for ip, mac in sorted(mac_of.items()):
+        v4s: dict[str, list] = {}
+        for ip, mac in mac_of.items():
             if ":" not in ip:
-                v4_of.setdefault(mac, ip)
+                v4s.setdefault(mac, []).append(ip)
         key_of = {}
         for ip, mac in mac_of.items():
-            if ":" in ip:
-                key_of[ip] = v4_of.get(mac) or self.first6.setdefault(mac, ip)
-            else:
-                key_of[ip] = v4_of.get(mac, ip)
+            own = v4s.get(mac, [])
+            key_of[ip] = own[0] if ":" in ip and len(own) == 1 else ip
         self.mac_of, self.key_of = mac_of, key_of
+        self.shared_macs = sum(1 for v in v4s.values() if len(v) > 1)
         return True
 
     def key(self, ip: str) -> str:
@@ -150,4 +153,5 @@ class DeviceKeys:
         n6 = sum(1 for ip in self.mac_of if ":" in ip)
         grouped = sum(1 for ip, k in self.key_of.items() if ":" in ip and ":" not in k)
         return {"source": self.source, "addresses": len(self.mac_of), "ipv6_addresses": n6,
-                "ipv6_grouped_with_ipv4": grouped, "devices": len(set(self.key_of.values()))}
+                "ipv6_grouped_with_ipv4": grouped, "devices": len(set(self.key_of.values())),
+                "shared_macs": self.shared_macs}
