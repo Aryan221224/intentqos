@@ -1,0 +1,41 @@
+#!/bin/bash
+# Stand-in for NetworkManager's nmcli on the emulated bridge laptop (no NetworkManager in a namespace).
+# Implements exactly what the 4G Bridge uses, with NetworkManager's real "shared" behaviour: 10.42.0.1/24 on the
+# Ethernet port, a DHCP server there (dnsmasq), IPv4 forwarding and masquerading out of the default route.
+# Every call is logged to $SYSSIM_WORK/logs/nmcli-shim.log.
+W=${SYSSIM_WORK:-/home/claude/syssim}; ST=$W/nm-shared.state
+echo "$(date +%s.%N) nmcli $*" >> $W/logs/nmcli-shim.log
+case "$*" in
+  "-t -f NAME,DEVICE con show --active")
+    [ -f "$ST" ] && [ "$(sed -n 3p $ST)" = up ] && echo "$(sed -n 1p $ST):$(sed -n 2p $ST)"; exit 0 ;;
+esac
+if [ "$1" = con ] && [ "$2" = delete ]; then
+  [ -f "$ST" ] && "$0" con down "$3" >/dev/null 2>&1; rm -f "$ST"; exit 0
+fi
+if [ "$1" = con ] && [ "$2" = add ]; then
+  shift 2; name=""; ifn=""
+  while [ $# -gt 0 ]; do case "$1" in ifname) ifn=$2; shift;; con-name) name=$2; shift;; esac; shift; done
+  printf '%s\n%s\ndown\n' "$name" "$ifn" > $ST; echo "Connection '$name' successfully added."; exit 0
+fi
+if [ "$1" = con ] && [ "$2" = up ]; then
+  [ -f "$ST" ] || { echo "Error: unknown connection '$3'." >&2; exit 10; }
+  ifn=$(sed -n 2p $ST)
+  ip link set "$ifn" up; ip addr flush dev "$ifn"; ip addr add 10.42.0.1/24 dev "$ifn"
+  sysctl -qw net.ipv4.ip_forward=1
+  up=$(ip route show default | awk '{print $5; exit}')
+  iptables -t nat -C POSTROUTING -s 10.42.0.0/24 ! -d 10.42.0.0/24 -j MASQUERADE 2>/dev/null || \
+    iptables -t nat -A POSTROUTING -s 10.42.0.0/24 ! -d 10.42.0.0/24 -j MASQUERADE
+  dnsmasq --interface="$ifn" --bind-interfaces --dhcp-range=10.42.0.10,10.42.0.254,1h --dhcp-option=3,10.42.0.1 \
+    --dhcp-option=6,10.42.0.1 --server=192.168.42.129 --no-resolv --pid-file=$W/nm-dnsmasq.pid \
+    --dhcp-leasefile=$W/nm-shared.leases --log-dhcp --log-facility=$W/logs/nm-shared-dnsmasq.log
+  sed -i 3s/.*/up/ $ST
+  echo "Connection successfully activated (shared via $up)"; exit 0
+fi
+if [ "$1" = con ] && [ "$2" = down ]; then
+  [ -f "$ST" ] || exit 10
+  ifn=$(sed -n 2p $ST)
+  [ -f $W/nm-dnsmasq.pid ] && kill $(cat $W/nm-dnsmasq.pid) 2>/dev/null; rm -f $W/nm-dnsmasq.pid
+  iptables -t nat -D POSTROUTING -s 10.42.0.0/24 ! -d 10.42.0.0/24 -j MASQUERADE 2>/dev/null
+  ip addr flush dev "$ifn"; sed -i 3s/.*/down/ $ST; echo "Connection '$3' successfully deactivated."; exit 0
+fi
+echo "nmcli shim: unsupported: $*" >&2; exit 2

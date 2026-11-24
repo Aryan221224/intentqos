@@ -1,0 +1,1 @@
+{"name": "on-cloud_backup", "kind": "bulk", "direction": "up", "src": "192.168.8.180", "dst": "104.18.20.10", "proto": "tcp", "sports": [52927, 53177], "dport": 9001, "conns": 2, "start_wall": 1795506819.7212186, "duration": 120.0, "bin": 0.25, "bins": {}}

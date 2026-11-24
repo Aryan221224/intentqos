@@ -20,9 +20,18 @@ import json
 import os
 import time
 import urllib.request
-import uuid
 
 MS365_URL = "https://endpoints.office.com/endpoints/worldwide?clientrequestid={rid}"
+
+
+def _request_id() -> str:
+    """A random GUID for the MS 365 endpoint API. Not `uuid`: OpenWrt ships it in a separate package
+    (python3-uuid) that python3-light does not include, and importing it crashed the engine on real firmware."""
+    b = bytearray(os.urandom(16))
+    b[6] = (b[6] & 0x0F) | 0x40
+    b[8] = (b[8] & 0x3F) | 0x80
+    h = b.hex()
+    return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
 CALL_SET = ("voip", "video")
 
 
@@ -67,7 +76,7 @@ class WeakLabels:
         self.cache.clear()
 
     def refresh_ms365(self, opener=None) -> dict:
-        url = MS365_URL.format(rid=uuid.uuid4())
+        url = MS365_URL.format(rid=_request_id())
         op = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with op.open(url, timeout=20) as r:
             data = json.loads(r.read())

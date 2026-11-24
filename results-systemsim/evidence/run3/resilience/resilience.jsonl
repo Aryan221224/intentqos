@@ -1,0 +1,20 @@
+{"t": 1795508912.428296, "event": "controller_offline_start"}
+{"t": 1795508912.4304533, "event": "console_processes", "pids": ["957", "966"]}
+{"t": 1795508932.4385808, "event": "operator_laptop_asleep"}
+{"t": 1795509053.8900595, "event": "router_while_console_away", "samples": [{"t": 1795508932.4948063, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795508942.5585136, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795508952.6896105, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795508963.1988478, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795508973.3176515, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795508983.381362, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795508993.5643253, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795509003.6288683, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795509013.7114165, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795509023.7672164, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795509033.834719, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}, {"t": 1795509043.889916, "code": 200, "backend": "cake", "paused": false, "down_rate_kbit": 27000}]}
+{"t": 1795509053.8910491, "event": "operator_laptop_awake"}
+{"t": 1795509114.51594, "event": "controller_offline_end"}
+{"t": 1795509114.5160084, "event": "power_cut_start"}
+{"t": 1795509125.045766, "event": "power_cut"}
+{"t": 1795509188.771632, "event": "router_answers_on_lan", "s": 63.7}
+{"t": 1795509188.7944202, "event": "internet_back", "s": 63.7}
+{"t": 1795509214.3147154, "event": "engine_api_back", "s": 89.3, "body": "{\"ok\": true, \"t\": 1795509213.4794815}"}
+{"t": 1795509214.3565488, "event": "shaping_active", "s": 89.3, "backend": "cake"}
+{"t": 1795509216.4531167, "event": "router_clock_after_boot", "out": "1795509215\nTue Nov 24 14:03:20 2026 daemon.info dnsmasq[1]: compile time options: IPv6 GNU-getopt no-DBus UBus no-i18n no-IDN DHCP no-DHCPv6 no-Lua TFTP no-conntrack no-ipset no-nftset no-auth no-DNSSEC no-ID loop-detect inotify dumpfile\nTue Nov 24 14:03:20 2026 daemon.info dnsmasq-dhcp[1]: DHCP, IP range 192.168.8.100 -- 192.168.8.249, lease time 12h\nTue Nov 24 14:03:21 2026 daemon.warn odhcpd[2215]: No default route present, setting ra_lifetime to 0!\n", "host_now": 1795509216.4531083}
+{"t": 1795509236.4539561, "event": "power_cut_summary", "lan_ping": 63.7, "internet": 63.7, "engine": 89.3, "shaping": 89.3}
+{"t": 1795509236.4540942, "event": "power_cut_end"}
+{"t": 1795509236.454109, "event": "wifi_far_start"}
+{"t": 1795509277.615107, "event": "laptop_moved_far", "extra_ms": 12, "loss": 0.02}
+{"t": 1795509378.2335336, "event": "experience_while_far", "samples": 10}
+{"t": 1795509379.3847203, "event": "laptop_back_near"}
+{"t": 1795509438.53807, "event": "wifi_far_end"}

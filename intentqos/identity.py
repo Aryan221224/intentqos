@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import re
 
 TYPES = ("phone", "laptop", "tv", "console", "camera", "speaker", "printer", "iot", "other")
@@ -76,12 +77,28 @@ def guess(hostname: str = "", vendor: str = "", opts: str = "", mac: str = "",
 
 
 class Identity:
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, cache_path: str | None = None):
         c = cfg.get("identity", {}) if isinstance(cfg.get("identity"), dict) else {}
         self.hook_path = c.get("dhcp_hook_path", "/tmp/intentqos/dhcp.jsonl")
         self.leases_path = c.get("leases_path", "/tmp/dhcp.leases")
         self.seen: dict[str, dict] = {}          # ip -> record
         self._pos = 0
+        # The hook file and dnsmasq's leases live in /tmp: after a router restart they are empty until each device
+        # renews (hours). Found in the full-system emulation's power-cut test: every device type was gone after the
+        # reboot. So the records are also kept on flash (state_dir), written only when they change and at most
+        # every 10 minutes, and read back at start.
+        self.cache_path = cache_path
+        self._cache_saved = ""
+        self._cache_t = 0.0
+        if cache_path:
+            try:
+                with open(cache_path) as f:
+                    for ip, r in json.load(f).items():
+                        if isinstance(r, dict):
+                            self.seen[ip] = dict(r, remembered=True)
+                self._cache_saved = json.dumps(self.seen, sort_keys=True)
+            except (OSError, ValueError):
+                pass
         self.fingerprints = dict(FINGERPRINTS)
         if c.get("fingerprints_path"):
             try:
@@ -101,7 +118,9 @@ class Identity:
                         continue
                     ip = r.get("ip")
                     if ip:
-                        self.seen.setdefault(ip, {}).update({k: v for k, v in r.items() if v})
+                        rec = self.seen.setdefault(ip, {})
+                        rec.pop("remembered", None)
+                        rec.update({k: v for k, v in r.items() if v})
                 self._pos = f.tell()
             if os.path.getsize(self.hook_path) > 512 * 1024:      # tmpfs: keep it small
                 open(self.hook_path, "w").close()
@@ -122,13 +141,32 @@ class Identity:
         except OSError:
             pass
 
+    def _save_cache(self) -> None:
+        if not self.cache_path or time.monotonic() - self._cache_t < 600:
+            return
+        txt = json.dumps({ip: {k: v for k, v in r.items() if k != "remembered"} for ip, r in self.seen.items()},
+                         sort_keys=True)
+        if txt == self._cache_saved:
+            return
+        try:
+            tmp = self.cache_path + ".tmp"
+            with open(tmp, "w") as f:
+                f.write(txt)
+            os.replace(tmp, self.cache_path)
+            self._cache_saved, self._cache_t = txt, time.monotonic()
+        except OSError:
+            pass
+
     def refresh(self) -> dict[str, dict]:
         self._read_leases()
         self._read_hook()
+        self._save_cache()
         out = {}
         for ip, r in self.seen.items():
             t, why = guess(r.get("hostname", ""), r.get("vendor", ""), r.get("opts", ""), r.get("mac", ""),
                            self.fingerprints)
+            if r.get("remembered"):
+                why += " (remembered from before the router restarted)"
             out[ip] = {"type": t, "why": why, "hostname": r.get("hostname"), "mac": r.get("mac"),
                        "mud_url": r.get("mud"), "private_mac": private_mac(r.get("mac", "")),
                        "priors": PRIORS.get(t, {})}

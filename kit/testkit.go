@@ -66,8 +66,22 @@ func (r *router) call(method, path string, body, out any) error {
 	return callJSON(r.c, method, "http://"+r.IP+":8080"+path, r.Key, body, out)
 }
 
+// bypass opens or closes the router's no-QoS test window. A router whose CPU is busy (the end of a loaded
+// measurement) can answer late, so a timeout is retried a few times before the test gives up: found in the
+// full-system emulation, where one slow answer stopped the whole run after its first test.
 func (r *router) bypass(on bool, minutes float64) error {
-	return r.call("POST", "/api/bypass", map[string]any{"on": on, "minutes": minutes, "by": "Test Kit on " + machineName()}, nil)
+	var err error
+	for i, wait := range []time.Duration{0, 2 * time.Second, 4 * time.Second, 8 * time.Second} {
+		if i > 0 {
+			logf("router did not answer the test-window request (%v); trying again in %v", err, wait)
+			time.Sleep(wait)
+		}
+		err = r.call("POST", "/api/bypass", map[string]any{"on": on, "minutes": minutes, "by": "Test Kit on " + machineName()}, nil)
+		if err == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 // ------------------------------------------------------------------ measurement

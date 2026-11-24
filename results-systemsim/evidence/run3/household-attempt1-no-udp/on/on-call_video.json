@@ -1,0 +1,1 @@
+{"name": "on-call_video", "kind": "video", "src": "192.168.8.216", "dst": "104.18.20.10", "sport": 51844, "dport": 9003, "proto": "udp", "flow_hash": "c438b2fa", "start_wall": 1795506494.6967463, "duration": 115.0, "sent_up": 21454, "up_rate": 30, "up_size": 7500, "dn_rate": 30, "dn_size": 9166, "down": {"seq": [], "tx": [], "rx": [], "size": []}}

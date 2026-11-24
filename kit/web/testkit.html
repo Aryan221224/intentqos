@@ -136,12 +136,17 @@ async function poll() {
   $("waiting").classList.toggle("hidden", !l.waiting); $("waittext").textContent = l.waiting || "";
   draw(l.recent || []);
   const unit = r => /RPM|capacity/.test(r.metric || "") ? "" : " ms";
+  // green only when "on" is actually better (lower delay, or higher RPM/capacity); a worse result is not green
+  const tone = r => { const a = parseFloat(r.off), b = parseFloat(r.on);
+    if (isNaN(a) || isNaN(b) || a === b) return "inherit";
+    const higherBetter = /RPM|capacity/.test(r.metric || "");
+    return (higherBetter ? b > a : b < a) ? "var(--ok)" : "var(--bad, #b42318)"; };
   const extra = (r, side) => [r[side + "_p50"] != null ? `p50 ${esc(r[side + "_p50"])}` : "",
     r[side + "_call_qoo"] != null ? `call ${esc(r[side + "_call_qoo"])} · game ${esc(r[side + "_game_qoo"])}` : "",
     r[side + "_rpm"] != null && !/RPM/.test(r.metric || "") ? `RPM ${esc(r[side + "_rpm"])}` : ""].filter(Boolean).join(" · ");
   $("res").innerHTML = (l.results || []).map(r => `<tr><td>${esc(r.name)}<br><span class="small muted">${esc(r.metric || "")}</span></td>
     <td><b>${esc(r.off)}${r.off === "—" ? "" : unit(r)}</b> <span class="small muted">${extra(r, "off")}</span></td>
-    <td><b style="color:var(--ok)">${esc(r.on)}${unit(r)}</b> <span class="small muted">${extra(r, "on")}</span></td><td>${esc(r.change)}</td>
+    <td><b style="color:${tone(r)}">${esc(r.on)}${unit(r)}</b> <span class="small muted">${extra(r, "on")}</span></td><td>${esc(r.change)}</td>
     <td class="small">${esc(r.off_tput || "")}${r.on_tput ? " / " + esc(r.on_tput) : ""}</td></tr>`).join("");
   if (l.error) { $("err").textContent = l.error; $("err").classList.remove("hidden"); }
   if (!l.running && l.done) {

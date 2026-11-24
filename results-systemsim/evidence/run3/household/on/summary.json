@@ -1,0 +1,106 @@
+{
+ "arm": "on",
+ "window_s": [
+  20,
+  115
+ ],
+ "call_audio_down": {
+  "n": 4734,
+  "owd_p50": 20.97,
+  "owd_p95": 80.519,
+  "owd_p99": 91.812,
+  "owd_max": 151.768,
+  "jitter_ms": 4.45,
+  "loss": 0.003,
+  "mos_mean": 3.667,
+  "poor_seconds_frac": 0.263,
+  "mos_min": 1.098
+ },
+ "call_audio_up": {
+  "n": 4746,
+  "owd_p50": 12.197,
+  "owd_p95": 35.659,
+  "owd_p99": 55.647,
+  "owd_max": 119.844,
+  "jitter_ms": 4.403,
+  "loss": 0.001,
+  "mos_mean": 4.314,
+  "poor_seconds_frac": 0.0,
+  "mos_min": 3.692
+ },
+ "call_video_down": {
+  "n": 20201,
+  "owd_p50": 28.102,
+  "owd_p95": 81.573,
+  "owd_p99": 99.204,
+  "owd_max": 155.269,
+  "jitter_ms": 3.433,
+  "loss": 0.024
+ },
+ "call_video_up": {
+  "n": 17700,
+  "owd_p50": 14.492,
+  "owd_p95": 36.347,
+  "owd_p99": 53.663,
+  "owd_max": 104.975,
+  "jitter_ms": 2.172,
+  "loss": 0.001
+ },
+ "game_down": {
+  "n": 2837,
+  "owd_p50": 20.467,
+  "owd_p95": 79.923,
+  "owd_p99": 91.648,
+  "owd_max": 144.529,
+  "jitter_ms": 5.001,
+  "loss": 0.005
+ },
+ "game_up": {
+  "n": 5697,
+  "owd_p50": 11.762,
+  "owd_p95": 34.37,
+  "owd_p99": 55.011,
+  "owd_max": 123.904,
+  "jitter_ms": 4.377,
+  "loss": 0.001
+ },
+ "iso_download": {
+  "goodput_mbps": 13.992,
+  "min_1s_mbps": 8.653,
+  "starved_seconds": 0
+ },
+ "cloud_backup": {
+  "goodput_mbps": 18.282,
+  "min_1s_mbps": 6.058,
+  "starved_seconds": 0
+ },
+ "tv1": {
+  "mean_bitrate_mbps": 1.5,
+  "rebuffer_s": 0.0,
+  "startup_s": 2.043,
+  "switches": 0,
+  "chunks": 50,
+  "mean_chunk_throughput_mbps": 3.433
+ },
+ "tv2": {
+  "mean_bitrate_mbps": 2.531,
+  "rebuffer_s": 0.0,
+  "startup_s": 1.951,
+  "switches": 10,
+  "chunks": 48,
+  "mean_chunk_throughput_mbps": 3.806
+ },
+ "tv3": {
+  "mean_bitrate_mbps": 1.5,
+  "rebuffer_s": 0.0,
+  "startup_s": 1.868,
+  "switches": 0,
+  "chunks": 48,
+  "mean_chunk_throughput_mbps": 3.302
+ },
+ "phone_web": {
+  "page_load_ms_p50": 449.2,
+  "page_load_ms_p95": 682.4,
+  "pages": 38
+ }
+}

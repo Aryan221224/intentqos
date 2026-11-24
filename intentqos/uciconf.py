@@ -74,7 +74,7 @@ def to_config(u: dict, root: str = DEFAULT_ROOT) -> dict:
         "api": {"listen": e.get("api_listen", "192.168.1.1:8080"),
                 "require_auth": e.get("require_auth", "1") == "1",      # on by default on a router
                 "key_file": "/etc/intentqos/admin.key"},
-        "watchdog": {"heartbeat_path": "/var/run/intentqos/heartbeat.json", "timeout_s": num(e, "watchdog_timeout_s", 3.0),
+        "watchdog": {"heartbeat_path": "/var/run/intentqos/heartbeat.json", "timeout_s": num(e, "watchdog_timeout_s", 8.0),
                      "exit_state": e.get("exit_state", "safe")},
         "intents": {"store_path": "/etc/intentqos/intents.json"},
         "data": {"dir": "/tmp/intentqos", "state_dir": "/etc/intentqos"},

@@ -930,6 +930,23 @@ def serve(cfg: dict) -> None:
         ctx.load_cert_chain(cfg["tls_cert"], cfg["tls_key"])
         srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
 
+        def reload_cert(path=cfg["tls_cert"], key=cfg["tls_key"]):
+            """Pick up a re-issued server certificate (the console re-issues it when the laptop gets a new
+            address); new connections use it, the CA routers trust is unchanged."""
+            mt = os.path.getmtime(path)
+            while True:
+                time.sleep(5)
+                try:
+                    m = os.path.getmtime(path)
+                    if m != mt:
+                        time.sleep(0.5)               # let the key and certificate both be written
+                        ctx.load_cert_chain(path, key)
+                        mt = m
+                        print("controller: server certificate reloaded", flush=True)
+                except (OSError, ssl.SSLError) as e:
+                    print(f"controller: certificate reload failed: {e}", flush=True)
+        threading.Thread(target=reload_cert, daemon=True).start()
+
     ui = cfg.get("ui_listen") or ""
     if ui:
         uhost, uport = ui.rsplit(":", 1)

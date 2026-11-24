@@ -1,0 +1,5 @@
+{"t": 1795471118.2398674, "event": "found", "state": "Phone (USB tethering)\nfound usb0\nInternet on this laptop\nworking\nSharing\noff", "phone": "usb0", "eth": "eth0"}
+{"t": 1795471123.4147646, "event": "shared", "msg": "Sharing is on. The router's WAN port gets an address from this laptop when its cable is plugged in here.", "state": "Phone (USB tethering)\nfound usb0\nInternet on this laptop\nworking\nSharing\non to eth0 (10.42.0.1)"}
+{"t": 1795507002.359572, "event": "found", "state": "Phone (USB tethering)\nfound usb0\nInternet on this laptop\nworking\nSharing\noff", "phone": "usb0", "eth": "eth0"}
+{"t": 1795507007.5337503, "event": "shared", "msg": "Sharing is on. The router's WAN port gets an address from this laptop when its cable is plugged in here.", "state": "Phone (USB tethering)\nfound usb0\nInternet on this laptop\nworking\nSharing\non to eth0 (10.42.0.1)"}
+{"t": 1795510210.1956313, "event": "unshared", "msg": "Sharing is off."}

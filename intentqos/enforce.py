@@ -36,6 +36,7 @@ import ipaddress
 import json
 import re
 import subprocess
+from struct import error as struct_error
 import threading
 import time
 
@@ -84,6 +85,91 @@ def tc_json(cmd: list[str]):
             except ValueError:
                 pass
         raise TcError(f"{' '.join(cmd)}: not JSON ({out[:120]!r})")
+
+
+# ------------------------------------------------------------------ qdisc statistics over netlink
+# The estimator reads the shaper's counters every tick. Running `tc -j -s qdisc show` for that costs a fork and
+# exec per device per tick, and OpenWrt's tc writes its JSON one byte per syscall: the full-system emulation on
+# the real OpenWrt 25.12 image measured about seven tc processes a second at idle. This reads the same counters
+# in-process with one netlink dump (RTM_GETQDISC) and returns them in `tc -j -s` shape; tc stays the fallback.
+_RTM_GETQDISC, _NLM_F_REQUEST, _NLM_F_DUMP, _NLMSG_DONE, _NLMSG_ERROR = 38, 0x1, 0x300, 3, 2
+_TCA_KIND, _TCA_OPTIONS, _TCA_STATS2 = 1, 2, 7
+_TCA_STATS_BASIC, _TCA_STATS_QUEUE, _TCA_STATS_APP = 1, 3, 4
+_TCA_CAKE_BASE_RATE64 = 2
+# linux/pkt_sched.h: the cake stats enums start with an INVALID and a PAD entry
+_TCA_CAKE_STATS_TIN_STATS = 10
+_CAKE_TIN = {2: "sent_packets", 3: "sent_bytes", 4: "drops", 8: "ecn_mark", 10: "backlog_packets",
+             11: "backlog_bytes", 18: "peak_delay_us", 19: "avg_delay_us", 20: "base_delay_us",
+             21: "sparse_flows", 22: "bulk_flows", 23: "unresponsive_flows"}
+
+
+def _nl_attrs(buf: bytes, off: int = 0, end: int | None = None) -> dict:
+    """Netlink attributes -> {type: payload bytes} (nested flag stripped)."""
+    import struct
+    end = len(buf) if end is None else end
+    out = {}
+    while off + 4 <= end:
+        ln, ty = struct.unpack_from("HH", buf, off)
+        if ln < 4:
+            break
+        out[ty & 0x3FFF] = buf[off + 4:off + ln]
+        off += (ln + 3) & ~3
+    return out
+
+
+def _nl_int(b: bytes) -> int:
+    return int.from_bytes(b[:8] if len(b) >= 8 else b[:4], "little")
+
+
+def qdisc_stats_netlink(dev: str) -> list[dict]:
+    """`tc -j -s qdisc show dev DEV` for cake (and the basic counters of any qdisc), read over netlink."""
+    import socket
+    import struct
+    ifindex = socket.if_nametoindex(dev)
+    s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 0)   # NETLINK_ROUTE
+    try:
+        s.settimeout(1.0)
+        tcm = struct.pack("BBHiIII", 0, 0, 0, 0, 0, 0, 0)
+        s.send(struct.pack("IHHII", 16 + len(tcm), _RTM_GETQDISC, _NLM_F_REQUEST | _NLM_F_DUMP, 1, 0) + tcm)
+        out, done = [], False
+        while not done:
+            data = s.recv(1 << 16)
+            off = 0
+            while off + 16 <= len(data):
+                ln, ty, _fl, _seq, _pid = struct.unpack_from("IHHII", data, off)
+                if ln < 16:
+                    done = True
+                    break
+                if ty == _NLMSG_DONE:
+                    done = True
+                    break
+                if ty == _NLMSG_ERROR:
+                    raise OSError("netlink error")
+                _fam, _p1, _p2, idx, handle, parent, _info = struct.unpack_from("BBHiIII", data, off + 16)
+                if idx == ifindex:
+                    a = _nl_attrs(data, off + 36, off + ln)
+                    q = {"kind": a.get(_TCA_KIND, b"").rstrip(b"\0").decode(), "handle": f"{handle >> 16:x}:",
+                         "root": parent == 0xFFFFFFFF}
+                    if q["kind"] == "cake" and _TCA_OPTIONS in a:
+                        o = _nl_attrs(a[_TCA_OPTIONS])
+                        if _TCA_CAKE_BASE_RATE64 in o:
+                            q["options"] = {"bandwidth": _nl_int(o[_TCA_CAKE_BASE_RATE64])}
+                    st = _nl_attrs(a.get(_TCA_STATS2, b""))
+                    if _TCA_STATS_BASIC in st:
+                        q["bytes"], q["packets"] = struct.unpack_from("QI", st[_TCA_STATS_BASIC])
+                    if _TCA_STATS_QUEUE in st:
+                        q["qlen"], q["backlog"], q["drops"], q["requeues"], q["overlimits"] = \
+                            struct.unpack_from("IIIII", st[_TCA_STATS_QUEUE])
+                    if q["kind"] == "cake" and _TCA_STATS_APP in st:
+                        x = _nl_attrs(st[_TCA_STATS_APP])
+                        tins = _nl_attrs(x.get(_TCA_CAKE_STATS_TIN_STATS, b""))
+                        q["tins"] = [{name: _nl_int(t[k]) for k, name in _CAKE_TIN.items() if k in t}
+                                     for _n, t in sorted((n, _nl_attrs(v)) for n, v in tins.items())]
+                    out.append(q)
+                off += (ln + 3) & ~3
+        return out
+    finally:
+        s.close()
 
 
 _UNIT = {"": 1, "k": 1e3, "m": 1e6, "g": 1e9, "t": 1e12}
@@ -311,6 +397,7 @@ class CakeBackend(Backend):
     def __init__(self, lan, wan, cfg, kinds: dict | None = None):
         super().__init__(lan, wan, cfg)
         self.kinds = kinds or {"down": "cake", "up": "cake"}     # per direction: cake | cake_mq
+        self._netlink = True                                      # read counters in-process (qdisc_stats_netlink)
 
     def priority(self, tin: int) -> str:
         return f"1:{CAKE_MINOR[tin]}"
@@ -339,7 +426,14 @@ class CakeBackend(Backend):
 
     def verify(self, plan: dict) -> bool:
         for d, dev in self.devs.items():
-            js = tc_json(["tc", "-j", "qdisc", "show", "dev", dev])
+            js = None
+            if self._netlink and self.kinds.get(d, "cake") == "cake":
+                try:
+                    js = qdisc_stats_netlink(dev)
+                except (OSError, ValueError, struct_error):
+                    js = None
+            if js is None:
+                js = tc_json(["tc", "-j", "qdisc", "show", "dev", dev])
             kind = self.kinds.get(d, "cake")
             root = [q for q in js if q.get("kind") == kind and q.get("root", True)] or [q for q in js if q.get("kind") == kind]
             if not root:
@@ -354,10 +448,17 @@ class CakeBackend(Backend):
         names = ["bulk", "besteffort", "video", "voice"]
         out = {}
         for d, dev in self.devs.items():
-            try:
-                js = tc_json(["tc", "-j", "-s", "qdisc", "show", "dev", dev])
-            except (TcError, ValueError):
-                js = []
+            js = None
+            if self._netlink:
+                try:
+                    js = qdisc_stats_netlink(dev)
+                except (OSError, ValueError, struct_error):
+                    self._netlink = False          # e.g. no NETLINK_ROUTE access: use tc from now on
+            if js is None:
+                try:
+                    js = tc_json(["tc", "-j", "-s", "qdisc", "show", "dev", dev])
+                except (TcError, ValueError):
+                    js = []
             # cake: one qdisc; cake_mq: one cake per hardware queue under it, summed here
             qs = [x for x in js if x.get("kind") == "cake" and x.get("tins")]
             per, total = {}, None
@@ -618,13 +719,17 @@ class Enforcer:
         return sum(1 for x in self.changes if t - x < 60)
 
 
-def safe_plan(cfg: dict) -> dict:
+def safe_plan(cfg: dict, cap_kbit: dict | None = None) -> dict:
     """The known-safe state: shape at a conservative fraction of nominal, one fair best-effort class,
-    every tin keeps its floor. Deterministic and independent of any estimate or model."""
+    every tin keeps its floor. Deterministic and independent of any model; `cap_kbit` (the rates the engine
+    last applied, from its heartbeat) only ever lowers it, so a watchdog trip on a 4G backup does not put the
+    fibre rate back."""
     f = cfg["policy"]["safe_fraction"]
     plan = {}
     for d, nom in (("down", cfg["link"]["down_mbit"]), ("up", cfg["link"]["up_mbit"])):
         rate = nom * 1000 * f
+        if cap_kbit and cap_kbit.get(d):
+            rate = max(min(rate, float(cap_kbit[d])), 0.05 * nom * 1000)
         fl = cfg["policy"]["floor_fraction"]
         g = {TIN_INTENT: rate * 0.0001, TIN_VOICE: rate * fl["voice"], TIN_VIDEO: rate * fl["video"],
              TIN_BULK: rate * fl["bulk"]}

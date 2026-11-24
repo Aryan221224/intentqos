@@ -30,3 +30,6 @@ testbed/accessemu
 kit/.cache/
 kit/embed/
 kit/*.syso
+
+# systemsim build output
+systemsim/wifiemu

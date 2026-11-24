@@ -1,0 +1,46 @@
+{
+ "arm": "off",
+ "window_s": [
+  20,
+  115.0
+ ],
+ "iso_download": {
+  "goodput_mbps": 20.017,
+  "min_1s_mbps": 13.854,
+  "starved_seconds": 0
+ },
+ "cloud_backup": {
+  "goodput_mbps": 14.435,
+  "min_1s_mbps": 8.966,
+  "starved_seconds": 0
+ },
+ "tv1": {
+  "mean_bitrate_mbps": 2.296,
+  "rebuffer_s": 0.0,
+  "startup_s": 1.807,
+  "switches": 3,
+  "chunks": 49,
+  "mean_chunk_throughput_mbps": 3.775
+ },
+ "tv2": {
+  "mean_bitrate_mbps": 2.939,
+  "rebuffer_s": 0.0,
+  "startup_s": 1.113,
+  "switches": 2,
+  "chunks": 49,
+  "mean_chunk_throughput_mbps": 5.348
+ },
+ "tv3": {
+  "mean_bitrate_mbps": 1.531,
+  "rebuffer_s": 0.0,
+  "startup_s": 1.992,
+  "switches": 1,
+  "chunks": 49,
+  "mean_chunk_throughput_mbps": 2.841
+ },
+ "phone_web": {
+  "page_load_ms_p50": 402.7,
+  "page_load_ms_p95": 799.8,
+  "pages": 38
+ }
+}

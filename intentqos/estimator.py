@@ -378,8 +378,26 @@ class CapacityEstimator:
         for d in (self.down, self.up):
             old, old_state = d.rate, d.state
             if blind:
-                d.rate = min(d.rate, d.base)
-                d.state = "blind"
+                # Silence while we are pushing traffic is not "no news". In the full-system emulation, a failover
+                # from fibre to a phone's 4G left the shaper at the fibre rate; the 4G modem's 300 ms buffer filled,
+                # the probes timed out, and holding the rate kept it full for ~40 s. So: loaded and blind -> back
+                # off (towards what actually got through), every 2 s, down to a floor; idle and blind -> hold.
+                floor = max(d.min, d.base * e.get("blind_floor_fraction", 0.3))
+                if d.load >= e.get("blind_backoff_load", 0.5) and now >= d.hold_decrease_until and d.rate > floor:
+                    target = min(d.rate, d.base) * (1.0 - e.get("blind_backoff", 0.3))
+                    if d.achieved > 0:
+                        target = min(target, max(floor, 0.9 * d.achieved))
+                    d.rate = max(floor, target)
+                    d.hold_decrease_until = now + 2.0
+                    d.hold_increase_until = now + e["increase_hold_ms"] / 1000.0
+                    d.last_bloat = now
+                    d.state = "blind-backoff"
+                    self.decisions += 1
+                    self.emit("estimator", f"{d.name}: reflectors silent under load -> rate {old / 1000:.1f} -> "
+                                           f"{d.rate / 1000:.1f} Mbit/s", "warn")
+                else:
+                    d.rate = min(d.rate, d.base)
+                    d.state = "blind"
                 continue
             bloat = self._bloated(d, now)
             # Cut deep enough to drain the queue we found within ~drain_target: a 400 ms queue needs a
@@ -452,6 +470,28 @@ class CapacityEstimator:
                 self.emit("estimator", f"{d.name}: bufferbloat (+{d.delta:.0f} ms) at load {d.load:.2f} -> "
                                        f"rate {old / 1000:.1f} -> {d.rate / 1000:.1f} Mbit/s", "info")
         return self.down.rate, self.up.rate
+
+    def path_changed(self, now: float, why: str) -> None:
+        """The WAN path changed under us (another gateway: the cable moved to a 4G bridge, or back). The old
+        baselines describe the old path and the old rate its capacity: forget both, restart low and let load
+        find the new capacity (bloat cuts, load-driven increases)."""
+        if not self.enabled:
+            return
+        self.baseline.clear()
+        self.last_delta.clear()
+        self.last_raw.clear()
+        frac = self.e.get("path_change_fraction", 0.3)
+        for d in (self.down, self.up):
+            d.rate = max(d.min, d.base * frac)
+            d.bloat_rate = None
+            d.streak = 0
+            d.deltas.clear()
+            d.last_bloat = now
+            d.hold_increase_until = now + self.e["increase_hold_ms"] / 1000.0
+            d.state = "path-change"
+        self.decisions += 1
+        self.emit("estimator", f"WAN path changed ({why}): baselines re-learned, rates restart at "
+                               f"{self.down.rate / 1000:.1f}/{self.up.rate / 1000:.1f} Mbit/s", "warn")
 
     def info(self) -> dict:
         def dd(d: Direction):

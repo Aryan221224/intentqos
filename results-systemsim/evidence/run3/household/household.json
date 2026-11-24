@@ -1,0 +1,214 @@
+{
+ "off": {
+  "arm": "off",
+  "window_s": [
+   20,
+   115
+  ],
+  "call_audio_down": {
+   "n": 4701,
+   "owd_p50": 58.597,
+   "owd_p95": 66.552,
+   "owd_p99": 80.8,
+   "owd_max": 152.679,
+   "jitter_ms": 5.607,
+   "loss": 0.01,
+   "mos_mean": 3.894,
+   "poor_seconds_frac": 0.158,
+   "mos_min": 1.356
+  },
+  "call_audio_up": {
+   "n": 4746,
+   "owd_p50": 8.949,
+   "owd_p95": 38.078,
+   "owd_p99": 54.726,
+   "owd_max": 94.398,
+   "jitter_ms": 2.597,
+   "loss": 0.001,
+   "mos_mean": 4.35,
+   "poor_seconds_frac": 0.0,
+   "mos_min": 3.947
+  },
+  "call_video_down": {
+   "n": 17371,
+   "owd_p50": 57.548,
+   "owd_p95": 66.332,
+   "owd_p99": 78.047,
+   "owd_max": 138.582,
+   "jitter_ms": 1.139,
+   "loss": 0.161
+  },
+  "call_video_up": {
+   "n": 17684,
+   "owd_p50": 10.448,
+   "owd_p95": 39.398,
+   "owd_p99": 55.761,
+   "owd_max": 100.001,
+   "jitter_ms": 0.867,
+   "loss": 0.002
+  },
+  "game_down": {
+   "n": 2794,
+   "owd_p50": 58.884,
+   "owd_p95": 65.979,
+   "owd_p99": 80.287,
+   "owd_max": 138.948,
+   "jitter_ms": 6.294,
+   "loss": 0.02
+  },
+  "game_up": {
+   "n": 5695,
+   "owd_p50": 8.962,
+   "owd_p95": 38.526,
+   "owd_p99": 55.236,
+   "owd_max": 95.114,
+   "jitter_ms": 3.683,
+   "loss": 0.001
+  },
+  "iso_download": {
+   "goodput_mbps": 17.094,
+   "min_1s_mbps": 13.345,
+   "starved_seconds": 0
+  },
+  "cloud_backup": {
+   "goodput_mbps": 13.764,
+   "min_1s_mbps": 6.974,
+   "starved_seconds": 0
+  },
+  "tv1": {
+   "mean_bitrate_mbps": 2.46,
+   "rebuffer_s": 0.0,
+   "startup_s": 1.449,
+   "switches": 3,
+   "chunks": 50,
+   "mean_chunk_throughput_mbps": 4.834
+  },
+  "tv2": {
+   "mean_bitrate_mbps": 2.602,
+   "rebuffer_s": 0.0,
+   "startup_s": 1.75,
+   "switches": 3,
+   "chunks": 49,
+   "mean_chunk_throughput_mbps": 4.008
+  },
+  "tv3": {
+   "mean_bitrate_mbps": 1.531,
+   "rebuffer_s": 0.0,
+   "startup_s": 1.389,
+   "switches": 1,
+   "chunks": 48,
+   "mean_chunk_throughput_mbps": 3.174
+  },
+  "phone_web": {
+   "page_load_ms_p50": 528.4,
+   "page_load_ms_p95": 952.7,
+   "pages": 37
+  }
+ },
+ "on": {
+  "arm": "on",
+  "window_s": [
+   20,
+   115
+  ],
+  "call_audio_down": {
+   "n": 4734,
+   "owd_p50": 20.97,
+   "owd_p95": 80.519,
+   "owd_p99": 91.812,
+   "owd_max": 151.768,
+   "jitter_ms": 4.45,
+   "loss": 0.003,
+   "mos_mean": 3.667,
+   "poor_seconds_frac": 0.263,
+   "mos_min": 1.098
+  },
+  "call_audio_up": {
+   "n": 4746,
+   "owd_p50": 12.197,
+   "owd_p95": 35.659,
+   "owd_p99": 55.647,
+   "owd_max": 119.844,
+   "jitter_ms": 4.403,
+   "loss": 0.001,
+   "mos_mean": 4.314,
+   "poor_seconds_frac": 0.0,
+   "mos_min": 3.692
+  },
+  "call_video_down": {
+   "n": 20201,
+   "owd_p50": 28.102,
+   "owd_p95": 81.573,
+   "owd_p99": 99.204,
+   "owd_max": 155.269,
+   "jitter_ms": 3.433,
+   "loss": 0.024
+  },
+  "call_video_up": {
+   "n": 17700,
+   "owd_p50": 14.492,
+   "owd_p95": 36.347,
+   "owd_p99": 53.663,
+   "owd_max": 104.975,
+   "jitter_ms": 2.172,
+   "loss": 0.001
+  },
+  "game_down": {
+   "n": 2837,
+   "owd_p50": 20.467,
+   "owd_p95": 79.923,
+   "owd_p99": 91.648,
+   "owd_max": 144.529,
+   "jitter_ms": 5.001,
+   "loss": 0.005
+  },
+  "game_up": {
+   "n": 5697,
+   "owd_p50": 11.762,
+   "owd_p95": 34.37,
+   "owd_p99": 55.011,
+   "owd_max": 123.904,
+   "jitter_ms": 4.377,
+   "loss": 0.001
+  },
+  "iso_download": {
+   "goodput_mbps": 13.992,
+   "min_1s_mbps": 8.653,
+   "starved_seconds": 0
+  },
+  "cloud_backup": {
+   "goodput_mbps": 18.282,
+   "min_1s_mbps": 6.058,
+   "starved_seconds": 0
+  },
+  "tv1": {
+   "mean_bitrate_mbps": 1.5,
+   "rebuffer_s": 0.0,
+   "startup_s": 2.043,
+   "switches": 0,
+   "chunks": 50,
+   "mean_chunk_throughput_mbps": 3.433
+  },
+  "tv2": {
+   "mean_bitrate_mbps": 2.531,
+   "rebuffer_s": 0.0,
+   "startup_s": 1.951,
+   "switches": 10,
+   "chunks": 48,
+   "mean_chunk_throughput_mbps": 3.806
+  },
+  "tv3": {
+   "mean_bitrate_mbps": 1.5,
+   "rebuffer_s": 0.0,
+   "startup_s": 1.868,
+   "switches": 0,
+   "chunks": 48,
+   "mean_chunk_throughput_mbps": 3.302
+  },
+  "phone_web": {
+   "page_load_ms_p50": 449.2,
+   "page_load_ms_p95": 682.4,
+   "pages": 38
+  }
+ }
+}

@@ -1,0 +1,100 @@
+{"t": 1795470818.1984487, "event": "paired", "check": "connected plan 30/30 Mbit/s", "pair": "Paired with the console at 192.168.8.214."}
+{"t": 1795470876.5485911, "event": "paired", "check": "connected plan 30/30 Mbit/s", "pair": ""}
+{"t": 1795470876.866203, "event": "run_clicked", "scenarios": ["call_backup", "game_downloads", "busy_home", "rpm", "home_network"], "seconds": "30"}
+{"t": 1795470898.3255708, "event": "live", "phase": "Work call while a backup uploads: IntentQoS off", "progress": 0.05824358968055555, "down": 0, "up": 32.505856}
+{"t": 1795470919.7325382, "event": "live", "phase": "Work call while a backup uploads: IntentQoS on (settling)", "progress": 0.0998950207027778, "down": 0, "up": 24.641536}
+{"t": 1795470938.0743186, "event": "live", "phase": "Work call while a backup uploads: IntentQoS on", "progress": 0.16562135464444444, "down": 0, "up": 26.2144}
+{"t": 1795470959.4749072, "event": "live", "phase": "Work call while a backup uploads: IntentQoS on", "progress": 0.19977665500277778, "down": 0, "up": 22.544384}
+{"t": 1795470964.5885572, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\nWork call while a backup uploads\ndelay p99 (ms)\t85.8 ms p50 66.2 \u00b7 call 100 \u00b7 game 69.8\t59.5 ms p50 22.1 \u00b7 call 100 \u00b7 game 100\t-31 %\t\u2191 29.4 Mbit/s / \u2191 23.3 Mbit/s\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\ncould not open the no-QoS test window on the router: Post \"http://192.168.8.1:8080/api/bypass\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)", "seconds": 87.7}
+{"t": 1795471054.4344652, "event": "paired", "check": "connected plan 30/30 Mbit/s", "pair": ""}
+{"t": 1795471054.773493, "event": "run_clicked", "scenarios": ["call_backup", "game_downloads", "busy_home", "rpm", "home_network"], "seconds": "30"}
+{"t": 1795471076.0913885, "event": "live", "phase": "Work call while a backup uploads: IntentQoS off", "progress": 0.057384067880555556, "down": 0, "up": 25.690112}
+{"t": 1795471097.4441056, "event": "live", "phase": "Work call while a backup uploads: IntentQoS on (settling)", "progress": 0.09988400121666668, "down": 0, "up": 23.59296}
+{"t": 1795471115.7222846, "event": "live", "phase": "Work call while a backup uploads: IntentQoS on", "progress": 0.1645101801861111, "down": 0, "up": 21.757952}
+{"t": 1795471137.1945302, "event": "live", "phase": "Game while big downloads run: IntentQoS off", "progress": 0.21991176153333333, "down": 25.413888, "up": 0}
+{"t": 1795471155.7059205, "event": "live", "phase": "Game while big downloads run: IntentQoS off", "progress": 0.2713040992361111, "down": 27.674176, "up": 0}
+{"t": 1795471177.1379988, "event": "live", "phase": "Game while big downloads run: IntentQoS on", "progress": 0.32941181115833335, "down": 20.422592, "up": 0}
+{"t": 1795471195.5700362, "event": "live", "phase": "Game while big downloads run: IntentQoS on", "progress": 0.38062676449444444, "down": 24.013632, "up": 0}
+{"t": 1795471216.9729643, "event": "live", "phase": "Everyone online at once: IntentQoS off", "progress": 0.4166666666666667, "down": 27.152896, "up": 29.622272}
+{"t": 1795471235.4204853, "event": "live", "phase": "Everyone online at once: IntentQoS off", "progress": 0.46849971085000003, "down": 27.732096, "up": 23.855104}
+{"t": 1795471256.9144177, "event": "live", "phase": "Everyone online at once: IntentQoS on", "progress": 0.5253471020694445, "down": 26.156672, "up": 23.068672}
+{"t": 1795471275.4130251, "event": "live", "phase": "Everyone online at once: IntentQoS on", "progress": 0.5767475648777778, "down": 21.175552, "up": 18.35008}
+{"t": 1795471296.8208046, "event": "live", "phase": "Responsiveness (RPM): IntentQoS off", "progress": 0.5998135956861111, "down": 0, "up": 0}
+{"t": 1795471315.2653797, "event": "live", "phase": "Responsiveness (RPM): IntentQoS off", "progress": 0.5998135956861111, "down": 0, "up": 0}
+{"t": 1795471336.697606, "event": "live", "phase": "Responsiveness (RPM): IntentQoS on", "progress": 0.7, "down": 0, "up": 0}
+{"t": 1795471355.238359, "event": "live", "phase": "Responsiveness (RPM): IntentQoS on", "progress": 0.7, "down": 0, "up": 0}
+{"t": 1795471376.5709162, "event": "live", "phase": "Home network: capacity, now 39 Mbit/s", "progress": 0.8, "down": 0, "up": 0}
+{"t": 1795471394.956016, "event": "live", "phase": "Home network: RPM 651 with 3 connections, 177 Mbit/s", "progress": 0.8, "down": 0, "up": 0}
+{"t": 1795471416.3677847, "event": "live", "phase": "Finished", "progress": 1, "down": 0, "up": 0}
+{"t": 1795471418.4718332, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\nWork call while a backup uploads\ndelay p99 (ms)\t79.7 ms p50 60.7 \u00b7 call 100 \u00b7 game 74.4\t63.3 ms p50 22.1 \u00b7 call 100 \u00b7 game 98.3\t-21 %\t\u2191 29.2 Mbit/s / \u2191 23.0 Mbit/s\nGame while big downloads run\ndelay p99 (ms)\t79.9 ms p50 67.4 \u00b7 call 100 \u00b7 game 68.8\t98.8 ms p50 32.2 \u00b7 call 100 \u00b7 game 79.6\t+24 %\t\u2193 27.6 Mbit/s / \u2193 21.6 Mbit/s\nEveryone online at once\ndelay p99 (ms)\t165.8 ms p50 77.6 \u00b7 call 100 \u00b7 game 44.3\t109.3 ms p50 31.3 \u00b7 call 100 \u00b7 game 74.1\t-34 %\t\u2193 27.0 \u2191 23.8 Mbit/s / \u2193 21.7 \u2191 22.3 Mbit/s\nResponsiveness (RPM)\ndelay p99 (ms)\t88.4 ms p50 61.5 \u00b7 call 100 \u00b7 game 73.8\t98.7 ms p50 77.4 \u00b7 call 100 \u00b7 game 60.5\t+12 %\tMbit/s / Mbit/s\nHome network only\ncapacity and responsiveness to the Operator Console\t\u2014\t46 Mbit/s RPM 424\tinside the home\t\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSent to the Operator Console.", "seconds": 363.7}
+{"t": 1795471421.5178504, "event": "finished", "upl": "Sent to the Operator Console."}
+{"t": 1795507037.3328779, "event": "failover_clicked", "qos": "on"}
+{"t": 1795507057.8634377, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795507063.1247551, "event": "cable_moved", "rc": 0, "out": "moved to-4g after 4s\nnsenter: cannot open /proc/1/ns/net: Permission denied\nnsenter: cannot open /proc/1/ns/net: Permission denied\n"}
+{"t": 1795507063.4393961, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 22.24128, "up": 14.680064}
+{"t": 1795507078.1438031, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 22.41504, "up": 18.612224}
+{"t": 1795507098.1073024, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 20.654272, "up": 18.35008}
+{"t": 1795507118.2244327, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 20.96704, "up": 22.544384}
+{"t": 1795507133.9864092, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 96.7}
+{"t": 1795507137.0603926, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795507142.1327536, "event": "cable_back", "rc": 0}
+{"t": 1795507181.474923, "event": "failover_clicked", "qos": "on"}
+{"t": 1795507202.021787, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795507202.7754562, "event": "cable_moved", "rc": 0, "out": "nsenter: cannot open /proc/1/ns/net: Permission denied\n"}
+{"t": 1795507202.9531617, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 21.708416, "up": 23.59296}
+{"t": 1795507221.7230802, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 20.885952, "up": 20.97152}
+{"t": 1795507241.6825204, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 21.847424, "up": 20.447232}
+{"t": 1795507261.7953105, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 21.592576, "up": 25.165824}
+{"t": 1795507274.2895, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 92.8}
+{"t": 1795507277.345595, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795507278.1717074, "event": "cable_back", "rc": 0}
+{"t": 1795507368.0312943, "event": "failover_clicked", "qos": "on"}
+{"t": 1795507388.5125027, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795507393.9573247, "event": "cable_moved", "rc": 0, "out": "moved to-4g after 4s\n"}
+{"t": 1795507394.1833243, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 20.73536, "up": 20.447232}
+{"t": 1795507408.7137036, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 14.966528, "up": 8.388608}
+{"t": 1795507428.5498312, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 9.950656, "up": 6.815744}
+{"t": 1795507448.469477, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 4.57568, "up": 3.145728}
+{"t": 1795507458.9403906, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 90.9}
+{"t": 1795507461.9757452, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795507467.2659538, "event": "cable_back", "rc": 0}
+{"t": 1795507527.6468048, "event": "failover_clicked", "qos": "off"}
+{"t": 1795507548.1798737, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795507553.636461, "event": "cable_moved", "rc": 0, "out": "moved to-4g after 4s\n"}
+{"t": 1795507553.8136468, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 9.406208, "up": 5.24288}
+{"t": 1795507568.434405, "event": "live", "phase": "Failover test (off): on 4G, measuring recovery", "progress": 0, "down": 25.959744, "up": 18.874368}
+{"t": 1795507588.4237163, "event": "live", "phase": "Failover test (off): on 4G, measuring recovery", "progress": 0, "down": 9.406208, "up": 7.86432}
+{"t": 1795507608.4180918, "event": "live", "phase": "Failover test (off): on 4G, measuring recovery", "progress": 0, "down": 6.568128, "up": 7.86432}
+{"t": 1795507617.8715098, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 90.2}
+{"t": 1795507620.9157696, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795507626.1979442, "event": "cable_back", "rc": 0}
+{"t": 1795507969.4773722, "event": "failover_clicked", "qos": "on"}
+{"t": 1795507990.0859904, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795507995.71872, "event": "cable_moved", "rc": 0, "out": "moved to-4g after 4s\n"}
+{"t": 1795507995.9058335, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 21.824256, "up": 22.28224}
+{"t": 1795508010.551617, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 20.353088, "up": 0}
+{"t": 1795508030.4100904, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 26.342016, "up": 12.845056}
+{"t": 1795508050.492624, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 20.364672, "up": 16.252928}
+{"t": 1795508061.0042264, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 91.5}
+{"t": 1795508064.0535989, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795508069.3393593, "event": "cable_back", "rc": 0}
+{"t": 1795508363.1448665, "event": "failover_clicked", "qos": "on"}
+{"t": 1795508383.6741457, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795508389.1238487, "event": "cable_moved", "rc": 0, "out": "moved to-4g after 4s\n"}
+{"t": 1795508389.3786201, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 19.380032, "up": 23.330816}
+{"t": 1795508403.9326959, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 10.993216, "up": 6.291456}
+{"t": 1795508423.720626, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 15.974336, "up": 12.582912}
+{"t": 1795508443.6531096, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 7.900288, "up": 1.572864}
+{"t": 1795508453.1559684, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 90.0}
+{"t": 1795508456.2167392, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795508461.4894905, "event": "cable_back", "rc": 0}
+{"t": 1795508647.965122, "event": "failover_clicked", "qos": "on"}
+{"t": 1795508668.4762297, "event": "asked_to_move_cable", "text": "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press \u201cCable moved\u201d."}
+{"t": 1795508673.924235, "event": "cable_moved", "rc": 0, "out": "moved to-4g after 4s\n"}
+{"t": 1795508674.1083446, "event": "live", "phase": "Failover test: move the cable now", "progress": 0, "down": 18.812416, "up": 18.35008}
+{"t": 1795508688.6558712, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 3.984896, "up": 4.194304}
+{"t": 1795508708.5930684, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 7.958208, "up": 3.145728}
+{"t": 1795508728.7528217, "event": "live", "phase": "Failover test (on): on 4G, measuring recovery", "progress": 0, "down": 12.939328, "up": 5.505024}
+{"t": 1795508740.325501, "event": "result", "text": "Results\nTest\tIntentQoS off\tIntentQoS on\tChange\tSpeed (off / on)\n\np99 = the delay that 1 in 100 moments is worse than: what makes a call stutter or a game lag. p50 shown small.\n\nOpen the report\nSaved in Documents \u203a IntentQoS Reports.", "seconds": 92.4}
+{"t": 1795508743.3747685, "event": "finished", "upl": "Saved in Documents \u203a IntentQoS Reports."}
+{"t": 1795508748.6607468, "event": "cable_back", "rc": 0}

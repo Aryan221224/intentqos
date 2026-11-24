@@ -1,0 +1,1 @@
+{"name": "off-call_audio", "kind": "voip", "src": "192.168.8.216", "dst": "104.18.20.10", "sport": 51241, "dport": 9003, "proto": "udp", "flow_hash": "1054a5d4", "start_wall": 1795506361.8668265, "duration": 115.0, "sent_up": 5750, "up_rate": 50, "up_size": 172, "dn_rate": 50, "dn_size": 172, "down": {"seq": [], "tx": [], "rx": [], "size": []}}

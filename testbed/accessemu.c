@@ -127,6 +127,13 @@ static void cfg_load(const char *path) {
         double x = atof(v);
         if (!strcmp(k, "seed")) C.seed = strtoull(v, NULL, 10);
         else if (!strcmp(k, "epoch")) C.epoch = strtoull(v, NULL, 10);
+        else if (!strcmp(k, "lan4") || !strcmp(k, "gw4")) {   /* optional: addresses of this deployment */
+            unsigned a, b, c, d;
+            if (sscanf(v, "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
+                uint32_t ip = a << 24 | b << 16 | c << 8 | d;
+                if (k[0] == 'l') C.lan4 = ip & 0xFFFFFF00u; else C.gw4 = ip & 0xFFFFFFFCu;
+            }
+        }
         else if (!strncmp(k, "down.", 5)) set_dir(&C.d[0], k + 5, x);
         else if (!strncmp(k, "up.", 3)) set_dir(&C.d[1], k + 3, x);
         else if (!strcmp(k, "wifi5.med_ms")) C.w_med[0] = x; else if (!strcmp(k, "wifi5.sigma")) C.w_sigma[0] = x;

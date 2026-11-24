@@ -1,0 +1,1050 @@
+{
+ "calibration": {
+  "coremark": {
+   "router_vm_per_core": 6204.5,
+   "cortex_a53_1200mhz_rpi3": 3800,
+   "cortex_a53_1300mhz_scaled": 4117,
+   "source": "https://kreier.github.io/benchmark/CoreMark/ (Raspberry Pi 3 Model B, single core)",
+   "ratio_vm_to_mt7981": 1.51
+  },
+  "nat_routing_no_shaping": {
+   "tcp_down_mbit": 296,
+   "host_cpu_pct_of_one_core": 190,
+   "note": "before IntentQoS, MTU-sized frames, fw4 NAT"
+  },
+  "real_mt7981_cake_reference": {
+   "mbit": 200,
+   "source": "https://forum.openwrt.org/t/mt7981-sqm-performance-200-mbps-vs-mt7622-500-mbps/188426",
+   "confidence": "low (one user report quoted in the thread)"
+  },
+  "load_tests": {
+   "note": "4 TCP downloads to the wired desktop for 25 s; ping from the 5 GHz laptop every 200 ms; IntentQoS on",
+   "before_engine_fix": [
+    {
+     "plan": 100,
+     "delivered_mbit": 76.2,
+     "rtt_avg_ms": 27.0,
+     "rtt_max_ms": 69.4,
+     "router_busy_pct": 99
+    },
+    {
+     "plan": 50,
+     "delivered_mbit": 45.1,
+     "rtt_avg_ms": 39.8,
+     "rtt_max_ms": 95.4,
+     "router_busy_pct": 99
+    },
+    {
+     "plan": 30,
+     "delivered_mbit": 26.0,
+     "rtt_avg_ms": 35.1,
+     "rtt_max_ms": 73.6,
+     "router_busy_pct": 97
+    }
+   ],
+   "after_engine_fix": [
+    {
+     "plan": 100,
+     "delivered_mbit": 42.6,
+     "rtt_avg_ms": 21.5,
+     "rtt_max_ms": 60.1,
+     "router_busy_pct": 93.8,
+     "softirq_pct": 56.1,
+     "daemon_pct_one_core": 60.9
+    },
+    {
+     "plan": 50,
+     "delivered_mbit": 33.7,
+     "rtt_avg_ms": 17.8,
+     "rtt_max_ms": 41.2,
+     "router_busy_pct": 83.6,
+     "softirq_pct": 42.3,
+     "daemon_pct_one_core": 94.2
+    },
+    {
+     "plan": 30,
+     "delivered_mbit": 24.4,
+     "rtt_avg_ms": 19.1,
+     "rtt_max_ms": 66.9,
+     "router_busy_pct": 90.8,
+     "softirq_pct": 47.2,
+     "daemon_pct_one_core": 80.1
+    }
+   ],
+   "idle_rtt_wired_ms": 12.1,
+   "idle_rtt_5ghz_ms": 15.1,
+   "idle_rtt_24ghz_ms": 18.8
+  },
+  "engine_idle_cpu": {
+   "before": {
+    "router_busy_pct_of_2_cores": 88.5,
+    "daemon_pct_one_core": 69.3,
+    "processes_per_s": 7.0,
+    "cause": "tc -j -s qdisc show per device per estimator tick (fork+exec; OpenWrt tc writes its JSON one byte per syscall)"
+   },
+   "after": {
+    "router_busy_pct_of_2_cores": 12.5,
+    "daemon_pct_one_core": 16.5,
+    "processes_per_s": 2.3,
+    "change": "cake counters read in-process over netlink (RTM_GETQDISC); 4.8 ms CPU per read vs ~52 ms per tc run"
+   }
+  }
+ },
+ "timeline_events": 247,
+ "testkit": [
+  {
+   "id": "call_backup",
+   "name": "Work call while a backup uploads",
+   "report": "IntentQoS-test-2026-11-24_0327.json",
+   "off": {
+    "p50": 60.7,
+    "p95": 74.3,
+    "p99": 79.7,
+    "loss_pct": 0.3,
+    "down_mbps": 0,
+    "up_mbps": 29.2
+   },
+   "on": {
+    "p50": 22.1,
+    "p95": 33.3,
+    "p99": 63.3,
+    "loss_pct": 0,
+    "down_mbps": 0,
+    "up_mbps": 23
+   }
+  },
+  {
+   "id": "game_downloads",
+   "name": "Game while big downloads run",
+   "report": "IntentQoS-test-2026-11-24_0327.json",
+   "off": {
+    "p50": 67.4,
+    "p95": 75.7,
+    "p99": 79.9,
+    "loss_pct": 0,
+    "down_mbps": 27.6,
+    "up_mbps": 0
+   },
+   "on": {
+    "p50": 32.2,
+    "p95": 94.2,
+    "p99": 98.8,
+    "loss_pct": 0.3,
+    "down_mbps": 21.6,
+    "up_mbps": 0
+   }
+  },
+  {
+   "id": "busy_home",
+   "name": "Everyone online at once",
+   "report": "IntentQoS-test-2026-11-24_0327.json",
+   "off": {
+    "p50": 77.6,
+    "p95": 137.3,
+    "p99": 165.8,
+    "loss_pct": 0.3,
+    "down_mbps": 27,
+    "up_mbps": 23.8
+   },
+   "on": {
+    "p50": 31.3,
+    "p95": 70,
+    "p99": 109.3,
+    "loss_pct": 0.3,
+    "down_mbps": 21.7,
+    "up_mbps": 22.3
+   }
+  },
+  {
+   "id": "rpm",
+   "name": "Responsiveness (RPM)",
+   "report": "IntentQoS-test-2026-11-24_0327.json",
+   "off": {
+    "p50": 61.5,
+    "p95": 81.2,
+    "p99": 88.4,
+    "loss_pct": 0.3,
+    "down_mbps": 0,
+    "up_mbps": 0
+   },
+   "on": {
+    "p50": 77.4,
+    "p95": 89.6,
+    "p99": 98.7,
+    "loss_pct": 0.3,
+    "down_mbps": 0,
+    "up_mbps": 0
+   }
+  },
+  {
+   "id": "home_network",
+   "name": "Home network only",
+   "report": "IntentQoS-test-2026-11-24_0327.json",
+   "off": {
+    "p50": 0,
+    "p95": 0,
+    "p99": 0,
+    "loss_pct": 0,
+    "down_mbps": 0,
+    "up_mbps": 0
+   },
+   "on": {
+    "p50": 0,
+    "p95": 0,
+    "p99": 0,
+    "loss_pct": 0,
+    "down_mbps": 0,
+    "up_mbps": 0
+   },
+   "home": {
+    "capacity_mbps": 46.3,
+    "rpm": 424,
+    "loaded_rpm": 104
+   }
+  }
+ ],
+ "failover": [
+  {
+   "qos": "on",
+   "switch_t": 25.797790954,
+   "report": "IntentQoS-test-2026-11-24_1327.json",
+   "before": {
+    "p50": 85.9,
+    "p95": 123.5,
+    "p99": 163.2,
+    "loss_pct": 0,
+    "down_mbps": 21.6,
+    "up_mbps": 19.8
+   },
+   "after": {
+    "p50": 41.8,
+    "p95": 102.2,
+    "p99": 123.5,
+    "loss_pct": 6.9,
+    "down_mbps": 19,
+    "up_mbps": 17.9
+   },
+   "label": "flap (cable not moved)"
+  },
+  {
+   "qos": "on",
+   "switch_t": 21.170862623,
+   "report": "IntentQoS-test-2026-11-24_1329.json",
+   "before": {
+    "p50": 47.6,
+    "p95": 104.7,
+    "p99": 127.1,
+    "loss_pct": 0,
+    "down_mbps": 22,
+    "up_mbps": 22.4
+   },
+   "after": {
+    "p50": 35.9,
+    "p95": 83.8,
+    "p99": 107.2,
+    "loss_pct": 13.1,
+    "down_mbps": 16.9,
+    "up_mbps": 17.3
+   },
+   "label": "flap (cable not moved)"
+  },
+  {
+   "qos": "on",
+   "switch_t": 25.926093917,
+   "report": "IntentQoS-test-2026-11-24_1332.json",
+   "before": {
+    "p50": 41.4,
+    "p95": 87.9,
+    "p99": 125,
+    "loss_pct": 0,
+    "down_mbps": 21.5,
+    "up_mbps": 22.2
+   },
+   "after": {
+    "p50": 218.5,
+    "p95": 404,
+    "p99": 743.3,
+    "loss_pct": 6.2,
+    "down_mbps": 10.4,
+    "up_mbps": 6.2
+   },
+   "label": "on, engine as first installed"
+  },
+  {
+   "qos": "off",
+   "switch_t": 25.523806951,
+   "report": "IntentQoS-test-2026-11-24_1335.json",
+   "before": {
+    "p50": 143.7,
+    "p95": 162.5,
+    "p99": 166.7,
+    "loss_pct": 0.5,
+    "down_mbps": 9.6,
+    "up_mbps": 7.5
+   },
+   "after": {
+    "p50": 231.7,
+    "p95": 467.1,
+    "p99": 829.5,
+    "loss_pct": 4,
+    "down_mbps": 13.4,
+    "up_mbps": 7.2
+   },
+   "label": "off (no QoS)"
+  },
+  {
+   "qos": "on",
+   "switch_t": 26.215651822,
+   "report": "IntentQoS-test-2026-11-24_1342.json",
+   "before": {
+    "p50": 55.8,
+    "p95": 154.8,
+    "p99": 180.6,
+    "loss_pct": 0,
+    "down_mbps": 20.6,
+    "up_mbps": 21.7
+   },
+   "after": {
+    "p50": 365.9,
+    "p95": 772.7,
+    "p99": 915,
+    "loss_pct": 8.2,
+    "down_mbps": 16.3,
+    "up_mbps": 7.3
+   },
+   "label": "on + blind back-off + path-change reset"
+  },
+  {
+   "qos": "on",
+   "switch_t": 25.993340085,
+   "report": "IntentQoS-test-2026-11-24_1349.json",
+   "before": {
+    "p50": 47.3,
+    "p95": 103.8,
+    "p99": 176,
+    "loss_pct": 0.5,
+    "down_mbps": 21.9,
+    "up_mbps": 22.4
+   },
+   "after": {
+    "p50": 163,
+    "p95": 409.2,
+    "p99": 453.2,
+    "loss_pct": 4.9,
+    "down_mbps": 9.7,
+    "up_mbps": 6.8
+   },
+   "label": "on + watchdog keeps lower rates, engine re-applies"
+  },
+  {
+   "qos": "on",
+   "switch_t": 25.968370553,
+   "report": "IntentQoS-test-2026-11-24_1354.json",
+   "before": {
+    "p50": 94.5,
+    "p95": 134,
+    "p99": 162.4,
+    "loss_pct": 0.5,
+    "down_mbps": 19.6,
+    "up_mbps": 21.3
+   },
+   "after": {
+    "p50": 236.2,
+    "p95": 748.5,
+    "p99": 836.4,
+    "loss_pct": 4.7,
+    "down_mbps": 12.1,
+    "up_mbps": 7.2
+   },
+   "label": "on + watchdog timeout 8 s"
+  }
+ ],
+ "household": {
+  "off": {
+   "arm": "off",
+   "window_s": [
+    20,
+    115
+   ],
+   "call_audio_down": {
+    "n": 4701,
+    "owd_p50": 58.597,
+    "owd_p95": 66.552,
+    "owd_p99": 80.8,
+    "owd_max": 152.679,
+    "jitter_ms": 5.607,
+    "loss": 0.01,
+    "mos_mean": 3.894,
+    "poor_seconds_frac": 0.158,
+    "mos_min": 1.356
+   },
+   "call_audio_up": {
+    "n": 4746,
+    "owd_p50": 8.949,
+    "owd_p95": 38.078,
+    "owd_p99": 54.726,
+    "owd_max": 94.398,
+    "jitter_ms": 2.597,
+    "loss": 0.001,
+    "mos_mean": 4.35,
+    "poor_seconds_frac": 0.0,
+    "mos_min": 3.947
+   },
+   "call_video_down": {
+    "n": 17371,
+    "owd_p50": 57.548,
+    "owd_p95": 66.332,
+    "owd_p99": 78.047,
+    "owd_max": 138.582,
+    "jitter_ms": 1.139,
+    "loss": 0.161
+   },
+   "call_video_up": {
+    "n": 17684,
+    "owd_p50": 10.448,
+    "owd_p95": 39.398,
+    "owd_p99": 55.761,
+    "owd_max": 100.001,
+    "jitter_ms": 0.867,
+    "loss": 0.002
+   },
+   "game_down": {
+    "n": 2794,
+    "owd_p50": 58.884,
+    "owd_p95": 65.979,
+    "owd_p99": 80.287,
+    "owd_max": 138.948,
+    "jitter_ms": 6.294,
+    "loss": 0.02
+   },
+   "game_up": {
+    "n": 5695,
+    "owd_p50": 8.962,
+    "owd_p95": 38.526,
+    "owd_p99": 55.236,
+    "owd_max": 95.114,
+    "jitter_ms": 3.683,
+    "loss": 0.001
+   },
+   "iso_download": {
+    "goodput_mbps": 17.094,
+    "min_1s_mbps": 13.345,
+    "starved_seconds": 0
+   },
+   "cloud_backup": {
+    "goodput_mbps": 13.764,
+    "min_1s_mbps": 6.974,
+    "starved_seconds": 0
+   },
+   "tv1": {
+    "mean_bitrate_mbps": 2.46,
+    "rebuffer_s": 0.0,
+    "startup_s": 1.449,
+    "switches": 3,
+    "chunks": 50,
+    "mean_chunk_throughput_mbps": 4.834
+   },
+   "tv2": {
+    "mean_bitrate_mbps": 2.602,
+    "rebuffer_s": 0.0,
+    "startup_s": 1.75,
+    "switches": 3,
+    "chunks": 49,
+    "mean_chunk_throughput_mbps": 4.008
+   },
+   "tv3": {
+    "mean_bitrate_mbps": 1.531,
+    "rebuffer_s": 0.0,
+    "startup_s": 1.389,
+    "switches": 1,
+    "chunks": 48,
+    "mean_chunk_throughput_mbps": 3.174
+   },
+   "phone_web": {
+    "page_load_ms_p50": 528.4,
+    "page_load_ms_p95": 952.7,
+    "pages": 37
+   }
+  },
+  "on": {
+   "arm": "on",
+   "window_s": [
+    20,
+    115
+   ],
+   "call_audio_down": {
+    "n": 4734,
+    "owd_p50": 20.97,
+    "owd_p95": 80.519,
+    "owd_p99": 91.812,
+    "owd_max": 151.768,
+    "jitter_ms": 4.45,
+    "loss": 0.003,
+    "mos_mean": 3.667,
+    "poor_seconds_frac": 0.263,
+    "mos_min": 1.098
+   },
+   "call_audio_up": {
+    "n": 4746,
+    "owd_p50": 12.197,
+    "owd_p95": 35.659,
+    "owd_p99": 55.647,
+    "owd_max": 119.844,
+    "jitter_ms": 4.403,
+    "loss": 0.001,
+    "mos_mean": 4.314,
+    "poor_seconds_frac": 0.0,
+    "mos_min": 3.692
+   },
+   "call_video_down": {
+    "n": 20201,
+    "owd_p50": 28.102,
+    "owd_p95": 81.573,
+    "owd_p99": 99.204,
+    "owd_max": 155.269,
+    "jitter_ms": 3.433,
+    "loss": 0.024
+   },
+   "call_video_up": {
+    "n": 17700,
+    "owd_p50": 14.492,
+    "owd_p95": 36.347,
+    "owd_p99": 53.663,
+    "owd_max": 104.975,
+    "jitter_ms": 2.172,
+    "loss": 0.001
+   },
+   "game_down": {
+    "n": 2837,
+    "owd_p50": 20.467,
+    "owd_p95": 79.923,
+    "owd_p99": 91.648,
+    "owd_max": 144.529,
+    "jitter_ms": 5.001,
+    "loss": 0.005
+   },
+   "game_up": {
+    "n": 5697,
+    "owd_p50": 11.762,
+    "owd_p95": 34.37,
+    "owd_p99": 55.011,
+    "owd_max": 123.904,
+    "jitter_ms": 4.377,
+    "loss": 0.001
+   },
+   "iso_download": {
+    "goodput_mbps": 13.992,
+    "min_1s_mbps": 8.653,
+    "starved_seconds": 0
+   },
+   "cloud_backup": {
+    "goodput_mbps": 18.282,
+    "min_1s_mbps": 6.058,
+    "starved_seconds": 0
+   },
+   "tv1": {
+    "mean_bitrate_mbps": 1.5,
+    "rebuffer_s": 0.0,
+    "startup_s": 2.043,
+    "switches": 0,
+    "chunks": 50,
+    "mean_chunk_throughput_mbps": 3.433
+   },
+   "tv2": {
+    "mean_bitrate_mbps": 2.531,
+    "rebuffer_s": 0.0,
+    "startup_s": 1.951,
+    "switches": 10,
+    "chunks": 48,
+    "mean_chunk_throughput_mbps": 3.806
+   },
+   "tv3": {
+    "mean_bitrate_mbps": 1.5,
+    "rebuffer_s": 0.0,
+    "startup_s": 1.868,
+    "switches": 0,
+    "chunks": 48,
+    "mean_chunk_throughput_mbps": 3.302
+   },
+   "phone_web": {
+    "page_load_ms_p50": 449.2,
+    "page_load_ms_p95": 682.4,
+    "pages": 38
+   }
+  }
+ },
+ "household_table": [
+  {
+   "metric": "call audio delay p99 (ms), down",
+   "off": 80.8,
+   "on": 91.812
+  },
+  {
+   "metric": "call audio delay p99 (ms), up",
+   "off": 54.726,
+   "on": 55.647
+  },
+  {
+   "metric": "call audio MOS, down",
+   "off": 3.894,
+   "on": 3.667
+  },
+  {
+   "metric": "call video delay p99 (ms), down",
+   "off": 78.047,
+   "on": 99.204
+  },
+  {
+   "metric": "game delay p99 (ms), down",
+   "off": 80.287,
+   "on": 91.648
+  },
+  {
+   "metric": "game delay p99 (ms), up",
+   "off": 55.236,
+   "on": 55.011
+  },
+  {
+   "metric": "ISO download (Mbit/s)",
+   "off": 17.094,
+   "on": 13.992
+  },
+  {
+   "metric": "cloud backup (Mbit/s)",
+   "off": 13.764,
+   "on": 18.282
+  },
+  {
+   "metric": "TV 1 bitrate (Mbit/s)",
+   "off": 2.46,
+   "on": 1.5
+  },
+  {
+   "metric": "TV 3 (2.4 GHz) bitrate",
+   "off": 1.531,
+   "on": 1.5
+  },
+  {
+   "metric": "phone page load p95 (ms)",
+   "off": 952.7,
+   "on": 682.4
+  }
+ ],
+ "router_health": {
+  "run2": {
+   "samples": 285,
+   "busy_mean": 39.4,
+   "busy_p95": 92.3,
+   "seconds_above_90pct": 93,
+   "mem_used_mb_max": 154.7,
+   "mem_total_mb": 477.7
+  },
+  "run3": {
+   "samples": 974,
+   "busy_mean": 51.6,
+   "busy_p95": 99.9,
+   "seconds_above_90pct": 537,
+   "mem_used_mb_max": 156.7,
+   "mem_total_mb": 477.7
+  }
+ },
+ "engine_events": {
+  "total": 272,
+  "by_kind": {
+   "watchdog/warn": 53,
+   "estimator/info": 36,
+   "engine/info": 33,
+   "estimator/warn": 32,
+   "enforce/info": 31,
+   "api/info": 28,
+   "engine/warn": 19,
+   "drift/warn": 18,
+   "offer/info": 13,
+   "config/info": 6,
+   "classifier/info": 2,
+   "rollback/warn": 1
+  },
+  "watchdog_stale": 53,
+  "watchdog_restore_ms": [
+   2945.7,
+   2212.9,
+   1956.7,
+   285.4,
+   364.1,
+   2353.6,
+   2067.9,
+   1077.6,
+   1726.5,
+   1123.3,
+   983.9,
+   802.6,
+   1028.7,
+   1671.4,
+   3213.7,
+   593.0,
+   1586.6,
+   875.5,
+   1666.0,
+   2581.9,
+   318.8,
+   1003.9,
+   2109.0,
+   627.4,
+   7808.2,
+   2515.1,
+   672.8,
+   13984.3,
+   2615.3,
+   4509.7,
+   12106.6,
+   11117.9,
+   10282.1,
+   881.6,
+   20568.6,
+   17511.5,
+   1007.6,
+   15581.0,
+   693.3,
+   2778.0,
+   1105.1,
+   578.5,
+   14426.1,
+   1047.3,
+   9237.0,
+   17188.7,
+   4784.9,
+   2072.1,
+   793.5,
+   627.1,
+   11064.4,
+   6419.8,
+   795.6
+  ],
+  "offers": [
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and the line is busy.",
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and the line is busy.",
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and another device is downloading.",
+   "offered a boost for 192.168.8.172: A game started on 192.168.8.172 and another device is downloading.",
+   "offered a boost for 192.168.8.231: A game started on 192.168.8.231 and the line is busy.",
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and the line is busy.",
+   "offered a boost for 192.168.8.231: A game started on 192.168.8.231 and the line is busy.",
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and the line is busy.",
+   "offered a boost for 192.168.8.231: A game started on 192.168.8.231 and the line is busy.",
+   "offered a boost for 192.168.8.216: A call started on 192.168.8.216 and the line is busy.",
+   "offered a boost for 192.168.8.231: A game started on 192.168.8.231 and the line is busy.",
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and the line is busy.",
+   "offered a boost for 192.168.8.216: A game started on 192.168.8.216 and the line is busy."
+  ],
+  "estimator": [
+   "down: bufferbloat (+37 ms) at load 1.02 -> rate 27.0 -> 22.9 Mbit/s",
+   "down: bufferbloat (+23 ms) at load 1.01 -> rate 27.0 -> 22.9 Mbit/s",
+   "up: bufferbloat (+24 ms) at load 0.00 -> rate 27.4 -> 23.3 Mbit/s",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "down: bufferbloat (+20 ms) at load 0.00 -> rate 27.0 -> 22.9 Mbit/s",
+   "up: bufferbloat (+22 ms) at load 0.00 -> rate 27.0 -> 22.9 Mbit/s",
+   "up: bufferbloat (+20 ms) at load 0.00 -> rate 22.9 -> 19.5 Mbit/s",
+   "down: path delay rose 16 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 19.5 Mbit/s",
+   "up: path delay rose 14 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 19.5 Mbit/s",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "down: bufferbloat (+21 ms) at load 0.52 -> rate 27.0 -> 12.0 Mbit/s",
+   "up: bufferbloat (+214 ms) at load 0.29 -> rate 27.0 -> 6.7 Mbit/s",
+   "down: path delay rose 18 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 14.1 Mbit/s",
+   "up: path delay rose 54 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 7.9 Mbit/s",
+   "up: bufferbloat (+124 ms) at load 0.58 -> rate 7.9 -> 3.9 Mbit/s",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "WAN path changed (gateway 192.168.29.1 -> 10.42.0.1): baselines re-learned, rates restart at 8.1/8.1 Mbit/s",
+   "up: bufferbloat (+45 ms) at load 0.94 -> rate 8.1 -> 6.5 Mbit/s",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "WAN path changed (gateway 10.42.0.1 -> 192.168.29.1): baselines re-learned, rates restart at 8.1/8.1 Mbit/s",
+   "reflectors responding again",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "down: reflectors silent under load -> rate 27.0 -> 18.0 Mbit/s",
+   "up: reflectors silent under load -> rate 27.4 -> 17.2 Mbit/s",
+   "WAN path changed (gateway 192.168.29.1 -> 10.42.0.1): baselines re-learned, rates restart at 8.1/8.1 Mbit/s",
+   "reflectors responding again",
+   "up: bufferbloat (+332 ms) at load 1.33 -> rate 8.1 -> 6.3 Mbit/s",
+   "up: bufferbloat (+112 ms) at load 1.00 -> rate 3.1 -> 2.7 Mbit/s",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "WAN path changed (gateway 10.42.0.1 -> 192.168.29.1): baselines re-learned, rates restart at 8.1/8.1 Mbit/s",
+   "reflectors responding again",
+   "WAN path changed (gateway 192.168.29.1 -> 10.42.0.1): baselines re-learned, rates restart at 8.1/8.1 Mbit/s",
+   "down: bufferbloat (+19 ms) at load 1.40 -> rate 8.1 -> 6.9 Mbit/s",
+   "up: bufferbloat (+437 ms) at load 1.19 -> rate 8.1 -> 5.7 Mbit/s",
+   "down: bufferbloat (+17 ms) at load 0.01 -> rate 6.0 -> 5.1 Mbit/s",
+   "down: path delay rose 13 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 6.9 Mbit/s",
+   "reflectors silent: holding rates at or below base (blind mode)",
+   "reflectors responding again",
+   "WAN path changed (gateway 10.42.0.1 -> 192.168.29.1): baselines re-learned, rates restart at 8.1/8.1 Mbit/s",
+   "down: bufferbloat (+18 ms) at load 0.01 -> rate 27.0 -> 22.9 Mbit/s",
+   "down: path delay rose 41 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 14.1 Mbit/s",
+   "down: bufferbloat (+17 ms) at load 0.00 -> rate 14.1 -> 12.0 Mbit/s",
+   "down: path delay rose 98 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 1.0 Mbit/s",
+   "down: bufferbloat (+16 ms) at load 0.03 -> rate 1.5 -> 1.3 Mbit/s",
+   "down: path delay rose 16 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 1.1 Mbit/s",
+   "down: bufferbloat (+16 ms) at load 0.45 -> rate 1.7 -> 1.4 Mbit/s",
+   "down: path delay rose 16 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 1.2 Mbit/s",
+   "down: bufferbloat (+16 ms) at load 0.00 -> rate 27.0 -> 22.9 Mbit/s",
+   "down: path delay rose 17 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 19.5 Mbit/s",
+   "down: bufferbloat (+16 ms) at load 0.06 -> rate 19.5 -> 16.6 Mbit/s",
+   "down: bufferbloat (+16 ms) at load 0.07 -> rate 16.6 -> 14.1 Mbit/s",
+   "down: bufferbloat (+16 ms) at load 0.00 -> rate 14.1 -> 14.1 Mbit/s",
+   "down: path delay rose 15 ms and stayed with our traffic held back (failover or route change): baseline re-learned, rate back to 14.1 Mbit/s"
+  ],
+  "drift": [
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining",
+   "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; consider collecting corrections and retraining"
+  ],
+  "cellular": []
+ },
+ "resilience": [
+  {
+   "t": 1795508912.428296,
+   "event": "controller_offline_start"
+  },
+  {
+   "t": 1795508912.4304533,
+   "event": "console_processes",
+   "pids": [
+    "957",
+    "966"
+   ]
+  },
+  {
+   "t": 1795508932.4385808,
+   "event": "operator_laptop_asleep"
+  },
+  {
+   "t": 1795509053.8900595,
+   "event": "router_while_console_away"
+  },
+  {
+   "t": 1795509053.8910491,
+   "event": "operator_laptop_awake"
+  },
+  {
+   "t": 1795509114.51594,
+   "event": "controller_offline_end"
+  },
+  {
+   "t": 1795509114.5160084,
+   "event": "power_cut_start"
+  },
+  {
+   "t": 1795509125.045766,
+   "event": "power_cut"
+  },
+  {
+   "t": 1795509188.771632,
+   "event": "router_answers_on_lan",
+   "s": 63.7
+  },
+  {
+   "t": 1795509188.7944202,
+   "event": "internet_back",
+   "s": 63.7
+  },
+  {
+   "t": 1795509214.3147154,
+   "event": "engine_api_back",
+   "s": 89.3,
+   "body": "{\"ok\": true, \"t\": 1795509213.4794815}"
+  },
+  {
+   "t": 1795509214.3565488,
+   "event": "shaping_active",
+   "s": 89.3,
+   "backend": "cake"
+  },
+  {
+   "t": 1795509216.4531167,
+   "event": "router_clock_after_boot",
+   "out": "1795509215\nTue Nov 24 14:03:20 2026 daemon.info dnsmasq[1]: compile time options: IPv6 GNU-getopt no-DBus UBus no-i18n no-IDN DHCP no-DHCPv6 no-Lua TFTP no-conntrack no-ipset no-nftset no-auth no-DNSSEC no-ID loop-detect inotify dumpfile\nTue Nov 24 14:03:20 2026 daemon.info dnsmasq-dhcp[1]: DHCP, IP range 192.168.8.100 -- 192.168.8.249, lease time 12h\nTue Nov 24 14:03:21 2026 daemon.warn odhcpd[2215]: No default route present, setting ra_lifetime to 0!\n",
+   "host_now": 1795509216.4531083
+  },
+  {
+   "t": 1795509236.4539561,
+   "event": "power_cut_summary",
+   "lan_ping": 63.7,
+   "internet": 63.7,
+   "engine": 89.3,
+   "shaping": 89.3
+  },
+  {
+   "t": 1795509236.4540942,
+   "event": "power_cut_end"
+  },
+  {
+   "t": 1795509236.454109,
+   "event": "wifi_far_start"
+  },
+  {
+   "t": 1795509277.615107,
+   "event": "laptop_moved_far",
+   "extra_ms": 12,
+   "loss": 0.02
+  },
+  {
+   "t": 1795509378.2335336,
+   "event": "experience_while_far"
+  },
+  {
+   "t": 1795509379.3847203,
+   "event": "laptop_back_near"
+  },
+  {
+   "t": 1795509438.53807,
+   "event": "wifi_far_end"
+  }
+ ],
+ "controller_offline_samples": [
+  {
+   "t": 1795508932.4948063,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795508942.5585136,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795508952.6896105,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795508963.1988478,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795508973.3176515,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795508983.381362,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795508993.5643253,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795509003.6288683,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795509013.7114165,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795509023.7672164,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795509033.834719,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  },
+  {
+   "t": 1795509043.889916,
+   "code": 200,
+   "backend": "cake",
+   "paused": false,
+   "down_rate_kbit": 27000
+  }
+ ],
+ "wifi_events": {
+  "stall": 3160,
+  "scan_dwell": 664
+ },
+ "link_trace_changes": {
+  "fibre": 255,
+  "4g": 3775
+ },
+ "package_mirror": {
+  "requests": 28,
+  "bytes": 10284822,
+  "packages": [
+   "coremark-2025.05.01~1f483d5b-r1.apk",
+   "kmod-sched-cake-6.12.112-r1.apk",
+   "kmod-sched-core-6.12.112-r1.apk",
+   "libatomic1-14.3.0-r5.apk",
+   "libbpf1-1.6.2-r1.apk",
+   "libbz2-1.0-1.0.8-r1.apk",
+   "libelf1-0.192-r1.apk",
+   "libopenssl3-3.5.9-r1.apk",
+   "libpython3-3.13-3.13.18-r1.apk",
+   "libxtables12-1.8.10-r3.apk",
+   "python3-base-3.13.18-r1.apk",
+   "python3-codecs-3.13.18-r1.apk",
+   "python3-email-3.13.18-r1.apk",
+   "python3-light-3.13.18-r1.apk",
+   "python3-logging-3.13.18-r1.apk",
+   "python3-openssl-3.13.18-r1.apk",
+   "python3-urllib-3.13.18-r1.apk",
+   "strace-6.18-r2.apk",
+   "tc-full-6.18.0-r2.apk"
+  ]
+ },
+ "dns_queries": 9026
+}

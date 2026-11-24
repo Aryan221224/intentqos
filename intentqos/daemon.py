@@ -19,6 +19,8 @@ import os
 import signal
 import sys
 import threading
+import socket
+import struct
 import time
 import traceback
 
@@ -70,7 +72,7 @@ class Engine:
         self.enforcer = Enforcer(self.backend, self.marker, self.emit)
         self.xp = ExperienceTracker(cfg)                     # how each app is doing (header-only)
         self.locator = BottleneckLocator(cfg)                # Wi-Fi, line or upstream, per device
-        self.identity = Identity(cfg)                        # device types from DHCP and MAC
+        self.identity = Identity(cfg, os.path.join(state_dir, "identity.json"))   # device types from DHCP and MAC
         self.cell = CellularCeiling(cfg)                     # radio-aware ceiling when the router has a modem
         self.outcome = OutcomeController(cfg, self.xp, self.backend.name)
         self.offers = Offers()                               # proactive boost offers (household decides)
@@ -279,8 +281,52 @@ class Engine:
                 self.emit("engine", f"no-QoS test window ended ({who}): shaping restored", "info")
             return {"bypass": self.bypass_until is not None, "until": self.bypass_until, "by": self.bypass_by}
 
+    def _wan_gateway(self) -> str | None:
+        """The WAN's default gateway from /proc/net/route (cheap: no process, no netlink)."""
+        try:
+            with open("/proc/net/route") as f:
+                for ln in f.readlines()[1:]:
+                    p = ln.split()
+                    if len(p) > 2 and p[0] == self.wan and p[1] == "00000000":
+                        return socket.inet_ntoa(struct.pack("<I", int(p[2], 16)))
+        except (OSError, ValueError):
+            pass
+        return None
+
+    def _watch_watchdog(self, now: float) -> None:
+        """If the watchdog stepped in (the engine was too slow), it removed the flow marks and installed the safe
+        plan behind our back: put our shaping and marks back as soon as we are running again."""
+        try:
+            with open(self.wd_path) as f:
+                trips = int(json.load(f).get("trips", 0))
+        except (OSError, ValueError, TypeError):
+            return
+        seen = getattr(self, "_wd_trips_seen", None)
+        self._wd_trips_seen = trips
+        if seen is None or trips <= seen or self.bypass_until is not None or not self.enforcer.applied:
+            return
+        plan = self.enforcer.applied
+        self.enforcer.setup(plan)              # cake + a fresh nft table
+        self.marker.current.clear()
+        n = self.marker.sync(self.flow_tin)
+        self.emit("engine", f"watchdog had stepped in (engine too slow): shaping and {n} flow marks re-applied",
+                  "warn")
+
+    def _watch_wan(self, now: float) -> None:
+        if now - getattr(self, "_wan_check_t", 0.0) < 1.0:
+            return
+        self._wan_check_t = now
+        self._watch_watchdog(now)
+        gw = self._wan_gateway()
+        old = getattr(self, "_wan_gw", None)
+        if gw and old and gw != old:
+            self.estimator.path_changed(now, f"gateway {old} -> {gw}")
+        if gw:
+            self._wan_gw = gw
+
     def _tick(self, now: float) -> None:
         wall = time.time()
+        self._watch_wan(now)
         ach = self._read_stats(now)
         rd, ru = self.estimator.tick(now, ach["down"], ach["up"])
         rd, ru = self._cellular(now, rd, ru)
@@ -475,6 +521,9 @@ class Engine:
     def _heartbeat(self, stopped: bool = False) -> None:
         hb = {"ts": time.time(), "pid": os.getpid(), "stopped": stopped, "backend": self.backend.name,
               "lan": self.lan, "wan": self.wan}
+        ap = self.enforcer.applied if hasattr(self, "enforcer") else None
+        if ap:
+            hb["rates_kbit"] = {"down": round(ap["down"]["rate"]), "up": round(ap["up"]["rate"])}
         tmp = self.hb_path + ".tmp"
         try:
             with open(tmp, "w") as f:

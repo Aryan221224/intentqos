@@ -25,7 +25,7 @@ from . import config as C
 from .enforce import FlowMarker, HtbBackend, CakeBackend, safe_plan, run
 
 
-def apply_safe(cfg: dict, backend_name: str, lan: str, wan: str) -> str:
+def apply_safe(cfg: dict, backend_name: str, lan: str, wan: str, cap_kbit: dict | None = None) -> str:
     state = cfg["watchdog"]["exit_state"]
     run(["nft", "delete", "table", "inet", cfg["enforce"]["nft_table"]], check=False)
     if state == "passthrough":
@@ -33,8 +33,10 @@ def apply_safe(cfg: dict, backend_name: str, lan: str, wan: str) -> str:
             run(["tc", "qdisc", "del", "dev", dev, "root"], check=False)
         return "passthrough"
     be = CakeBackend(lan, wan, cfg) if backend_name == "cake" else HtbBackend(lan, wan, cfg)
-    be.setup(safe_plan(cfg))
-    return f"safe ({backend_name} at {cfg['policy']['safe_fraction'] * 100:.0f}% of nominal)"
+    plan = safe_plan(cfg, cap_kbit)
+    be.setup(plan)
+    return (f"safe ({backend_name} at {cfg['policy']['safe_fraction'] * 100:.0f}% of nominal, capped at the last "
+            f"applied rates: {plan['down']['rate'] / 1000:.1f}/{plan['up']['rate'] / 1000:.1f} Mbit/s)")
 
 
 def _status(path: str, d: dict) -> None:
@@ -76,7 +78,7 @@ def main(argv=None) -> int:
         if stale and not tripped:
             t0 = time.monotonic()
             what = apply_safe(cfg, hb.get("backend", "htb"), hb.get("lan", cfg["interfaces"]["lan"]),
-                              hb.get("wan", cfg["interfaces"]["wan"]))
+                              hb.get("wan", cfg["interfaces"]["wan"]), hb.get("rates_kbit"))
             ms = (time.monotonic() - t0) * 1000
             msg = (f"engine heartbeat stale ({now - hb['ts']:.1f}s > {timeout}s): restored {what} "
                    f"in {ms:.0f} ms")

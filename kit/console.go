@@ -185,6 +185,11 @@ func runController(ctx context.Context, st *consoleState, httpsPort, appPort int
 		return err
 	}
 	logf("certificate addresses: %s", strings.Join(ips, ", "))
+	// The laptop may get its home address after the console started (it starts at sign-in, before Wi-Fi or the
+	// cable is up). Routers check the address in the certificate, so re-issue it when a new address appears;
+	// the controller reloads it. Found in the full-system emulation: a console started before its DHCP lease
+	// had a certificate for 127.0.0.1 only and every router failed TLS ("IP address mismatch") until a restart.
+	go watchAddresses(ctx, filepath.Join(data, "pki"), ips)
 	cfgPath := filepath.Join(dir, "controller.toml")
 	if err := writeConsoleConfig(cfgPath, data, httpsPort, appPort); err != nil {
 		st.fail(err, "")
@@ -502,6 +507,41 @@ func ensurePKI(dir string) ([]string, error) {
 		return nil, err
 	}
 	return names, nil
+}
+
+func watchAddresses(ctx context.Context, dir string, have []string) {
+	known := map[string]bool{}
+	for _, a := range have {
+		known[a] = true
+	}
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		var added []string
+		for _, n := range localNets() {
+			if a := n.IP.String(); !known[a] {
+				added = append(added, a)
+			}
+		}
+		if len(added) == 0 {
+			continue
+		}
+		names, err := ensurePKI(dir)
+		if err != nil {
+			logf("could not re-issue the certificate for %s: %v", strings.Join(added, ", "), err)
+			continue
+		}
+		known = map[string]bool{}
+		for _, a := range names {
+			known[a] = true
+		}
+		logf("new address %s: certificate re-issued for %s", strings.Join(added, ", "), strings.Join(names, ", "))
+	}
 }
 
 func serial() *big.Int {

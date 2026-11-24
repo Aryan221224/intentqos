@@ -94,6 +94,10 @@ DEFAULTS: dict = {
         "shift_delta_keep": 0.7,       # ... (each still >= 70 % of the first) ...
         "shift_streak_gap_s": 15.0,    # ... no more than this apart ...
         "drain_probe_ms": 800,         # ... hold the shaper at its floor this long so any queue drains,
+        "blind_backoff_load": 0.5,     # probes silent while we push at least this share of the rate: a queue too
+        "blind_backoff": 0.3,          # ... deep for replies to return (a failover to a slower line). Cut by this
+        "blind_floor_fraction": 0.3,   # ... every 2 s, not below this share of the base rate
+        "path_change_fraction": 0.3,   # WAN gateway changed: restart at this share of the base rate, new baselines
         "drain_probe_read_ms": 300,    # ... read the delay over the end of the hold: still high = longer path
         "drain_probe_every_s": 20.0,   # at most one drain probe per direction in this period
         "shift_min_ms": 5.0,          # after the drain hold, a residual delay above this is the path itself
@@ -198,7 +202,8 @@ DEFAULTS: dict = {
     },
     "watchdog": {
         "heartbeat_path": "/run/intentqos/heartbeat.json",
-        "timeout_s": 3.0,
+        "timeout_s": 8.0,              # shaping stays in place while the engine is slow; a trip drops every flow
+                                       # priority. 3 s tripped 16 times in an hour on a loaded emulated router.
         "exit_state": "safe",          # safe | passthrough  (what to leave behind on shutdown/failure)
     },
     "agent": {

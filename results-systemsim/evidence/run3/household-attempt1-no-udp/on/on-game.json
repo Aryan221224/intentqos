@@ -1,0 +1,1 @@
+{"name": "on-game", "kind": "gaming", "src": "192.168.8.172", "dst": "104.18.20.10", "sport": 51757, "dport": 9003, "proto": "udp", "flow_hash": "c53dd781", "start_wall": 1795506494.8442926, "duration": 115.0, "sent_up": 6900, "up_rate": 60, "up_size": 110, "dn_rate": 30, "dn_size": 320, "down": {"seq": [], "tx": [], "rx": [], "size": []}}

@@ -228,3 +228,11 @@ tests/            unit tests (CI: .github/workflows/ci.yml)
 ```
 
 Licence: MIT. Three OFL-licensed typefaces are bundled (subset); see [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+
+## Full-system emulation (Nov 2026)
+
+The whole Round 2 setup was run in emulation against the real OpenWrt 25.12.6 image: Router Setup installing over
+SSH with real packages, the Operator Console, Test Kit, 4G Bridge and phone app driven through their windows, a
+household of eight devices on emulated fibre, Wi-Fi and 4G, and fibre-to-4G failover, power cuts and console
+outages. It found and fixed eight real problems (an engine crash on real firmware among them). Report, charts,
+screenshots and evidence: [results-systemsim/REPORT.md](results-systemsim/REPORT.md); harness: [systemsim/](systemsim/README.md).

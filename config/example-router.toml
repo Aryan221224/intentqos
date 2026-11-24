@@ -29,7 +29,7 @@ key_file = "/etc/intentqos/admin.key"  # ... created here (0600) on first start
 
 [watchdog]
 heartbeat_path = "/run/intentqos/heartbeat.json"
-timeout_s = 3.0
+timeout_s = 8.0
 exit_state = "safe"
 
 [data]
