@@ -144,3 +144,30 @@ class IdentityAcrossReboot(unittest.TestCase):
         b = Identity(cfg, cache).refresh()
         self.assertEqual(b["192.168.8.172"]["type"], "console")
         self.assertIn("remembered", b["192.168.8.172"]["why"])
+
+    def test_new_devices_seen_after_the_hook_rotates_its_file(self):
+        # The DHCP hook keeps its file small with `tail -n 500 > tmp && mv tmp file`: the file is replaced and
+        # can be shorter than what the engine had already read. Devices that joined after that must still appear.
+        import json
+        import os
+        import tempfile
+        from intentqos.identity import Identity
+        d = tempfile.mkdtemp()
+        hook = os.path.join(d, "dhcp.jsonl")
+        cfg = {"identity": {"dhcp_hook_path": hook, "leases_path": os.path.join(d, "none")}}
+        line = lambda i, h: json.dumps({"ip": f"192.168.8.{i}", "mac": f"00:11:22:33:44:{i:02x}", "hostname": h}) + "\n"
+        with open(hook, "w") as f:
+            for i in range(10, 60):
+                f.write(line(i, f"laptop-{i}"))
+        ident = Identity(cfg)
+        self.assertIn("192.168.8.59", ident.refresh())
+        with open(hook + ".tmp", "w") as f:                 # rotation: a shorter file under the same name
+            f.write(line(200, "PS5-7781"))
+        os.replace(hook + ".tmp", hook)
+        self.assertEqual(ident.refresh()["192.168.8.200"]["type"], "console")
+        with open(hook, "a") as f:                           # a half-written line is not consumed early
+            f.write(line(201, "iPhone")[:-10])
+        self.assertNotIn("192.168.8.201", ident.refresh())
+        with open(hook, "a") as f:
+            f.write(line(201, "iPhone")[-10:])
+        self.assertIn("192.168.8.201", ident.refresh())

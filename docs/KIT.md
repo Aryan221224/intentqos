@@ -177,7 +177,7 @@ Each comparison (IntentQoS off, then on) now carries, besides delay percentiles 
 ## Building
 
 ```
-python3 kit/build.py            # dist/kit/{windows,linux,macos,router}; needs Go 1.22+ and Pillow
+python3 kit/build.py            # dist/kit/{windows,linux,macos,router}; needs Go 1.24+ and Pillow
 ```
 
 The build packs the router payload (`router/build_payload.py`), the controller code, and a trimmed portable

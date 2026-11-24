@@ -83,13 +83,14 @@ class Identity:
         self.leases_path = c.get("leases_path", "/tmp/dhcp.leases")
         self.seen: dict[str, dict] = {}          # ip -> record
         self._pos = 0
+        self._ino = None                         # the hook file's inode: the hook rotates it (tail + mv)
         # The hook file and dnsmasq's leases live in /tmp: after a router restart they are empty until each device
         # renews (hours). Found in the full-system emulation's power-cut test: every device type was gone after the
         # reboot. So the records are also kept on flash (state_dir), written only when they change and at most
         # every 10 minutes, and read back at start.
         self.cache_path = cache_path
         self._cache_saved = ""
-        self._cache_t = 0.0
+        self._cache_t: float | None = None       # never saved yet: the first change is written at once
         if cache_path:
             try:
                 with open(cache_path) as f:
@@ -109,22 +110,27 @@ class Identity:
 
     def _read_hook(self) -> None:
         try:
-            with open(self.hook_path) as f:
+            st = os.stat(self.hook_path)
+            # The hook keeps its file small by rewriting it (tail -n 500 + mv): a new inode, or a file shorter
+            # than what was already read, means start again from the top (records are idempotent updates).
+            if st.st_ino != self._ino or st.st_size < self._pos:
+                self._ino, self._pos = st.st_ino, 0
+            with open(self.hook_path, "rb") as f:
                 f.seek(self._pos)
-                for ln in f:
+                while True:
+                    ln = f.readline()
+                    if not ln.endswith(b"\n"):      # a line still being written: read it next time
+                        break
+                    self._pos += len(ln)
                     try:
                         r = json.loads(ln)
                     except ValueError:
                         continue
-                    ip = r.get("ip")
+                    ip = r.get("ip") if isinstance(r, dict) else None
                     if ip:
                         rec = self.seen.setdefault(ip, {})
                         rec.pop("remembered", None)
                         rec.update({k: v for k, v in r.items() if v})
-                self._pos = f.tell()
-            if os.path.getsize(self.hook_path) > 512 * 1024:      # tmpfs: keep it small
-                open(self.hook_path, "w").close()
-                self._pos = 0
         except OSError:
             pass
 
@@ -142,7 +148,7 @@ class Identity:
             pass
 
     def _save_cache(self) -> None:
-        if not self.cache_path or time.monotonic() - self._cache_t < 600:
+        if not self.cache_path or (self._cache_t is not None and time.monotonic() - self._cache_t < 600):
             return
         txt = json.dumps({ip: {k: v for k, v in r.items() if k != "remembered"} for ip, r in self.seen.items()},
                          sort_keys=True)

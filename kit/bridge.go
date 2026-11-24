@@ -23,8 +23,8 @@ import (
 const partTitle = "IntentQoS 4G Bridge"
 
 type adapter struct {
-	Name   string   `json:"name"`   // Windows connection name / Linux device
-	Desc   string   `json:"desc"`   // driver or description
+	Name   string   `json:"name"` // Windows connection name / Linux device
+	Desc   string   `json:"desc"` // driver or description
 	Up     bool     `json:"up"`
 	IPs    []string `json:"ips"`
 	Phone  bool     `json:"phone"`  // a USB-tethered phone

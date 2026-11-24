@@ -4,22 +4,44 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: {python-version: "3.11"}
+      - name: Evaluation dependency for the analysis tests (the engine itself needs only the standard library)
+        run: pip install numpy==2.4.4
       - name: Unit tests (engine, router runtime, agent, controller; no root needed)
         run: python -m unittest discover -s tests -v
       - name: Capture helper builds and compiles cleanly
         run: gcc -O2 -Wall -Wextra -Werror -o /tmp/iq-capture router/iq-capture.c
+      - name: Emulators compile cleanly
+        run: |
+          gcc -O2 -Wall -Wextra -Werror -fsyntax-only testbed/accessemu.c
+          gcc -O2 -Wall -Wextra -Werror -fsyntax-only systemsim/wifiemu.c
       - name: Router package builds
         run: python router/build_ipk.py
+  kit:
+    runs-on: ubuntu-24.04
+    defaults:
+      run: {working-directory: kit}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: {go-version: "1.24", cache-dependency-path: kit/go.sum}
+      - name: Formatting
+        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - name: Vet every kit program (embedded build products replaced by placeholders)
+        run: |
+          mkdir -p embed && touch embed/app.zip embed/python.zip embed/router-payload.tar.gz
+          for t in console router testkit bridge; do go vet -tags $t . ; GOOS=windows go vet -tags $t . ; done
+      - name: Test Kit tests (QoO, delta-Q, RPM, capacity on loopback)
+        run: go test -race -tags testkit .
   launchers:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: {go-version: "1.22"}
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: {go-version: "1.24", cache: false}
       - name: Windows launchers cross-compile
         run: python3 launcher/build.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with: {name: windows-launchers, path: dist/*.exe}

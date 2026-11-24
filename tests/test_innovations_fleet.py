@@ -339,17 +339,34 @@ class ProactiveOffers(unittest.TestCase):
         try:
             eng = _engine(tmp.name)
             o = Offers()
-            apps = [{"ip": "192.168.1.5", "label": "voip", "qoo": 92.0}]
+            apps = [{"ip": "192.168.1.5", "label": "voip", "qoo": 92.0, "kbit_down": 64.0, "kbit_up": 64.0}]
             devices = [{"ip": "192.168.1.9", "elastic": True}]
-            made = o.consider(apps, devices, eng.estimator, [], {"192.168.1.5": "Work laptop"})
+            t = time.time()
+            self.assertEqual(o.consider(apps, devices, eng.estimator, [], {}, t), [])     # just started
+            made = o.consider(apps, devices, eng.estimator, [], {"192.168.1.5": "Work laptop"}, t + 25)
             self.assertEqual(len(made), 1)
             self.assertIn("Work laptop", made[0]["reason"])
-            self.assertEqual(o.consider(apps, devices, eng.estimator, [], {}), [])    # quiet period
+            self.assertEqual(o.consider(apps, devices, eng.estimator, [], {}, t + 30), [])  # quiet period
             r = o.accept(made[0]["id"], eng, minutes=30)
             self.assertTrue(r["ok"])
             self.assertEqual(o.open(), [])
         finally:
             tmp.cleanup()
+
+    def test_no_offer_for_measurement_probes(self):
+        # the Test Kit's DNS delay probes and a 200 ms ping look like a call or a game by timing alone
+        from intentqos.offers import Offers
+        est = types.SimpleNamespace(enabled=True, down=types.SimpleNamespace(load=0.95, state="bloat"))
+        o, t = Offers(), 1000.0
+        probes = [{"ip": "192.168.1.5", "label": "gaming", "qoo": 60.0, "kbit_down": 1.6, "kbit_up": 1.6},
+                  {"ip": "192.168.1.6", "label": "voip", "qoo": 60.0, "kbit_down": 4.0, "kbit_up": 4.0}]
+        for dt in range(0, 120, 5):
+            self.assertEqual(o.consider(probes, [], est, [], {}, t + dt), [])
+        game = [{"ip": "192.168.1.7", "label": "gaming", "qoo": 70.0, "kbit_down": 40.0, "kbit_up": 25.0}]
+        self.assertEqual(o.consider(game, [], est, [], {}, t), [])
+        self.assertEqual(o.consider([], [], est, [], {}, t + 10), [])       # it stopped: the clock restarts
+        self.assertEqual(o.consider(game, [], est, [], {}, t + 15), [])
+        self.assertEqual(len(o.consider(game, [], est, [], {}, t + 36)), 1)
 
     def test_no_offer_on_a_quiet_line(self):
         from intentqos.offers import Offers

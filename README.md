@@ -109,7 +109,7 @@ On your own router and devices, without an ISP: the home kit, [`docs/KIT.md`](do
 | Other call (phone) MOS, upload | 4.36 | **4.36** |
 | Backup worst 1-second goodput (Mbit/s) | 0.4 | **0.0** |
 
-S5 fault injection: after `kill -9` of the engine the watchdog installed the safe state in **1.8 s** (median of 10 runs; heartbeat timeout 2 s).
+S5 fault injection: after `kill -9` of the engine the watchdog installed the safe state in **1.8 s** (median of 10 runs, clean-lab set, heartbeat timeout 2 s at the time; the router default is now 8 s after the full-system test showed 2-3 s tripped on a loaded router-class CPU).
 
 **Does the ML help?** Where the class decides the outcome, yes: it recognises adaptive video that
 rules lump in with downloads, so TVs rebuffer 3 s instead of 18 s after a link drop and stream at
@@ -145,7 +145,7 @@ Full statistics, figures and method: [`results/REPORT.md`](results/REPORT.md)
 
 ```bash
 sudo make lab              # testbed + engine + watchdog + lab server; console at http://localhost:8090/
-make test                  # unit tests (44), no root needed
+make test                  # unit tests (121), no root needed
 pip install -r requirements.txt   # only to retrain the model or rebuild the report figures
 ```
 

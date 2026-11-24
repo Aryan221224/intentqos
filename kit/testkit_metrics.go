@@ -78,6 +78,9 @@ type quality struct {
 	JitterP90  float64 `json:"jitter_p90_ms"`
 	P90        float64 `json:"p90_ms"`
 	P95        float64 `json:"p95_ms"`
+	// delay percentiles are over the probes that came back; lost probes count as loss, not as delay
+	Answered int `json:"answered_probes"`
+	Lost     int `json:"lost_probes"`
 	// TRAI-style: percentiles (not averages) next to the 2024 wireline reference values
 	TRAI map[string]any `json:"trai_reference"`
 }
@@ -91,10 +94,11 @@ func pct(v []float64, p float64) float64 {
 
 func assess(a *arm) {
 	var v, jit []float64
-	prev := -1.0
+	prev, lost := -1.0, 0
 	for _, s := range a.Samples {
 		if s.RTT < 0 {
 			prev = -1
+			lost++
 			continue
 		}
 		v = append(v, s.RTT)
@@ -109,7 +113,8 @@ func assess(a *arm) {
 	sort.Float64s(v)
 	sort.Float64s(jit)
 	r1 := func(x float64) float64 { return math.Round(x*10) / 10 }
-	q := &quality{G: r1(v[0]), V50: r1(pct(v, 0.5) - v[0]), V99: r1(pct(v, 0.99) - v[0]), P90: r1(pct(v, 0.9)), P95: r1(pct(v, 0.95))}
+	q := &quality{G: r1(v[0]), V50: r1(pct(v, 0.5) - v[0]), V99: r1(pct(v, 0.99) - v[0]), P90: r1(pct(v, 0.9)), P95: r1(pct(v, 0.95)),
+		Answered: len(v), Lost: lost}
 	if len(jit) > 0 {
 		s := 0.0
 		for _, x := range jit {
@@ -150,10 +155,10 @@ type rpmResult struct {
 }
 
 type rpmCollector struct {
-	mu                          sync.Mutex
-	tcp, tlsT, httpF, httpL     []float64
-	small                       string
-	pinned                      string // console lab certificate fingerprint, "" = public server (normal TLS)
+	mu                      sync.Mutex
+	tcp, tlsT, httpF, httpL []float64
+	small                   string
+	pinned                  string // console lab certificate fingerprint, "" = public server (normal TLS)
 }
 
 // trimmed is the single-sided trimmed mean the draft uses (TMP = 95 %: the worst 5 % of samples dropped).

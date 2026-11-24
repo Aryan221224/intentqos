@@ -413,9 +413,15 @@ class TestMetrics(unittest.TestCase):
         self.assertAlmostEqual(demand_normalised_jain([2, 5, 5], [2, 10, 10], 12), 1.0)
 
 
+try:
+    import numpy as np
+except ImportError:                     # numpy is an evaluation dependency, not an engine one
+    np = None
+
+
+@unittest.skipIf(np is None, "numpy not installed (pip install -r requirements.txt)")
 class TestAnalysis(unittest.TestCase):
     def test_emodel_and_jitter(self):
-        import numpy as np
         from testbed.analysis import emodel_mos, rfc3550_jitter
         good = emodel_mos(np.full(50, 20.0), 0.0, 20.0)
         bad = emodel_mos(np.full(50, 400.0), 0.05, 20.0)

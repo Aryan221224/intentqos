@@ -574,7 +574,7 @@ func firewallRulesPresent() bool {
 }
 
 func addFirewallRules(httpsPort, appPort int) error {
-	del := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+fwRule)   // re-adding: no duplicates
+	del := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+fwRule) // re-adding: no duplicates
 	hideWindow(del)
 	_ = del.Run()
 	for _, n := range []string{"-Discovery", "-Lab", "-LabUDP"} {

@@ -25,7 +25,8 @@ class RouterStdlib(unittest.TestCase):
             for f in files:
                 if not f.endswith(".py"):
                     continue
-                tree = ast.parse(open(os.path.join(root, f)).read())
+                with open(os.path.join(root, f), encoding="utf-8") as fh:
+                    tree = ast.parse(fh.read())
                 for n in ast.walk(tree):
                     names = []
                     if isinstance(n, ast.Import):

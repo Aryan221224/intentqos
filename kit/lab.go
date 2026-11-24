@@ -133,12 +133,12 @@ func startLab(ctx context.Context, httpsPort, udpPort int) (*labServer, error) {
 // minimum, so the two clocks need not agree).
 func capacitySink(ctx context.Context, c *net.UDPConn) {
 	type peer struct {
-		addr                    *net.UDPAddr
-		next                    uint32
-		bytes, pkts, lost       uint64
-		minOff, maxOff, base    int64
-		haveBase                bool
-		last, lastReport        time.Time
+		addr                 *net.UDPAddr
+		next                 uint32
+		bytes, pkts, lost    uint64
+		minOff, maxOff, base int64
+		haveBase             bool
+		last, lastReport     time.Time
 	}
 	peers := map[string]*peer{}
 	buf := make([]byte, 65536)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the IntentQoS home-kit programs into dist/kit/ (needs Go 1.22+, Python 3.11+, Pillow for icons).
+"""Build the IntentQoS home-kit programs into dist/kit/ (needs Go 1.24+, Python 3.11+, Pillow for icons).
 
     python3 kit/build.py                 # everything: Windows, Linux, macOS
     python3 kit/build.py --only windows  # one platform

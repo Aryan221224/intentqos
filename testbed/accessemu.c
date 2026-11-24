@@ -207,7 +207,8 @@ static item hpop(void) {
     for (;;) { size_t l = 2 * i + 1, r = l + 1, m = i;
         if (l < hn && (H[l].t < H[m].t || (H[l].t == H[m].t && H[l].seq < H[m].seq))) m = l;
         if (r < hn && (H[r].t < H[m].t || (H[r].t == H[m].t && H[r].seq < H[m].seq))) m = r;
-        if (m == i) break; item x = H[m]; H[m] = H[i]; H[i] = x; i = m; }
+        if (m == i) break;
+        item x = H[m]; H[m] = H[i]; H[i] = x; i = m; }
     return top;
 }
 

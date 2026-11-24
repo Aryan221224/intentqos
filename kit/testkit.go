@@ -36,7 +36,7 @@ type endpoints struct {
 	// game sends small regular packets, so the router treats it like one; the reply time is the round trip
 	// through every queue on the way.
 	Probe []string `json:"probe"`
-	Down  string   `json:"down"`  // + byte count
+	Down  string   `json:"down"` // + byte count
 	Up    string   `json:"up"`
 	Small string   `json:"small"` // a 1-byte object on the same server (RPM probes)
 }
@@ -92,15 +92,15 @@ type sample struct {
 }
 
 type arm struct {
-	QoS      string    `json:"qos"` // "off" | "on"
-	Samples  []sample  `json:"samples"`
-	DownMbps float64   `json:"down_mbps"`
-	UpMbps   float64   `json:"up_mbps"`
-	P50      float64   `json:"p50"`
-	P95      float64   `json:"p95"`
-	P99      float64   `json:"p99"`
-	Loss     float64   `json:"loss_pct"`
-	Started  time.Time `json:"started"`
+	QoS      string     `json:"qos"` // "off" | "on"
+	Samples  []sample   `json:"samples"`
+	DownMbps float64    `json:"down_mbps"`
+	UpMbps   float64    `json:"up_mbps"`
+	P50      float64    `json:"p50"`
+	P95      float64    `json:"p95"`
+	P99      float64    `json:"p99"`
+	Loss     float64    `json:"loss_pct"`
+	Started  time.Time  `json:"started"`
 	Quality  *quality   `json:"quality,omitempty"`
 	RPM      *rpmResult `json:"rpm,omitempty"`
 }
@@ -611,9 +611,18 @@ func runFailover(ctx context.Context, rt *router, qos string, ep endpoints, befo
 	defer func() { _ = rt.bypass(false, 0) }()
 	t0 := time.Now()
 	run := foRun{QoS: qos}
-	L.set(func(l *live) { l.Phase = "Failover test (" + qos + "): on the fibre line"; l.Recent = nil; l.Waiting = "" })
+	L.set(func(l *live) {
+		l.Phase = "Failover test (" + qos + "): on the fibre line"
+		l.Recent = nil
+		l.Waiting = ""
+	})
 	onS := func(s sample) {
-		L.set(func(l *live) { l.Recent = append(l.Recent, s); if len(l.Recent) > 1500 { l.Recent = l.Recent[1:] } })
+		L.set(func(l *live) {
+			l.Recent = append(l.Recent, s)
+			if len(l.Recent) > 1500 {
+				l.Recent = l.Recent[1:]
+			}
+		})
 	}
 	s1, d1, u1 := measure(ctx, ep, 6, 4, before, t0, onS, nil)
 	run.Before = arm{QoS: qos, Samples: s1, DownMbps: d1, UpMbps: u1}

@@ -224,7 +224,8 @@ static item pop(void) {
     for (;;) { size_t l = 2 * i + 1, r = l + 1, m = i;
         if (l < hn && lt(&H[l], &H[m])) m = l;
         if (r < hn && lt(&H[r], &H[m])) m = r;
-        if (m == i) break; item x = H[m]; H[m] = H[i]; H[i] = x; i = m; }
+        if (m == i) break;
+        item x = H[m]; H[m] = H[i]; H[i] = x; i = m; }
     return top;
 }
 static void enqueue(int i, int dir, int fd, unsigned char *buf, int n, double t) {
