@@ -206,8 +206,14 @@ static void account(const uint8_t *b, unsigned caplen, unsigned wirelen, double 
         proto = b[off + 6];
         memcpy(src, b + off + 8, 16); memcpy(dst, b + off + 24, 16);
         l4 = off + 40; fam = 6;
-        for (int hops = 0; (proto == 0 || proto == 43 || proto == 60) && caplen >= l4 + 2 && hops < 4; hops++) {
-            proto = b[l4]; l4 += (b[l4 + 1] + 1) * 8;
+        /* extension headers as in capture.py: hop-by-hop, routing, fragment, AH, destination options */
+        for (int hops = 0; (proto == 0 || proto == 43 || proto == 44 || proto == 51 || proto == 60) &&
+                           caplen >= l4 + 8 && hops < 4; hops++) {
+            unsigned nxt = b[l4];
+            if (proto == 44) { frag = ((b[l4 + 2] << 8) | b[l4 + 3]) & 0xFFF8; l4 += 8; }
+            else if (proto == 51) l4 += (b[l4 + 1] + 2) * 4;
+            else l4 += (b[l4 + 1] + 1) * 8;
+            proto = nxt;
         }
     } else return;
     unsigned sport = 0, dport = 0, flags = 0;

@@ -184,7 +184,7 @@ def _session_key(f: Flow) -> tuple:
     """Flows of one app session: same device, protocol and remote network (/24, /48)."""
     r = f.remote_ip
     net = r.rsplit(".", 1)[0] if "." in r else ":".join(r.split(":")[:3])
-    return (f.lan_ip, f.proto, net)
+    return (getattr(f, "dev", f.lan_ip), f.proto, net)
 
 
 class PageHinkley:

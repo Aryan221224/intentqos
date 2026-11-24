@@ -149,7 +149,7 @@ class BottleneckLocator:
         by_dev: dict[str, list] = {}
         for f in flows:
             if f.proto == 6:
-                by_dev.setdefault(f.lan_ip, []).append(f)
+                by_dev.setdefault(getattr(f, "dev", f.lan_ip), []).append(f)
         st = self.stations.refresh()
         arp = arp_table() if st else {}
         out: dict[str, dict] = {}

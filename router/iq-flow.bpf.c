@@ -163,12 +163,19 @@ INLINE int handle(struct __sk_buff *skb, int up, int mode) {
         l4 = l3 + 40;
         fam = 6;
 #pragma unroll
-        for (int i = 0; i < 4; i++) {
-            if (proto != 0 && proto != 43 && proto != 60) break;
-            __u8 xh[2];
-            if (load_bytes(skb, l4, xh, 2)) return TC_ACT_OK;
+        for (int i = 0; i < 4; i++) {   /* hop-by-hop, routing, fragment, AH, destination options */
+            if (proto != 0 && proto != 43 && proto != 44 && proto != 51 && proto != 60) break;
+            __u8 xh[4];
+            if (load_bytes(skb, l4, xh, 4)) return TC_ACT_OK;
+            if (proto == 44) {
+                frag = ((xh[2] << 8) | xh[3]) & 0xFFF8;
+                l4 += 8;
+            } else if (proto == 51) {
+                l4 += (xh[1] + 2) * 4;
+            } else {
+                l4 += (xh[1] + 1) * 8;
+            }
             proto = xh[0];
-            l4 += (xh[1] + 1) * 8;
         }
         if (cfg->n6 && (up ? (!in_lan6(cfg, ip + 8) || in_lan6(cfg, ip + 24))
                            : (!in_lan6(cfg, ip + 24) || in_lan6(cfg, ip + 8)))) goto skip;

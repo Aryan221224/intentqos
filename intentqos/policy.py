@@ -47,7 +47,7 @@ def flow_tins(flows, decisions, intents) -> dict:
         d = decisions.get(f.id())
         label = d.committed if d else None
         tin = LABEL_TO_TIN.get(label, TIN_BE)
-        it = targets.get(f.lan_ip)
+        it = targets.get(f.dev)        # every address of the device, IPv6 included
         if it is not None:
             # voice-like flows already sit in the top-priority voice class; moving them into the intent
             # class would make them queue behind the same device's video bursts. Everything else the

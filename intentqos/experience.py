@@ -104,7 +104,7 @@ class ExperienceTracker:
             if getattr(w, "rw_n", 0):
                 xp.wan.add(w.rw_s / w.rw_n, n=min(3, w.rw_n))
             if getattr(w, "rl_n", 0):
-                self.lan.setdefault(f.lan_ip, Dist(cap=128)).add(w.rl_s / w.rl_n, n=min(3, w.rl_n))
+                self.lan.setdefault(f.dev, Dist(cap=128)).add(w.rl_s / w.rl_n, n=min(3, w.rl_n))
             if getattr(w, "sp_n", 0) and w.sp_n * 4 <= max(1, w.pk_dn):     # many edges = a random (disabled) bit
                 xp.spin.add(w.sp_s / w.sp_n)
             xp.retx += getattr(w, "retx_up", 0) + getattr(w, "retx_dn", 0)
@@ -138,8 +138,8 @@ class ExperienceTracker:
             if not label:
                 continue
             tin = flow_tin.get(f.key)
-            k = (f.lan_ip, label, _prefix(f.remote_ip))
-            s = sessions.setdefault(k, {"flows": [], "label": label, "ip": f.lan_ip, "tin": tin})
+            k = (f.dev, label, _prefix(f.remote_ip))
+            s = sessions.setdefault(k, {"flows": [], "label": label, "ip": f.dev, "tin": tin})
             s["flows"].append((f, xp))
         apps = []
         for (ip, label, _pfx), s in sessions.items():

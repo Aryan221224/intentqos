@@ -696,7 +696,7 @@ function deviceCard(d) {
   return `<div class="dev${lease ? " boost" : ""}"><span class="ic">${icon(d.type)}</span>
     <span class="nm">${esc(d.name || d.ip)} ${lease ? '<span class="tag boost">prioritised</span>' : ""}${q != null ? ` <span class="tag${q < 60 ? " unsure" : ""}" title="How well its apps are working now (Quality of Outcome, 0 to 100)">${q >= 80 ? "working well" : q >= 60 ? "mostly fine" : "struggling"}</span>` : ""}</span>
     <span class="act">${esc(d.activity || "Idle")}</span>
-    <span class="rt num">↓ ${mbit(d.kbps_dn)} · ↑ ${mbit(d.kbps_up)} Mbit/s · ${d.flows} flow${d.flows === 1 ? "" : "s"}</span>
+    <span class="rt num">↓ ${mbit(d.kbps_dn)} · ↑ ${mbit(d.kbps_up)} Mbit/s · ${d.flows} flow${d.flows === 1 ? "" : "s"}${d.ipv6 ? ` · <span title="${esc((d.addresses || []).join("\n"))}">IPv4 + IPv6 (${(d.addresses || []).length} addresses)</span>` : ""}</span>
     <span class="bar">${parts}</span></div>`;
 }
 function leaseHTML(i, simple) {

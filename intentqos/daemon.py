@@ -40,6 +40,7 @@ from .identity import Identity
 from .intents import IntentManager
 from .metrics import Events, History, demand_normalised_jain
 from .offers import Offers
+from .neighbours import DeviceKeys
 from .outcome import OutcomeController
 from .policy import decide, demand_by_tin, flow_tins, shield, significant
 from .wifi import BottleneckLocator
@@ -79,6 +80,8 @@ class Engine:
         self.qod = QoDSessions(self)                         # CAMARA-shaped Quality-on-Demand sessions
         self.idents: dict = {}
         self._last_ident = 0.0
+        self.devkeys = DeviceKeys(every=5.0)                 # dual stack: IPv6 addresses -> the device's key
+        self._pause_extra: dict[str, str] = {}               # other addresses (IPv6) paused with a device
         self._last_fade = 0.0
         self.probe_base_ms = cfg["estimator"]["probe_interval_ms"]
         self.passive_rtt_ps = 0.0
@@ -411,6 +414,14 @@ class Engine:
     def _policy_step(self, now: float, wall: float) -> None:
         self.table.roll_windows(now)
         flows = self.table.active(now)
+        try:
+            if self.devkeys.refresh(self.idents, now):
+                self._sync_pauses(wall)
+        except Exception as ex:  # noqa: BLE001 -- grouping is a refinement: without it each address stands alone
+            self.emit("identity", f"neighbour table error: {ex}", "warn")
+        key = self.devkeys.key
+        for f in flows:
+            f.dev = key(f.lan_ip)
         if now - self._last_sched >= 5.0:
             self._last_sched = now
             for ip, d in list(self.devreg.data.items()):
@@ -446,7 +457,7 @@ class Engine:
             self.emit("experience", f"experience sensing error ({type(ex).__name__}: {ex})", "error")
 
     def _device_measure(self, ip: str) -> dict:
-        fl = [f for f in self.flows if f.lan_ip == ip]
+        fl = [f for f in self.flows if f.dev == ip]
         up = dn = 0.0
         qms = 0.0
         for f in fl:
@@ -575,9 +586,10 @@ class Engine:
         intent_by_ip = {it.target: it.id for it in self.active_intents}
         names0 = self.devices
         for f in self.flows:
-            d = devs.setdefault(f.lan_ip, {"ip": f.lan_ip, "name": names0.get(f.lan_ip, ""), "kbps_up": 0.0,
-                                           "kbps_dn": 0.0, "flows": 0, "labels": {}, "elastic": False,
-                                           "demand_dn": 0.0, "intent": intent_by_ip.get(f.lan_ip)})
+            d = devs.setdefault(f.dev, {"ip": f.dev, "name": names0.get(f.dev, ""), "kbps_up": 0.0,
+                                        "kbps_dn": 0.0, "flows": 0, "labels": {}, "elastic": False,
+                                        "demand_dn": 0.0, "intent": intent_by_ip.get(f.dev), "addresses": set()})
+            d["addresses"].add(f.lan_ip)
             u, dn = recent_rates(f)
             d["kbps_up"] += u
             d["kbps_dn"] += dn
@@ -598,6 +610,8 @@ class Engine:
         for d in out:
             d["kbps_up"] = round(d["kbps_up"], 1)
             d["kbps_dn"] = round(d["kbps_dn"], 1)
+            d["addresses"] = sorted(d.get("addresses") or [d["ip"]], key=lambda a: (":" in a, a))
+            d["ipv6"] = any(":" in a for a in d["addresses"])
             reg = self.devreg.get(d["ip"])
             auto = self.idents.get(d["ip"], {})
             d["type"] = reg.get("type") or auto.get("type", "other")
@@ -620,7 +634,7 @@ class Engine:
             dec = self.decisions.get(f.id())
             u, dn = recent_rates(f)
             tin = self.flow_tin.get(f.key)
-            flows.append({"id": f.id(), "lan_ip": f.lan_ip, "device": names.get(f.lan_ip, ""),
+            flows.append({"id": f.id(), "lan_ip": f.lan_ip, "device_key": f.dev, "device": names.get(f.dev, ""),
                           "remote": f.remote_ip, "proto": {6: "tcp", 17: "udp"}.get(f.proto, str(f.proto)),
                           "label": dec.label if dec else None, "committed": dec.committed if dec else None,
                           "restored": bool(dec and dec.restored),
@@ -706,13 +720,33 @@ class Engine:
         until = 0 if not minutes else time.time() + minutes * 60
         self.marker.pause(ip, None if not minutes else minutes * 60)
         d = self.devreg.update(ip, paused_until=until)
+        self._sync_pauses(time.time())
         self.emit("device", f"{d.get('name') or ip} paused by {who}" + (f" for {minutes:.0f} min" if minutes else " until resumed"),
                   "info")
         return {"ok": True, "ip": ip, "paused_until": until}
 
+    def _sync_pauses(self, wall: float) -> None:
+        """A paused device is paused on every address it has: its IPv6 addresses (temporary ones included)
+        follow its IPv4 one, so a paused tablet cannot keep browsing over IPv6."""
+        want: dict[str, tuple] = {}
+        for ip, d in self.devreg.data.items():
+            pu = d.get("paused_until")
+            if pu is not None and (pu == 0 or pu > wall):
+                for a in self.devkeys.addresses(self.devkeys.key(ip)):
+                    if a != ip:
+                        want[a] = (ip, None if pu == 0 else pu - wall)
+        for a, (owner, left) in want.items():
+            if self._pause_extra.get(a) != owner:
+                self.marker.pause(a, left)
+                self._pause_extra[a] = owner
+        for a in [a for a in self._pause_extra if a not in want]:
+            self.marker.resume(a)
+            del self._pause_extra[a]
+
     def resume_device(self, ip: str, who: str = "household") -> dict:
         self.marker.resume(ip)
         d = self.devreg.update(ip, paused_until=None)
+        self._sync_pauses(time.time())
         self.emit("device", f"{d.get('name') or ip} resumed by {who}", "info")
         return {"ok": True, "ip": ip}
 

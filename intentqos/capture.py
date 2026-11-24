@@ -79,11 +79,12 @@ class Flow:
     __slots__ = ("key", "family", "first", "last", "pk_up", "pk_dn", "by_up", "by_dn", "early", "cur",
                  "hist", "last_up", "last_dn", "fin", "syn", "fid", "label", "meta",
                  "seq_hi_up", "seq_hi_dn", "tsu", "tsd", "last_tsv_up", "last_tsv_dn",
-                 "spin_last", "spin_t", "vid_up", "vid_dn", "ts_next_up", "ts_next_dn", "ts_gap_up", "ts_gap_dn")
+                 "spin_last", "spin_t", "vid_up", "vid_dn", "ts_next_up", "ts_next_dn", "ts_gap_up", "ts_gap_dn", "dev")
 
     def __init__(self, key, family, now):
         self.key = key
         self.family = family
+        self.dev = key[0]           # device key: the device's IPv4 address for its IPv6 flows (neighbours.py)
         self.first = now
         self.last = now
         self.pk_up = self.pk_dn = self.by_up = self.by_dn = 0
@@ -167,12 +168,22 @@ def parse_frame(buf, n_captured: int, wire_len: int):
         dst = socket.inet_ntop(socket.AF_INET6, bytes(buf[off + 24:off + 40]))
         l4 = off + 40
         fam = 6
-        # skip a few common extension headers (hop-by-hop, routing, dest opts)
-        hops = 0
-        while proto in (0, 43, 60) and n_captured >= l4 + 2 and hops < 4:
-            proto = buf[l4]
-            l4 += (buf[l4 + 1] + 1) * 8
+        # extension headers: hop-by-hop (0), routing (43), fragment (44), AH (51), destination options (60).
+        # A non-first fragment carries no L4 header: count it, but do not read payload bytes as ports.
+        hops = frag6 = 0
+        while proto in (0, 43, 44, 51, 60) and n_captured >= l4 + 8 and hops < 4:
+            nxt = buf[l4]
+            if proto == 44:
+                frag6 = ((buf[l4 + 2] << 8) | buf[l4 + 3]) & 0xFFF8
+                l4 += 8
+            elif proto == 51:
+                l4 += (buf[l4 + 1] + 2) * 4
+            else:
+                l4 += (buf[l4 + 1] + 1) * 8
+            proto = nxt
             hops += 1
+        if frag6:
+            return (fam, src, dst, proto, 0, 0, ip_len, 0, (tos, 0, -1, 0, 0, -1))
     else:
         return None
     sport = dport = flags = 0

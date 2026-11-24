@@ -210,7 +210,7 @@ class UsageMeter:
                     continue
                 w = f.hist[-1]
                 if w.by_up or w.by_dn:
-                    a = d.setdefault(f.lan_ip, [0, 0])
+                    a = d.setdefault(getattr(f, "dev", f.lan_ip), [0, 0])
                     a[0] += w.by_up
                     a[1] += w.by_dn
             if len(self.days) > self.keep:
