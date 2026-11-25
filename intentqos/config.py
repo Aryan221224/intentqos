@@ -56,6 +56,7 @@ DEFAULTS: dict = {
         "lan": "eth1",                 # egress toward the home  => DOWNLOAD shaping happens here
         "wan": "eth0",                 # egress toward the ISP   => UPLOAD shaping happens here
         "lan_subnets": ["192.168.1.0/24"],
+        "lan_ipv6_auto": True,         # add the LAN interface's IPv6 prefixes (ISP-delegated, can change) at run time
     },
     "link": {
         "down_mbit": 100.0,            # nominal plan rates (what the ISP sells)
@@ -129,6 +130,8 @@ DEFAULTS: dict = {
         "restore_max_age_s": 120,      # labels older than this are not restored (the flows will have ended)
         "corrections_path": "data/corrections.jsonl",
         "adaptive_conformal": True,    # re-tune alpha online (Gibbs & Candes 2021) from household and weak-label feedback
+        "repredict_s": 2.0,            # CPU: an established flow is re-run through the model every 2 s, not every tick
+        "repredict_young_s": 30.0,     # ... flows younger than this (their features still change fast) every tick
     },
     "weak_labels": {
         "path": "data/weak_labels.json",

@@ -48,7 +48,10 @@ class Dist:
         return s[k]
 
     def percentiles(self, ps=(50, 90, 99)) -> dict[int, float]:
-        return {p: v for p in ps if (v := self.pct(p)) is not None}
+        if not self.samples:
+            return {}
+        s, m = sorted(self.samples), len(self.samples) - 1          # one sort for all of them
+        return {p: s[min(m, max(0, int(round(p / 100.0 * m))))] for p in ps}
 
     def gsv(self, size_ms: float = 0.0) -> dict:
         """G = the floor (minimum, less the size part), S = serialisation, V = what queueing adds above the floor."""
@@ -69,7 +72,8 @@ def compose(*parts: "Dist | None", n: int = MC_SAMPLES, seed: int = 7) -> Dist:
     if not parts:
         return Dist()
     rnd = random.Random(seed)
-    out = [sum(rnd.choice(p.samples) for p in parts) for _ in range(n)]
+    # one batch draw per part, summed column-wise: ~5x faster than a choice() per sample per part (CPU profile)
+    out = list(map(sum, zip(*[rnd.choices(p.samples, k=n) for p in parts])))
     keep = 1.0
     for p in parts:
         keep *= 1.0 - p.loss

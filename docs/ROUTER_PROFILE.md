@@ -29,6 +29,32 @@ capture helper was the x86-64 build and the estimator used user-space receive ti
 falls back to them automatically). Emulated CPU figures are not a prediction of real ARM performance;
 a run on a physical router (e.g. a Cortex-A53 OpenWrt device) is the next validation step.
 
+## CPU overhead: where the time went and what changed (Nov 2026)
+
+The brief scores CPU overhead, and the full-system emulation showed the router CPU, not memory, as the limit. The
+engine was profiled with `py-spy` in the lab under the full household load (video call, ISO download, cloud backup,
+three TVs, a game, browsing: about 25 flows at 100/20 Mbit/s), and every process it started was counted with
+`strace -e execve`.
+
+| Where the time went (before) | Share of the engine's CPU | Change |
+|---|---|---|
+| Re-running the tree ensemble on every flow every 0.5 s | ~24 % | an established flow (older than 30 s) is re-predicted every 2 s and its last prediction reused in between; young flows, whose class is still being decided, every tick (`classifier.repredict_s`, `repredict_young_s`). Drift and feedback statistics count each prediction once. |
+| Reading HTB counters and verifying each change by starting `tc` (twice: this `tc`'s JSON is unusable, so its text output was parsed as well) | ~20 %, and 16 processes a second | counters and rates read in-process over netlink (`RTM_GETTCLASS`), checked equal to `tc` class by class; `tc` stays the fallback. CAKE already read its counters over netlink; its two `tc qdisc change` calls per change are now one `tc -batch`. |
+| ΔQ composition for each app's experience score (Monte Carlo, one random draw per sample per part) | ~18 % | one batch draw per part, summed column-wise (about 5x faster, same distribution); one sort for all percentiles |
+| Heartbeat file rewritten every 200 ms tick | ~10 % of what was left | written at an eighth of the watchdog timeout (1 s on a router); watchdog trip and restore timing unchanged (2.0 s after the last heartbeat, safe state in 43 ms) |
+
+Measured A/B on the same lab, same load, alternating the original 2.0.0 engine and this one (two rounds, three 25 s
+samples each):
+
+| | Engine CPU (one x86 core) | Processes started per second |
+|---|---|---|
+| 2.0.0 | 4.3–4.6 % | 16.3 |
+| now | **1.9–2.3 %** | **0.1** |
+
+Process starts matter most on a router: each fork and exec of `tc` costs milliseconds of a core that is also
+forwarding packets (the emulated MT7981-class router ran at 56 % softirq under load). The emulated router's 61-94 %
+engine CPU was measured before these changes; it has not been measured again, and a physical router is the real test.
+
 ## Packages
 
 ```

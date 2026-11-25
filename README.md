@@ -17,6 +17,10 @@ what is emulation or simulated):
 
 * The control loop chooses its settings by predicted **Quality of Outcome** of the live apps and refuses plans
   that would hurt a call, a game or a boosted device.
+* **IPv4 and IPv6 as one home**: a device's IPv6 addresses (privacy addresses included) are grouped with its IPv4
+  address from the router's neighbour table, so a boost, a pause or a fair share covers the whole device; the
+  ISP-delegated IPv6 prefix is found and followed at run time; fragments and extension headers are parsed in all
+  three capture paths. ([`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md#ipv4-and-ipv6) says what is verified.)
 * **Experience sensing from headers**: passive round trips from TCP timestamps (split into internet and
   in-home parts) and QUIC spin bits, ECN and L4S, retransmissions, video frame bursts; per-app QoO and ΔQ.
 * An opt-in **kernel flow engine** (eBPF at tc) that keeps the same per-flow statistics without copying
@@ -59,7 +63,7 @@ computer; it is off by default in the code.
 
 | Part | Runs on | Used by | What it does |
 |---|---|---|---|
-| **Gateway** | the home router (OpenWrt / prplOS, ARM or MIPS) | engineers; households through the app | classification, capacity estimation, shaping with a safety shield, intent leases, watchdog, agent. One 601 KiB `.ipk` (most of it the phase-wise model) plus a 76-142 KB static C capture helper per CPU; pure-Python model runtime. 2.7 % of a core and 25 MB on x86 in the 1.x profile; the 2.0 engine with the experience features measured 2.0 % and 29 MB under the lab's light household load (not the same workload). [`docs/ROUTER_PROFILE.md`](docs/ROUTER_PROFILE.md) |
+| **Gateway** | the home router (OpenWrt / prplOS, ARM or MIPS) | engineers; households through the app | classification, capacity estimation, shaping with a safety shield, intent leases, watchdog, agent. One 601 KiB `.ipk` (most of it the phase-wise model) plus a 76-142 KB static C capture helper per CPU; pure-Python model runtime. Under the lab's full household load (call, ISO download, backup, three TVs, game, browsing; about 25 flows at 100 Mbit/s) the 2.0 engine uses **2 % of one x86 core** (1.9–2.3 %, down from 4.3–4.6 % before the CPU work in [`docs/ROUTER_PROFILE.md`](docs/ROUTER_PROFILE.md)), plus 0.2 % for the capture helper, and spawns about one process every ten seconds instead of 16 a second. On the emulated router-class CPU it was the limit (see the full-system test); a physical router run is still to do. [`docs/ROUTER_PROFILE.md`](docs/ROUTER_PROFILE.md) |
 | **Fleet controller** | the ISP's data centre | network operations, support desk, change management, billing systems | zero-touch enrolment, alerts, OLT incident correlation, "home or network?" diagnosis, remote console, signed config and model rollouts with an always-valid sequential guard, private per-OLT QoO statistics, CAMARA Quality-on-Demand, TRAI-style QoE reports, roles and audit, northbound API and webhooks. [`docs/CONTROLLER.md`](docs/CONTROLLER.md) |
 | **Subscriber app** | the subscriber's phone (ISP-branded, English and हिन्दी) | the household | status in plain words, what each device is using, pause, boost, speed test from the router, outage notices, plan and renewal, reports with replies, DPDP privacy controls. [`docs/CONSUMER_APP.md`](docs/CONSUMER_APP.md) |
 

@@ -84,6 +84,41 @@ def neigh_ip() -> list[tuple[str, str]]:
     return out
 
 
+def lan_prefixes6(iface: str, path: str = "/proc/net/if_inet6") -> list[str]:
+    """The IPv6 prefixes on the LAN interface (global and ULA; not link-local), e.g. ["2401:4900:1c2a:5f00::/64"].
+
+    On OpenWrt the LAN gets its global prefix from the ISP by DHCPv6 prefix delegation, and the ISP can change it
+    on every reconnect, so it cannot be written into the configuration at install time like the IPv4 subnet.
+    Deprecated prefixes are kept: devices go on using their old addresses for a while after a change."""
+    out = set()
+    try:
+        with open(path) as f:
+            for ln in f:
+                p = ln.split()
+                if len(p) < 6 or p[5] != iface or int(p[3], 16) != 0:     # scope 0 = global (ULA included)
+                    continue
+                plen = int(p[2], 16)
+                if not 16 <= plen <= 120:                                  # a /128 is one address, not the LAN
+                    continue
+                addr = ":".join(p[0][i:i + 4] for i in range(0, 32, 4))
+                out.add(str(ipaddress.ip_network(f"{addr}/{plen}", strict=False)))
+    except (OSError, ValueError):
+        pass
+    return sorted(out)
+
+
+def merge_subnets(configured: list[str], extra: list[str]) -> list[str]:
+    """configured + the extra prefixes that no configured subnet already covers."""
+    nets = [ipaddress.ip_network(s, strict=False) for s in configured]
+    out = list(configured)
+    for e in extra:
+        n = ipaddress.ip_network(e, strict=False)
+        if not any(n.version == c.version and n.subnet_of(c) for c in nets):
+            out.append(e)
+            nets.append(n)
+    return out
+
+
 def _usable(ip: str) -> bool:
     try:
         a = ipaddress.ip_address(ip)

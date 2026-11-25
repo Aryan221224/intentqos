@@ -93,6 +93,8 @@ def tc_json(cmd: list[str]):
 # the real OpenWrt 25.12 image measured about seven tc processes a second at idle. This reads the same counters
 # in-process with one netlink dump (RTM_GETQDISC) and returns them in `tc -j -s` shape; tc stays the fallback.
 _RTM_GETQDISC, _NLM_F_REQUEST, _NLM_F_DUMP, _NLMSG_DONE, _NLMSG_ERROR = 38, 0x1, 0x300, 3, 2
+_RTM_GETTCLASS = 42
+_TCA_HTB_PARMS, _TCA_HTB_RATE64, _TCA_HTB_CEIL64 = 1, 6, 7
 _TCA_KIND, _TCA_OPTIONS, _TCA_STATS2 = 1, 2, 7
 _TCA_STATS_BASIC, _TCA_STATS_QUEUE, _TCA_STATS_APP = 1, 3, 4
 _TCA_CAKE_BASE_RATE64 = 2
@@ -166,6 +168,55 @@ def qdisc_stats_netlink(dev: str) -> list[dict]:
                         q["tins"] = [{name: _nl_int(t[k]) for k, name in _CAKE_TIN.items() if k in t}
                                      for _n, t in sorted((n, _nl_attrs(v)) for n, v in tins.items())]
                     out.append(q)
+                off += (ln + 3) & ~3
+        return out
+    finally:
+        s.close()
+
+
+def class_stats_netlink(dev: str) -> list[dict]:
+    """`tc -j -s class show dev DEV` (handle and the basic and queue counters) read over netlink (RTM_GETTCLASS).
+    The HTB backend reads these every tick; spawning tc for it was about a fifth of the engine's CPU under load."""
+    import socket
+    import struct
+    ifindex = socket.if_nametoindex(dev)
+    s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 0)   # NETLINK_ROUTE
+    try:
+        s.settimeout(1.0)
+        tcm = struct.pack("BBHiIII", 0, 0, 0, ifindex, 0, 0, 0)
+        s.send(struct.pack("IHHII", 16 + len(tcm), _RTM_GETTCLASS, _NLM_F_REQUEST | _NLM_F_DUMP, 1, 0) + tcm)
+        out, done = [], False
+        while not done:
+            data = s.recv(1 << 16)
+            off = 0
+            while off + 16 <= len(data):
+                ln, ty, _fl, _seq, _pid = struct.unpack_from("IHHII", data, off)
+                if ln < 16 or ty == _NLMSG_DONE:
+                    done = True
+                    break
+                if ty == _NLMSG_ERROR:
+                    raise OSError("netlink error")
+                _fam, _p1, _p2, idx, handle, parent, _info = struct.unpack_from("BBHiIII", data, off + 16)
+                if idx == ifindex:
+                    a = _nl_attrs(data, off + 36, off + ln)
+                    st = _nl_attrs(a.get(_TCA_STATS2, b""))
+                    c = {"class": a.get(_TCA_KIND, b"").rstrip(b"\0").decode(), "handle": f"{handle >> 16:x}:{handle & 0xFFFF:x}",
+                         "parent": f"{parent >> 16:x}:{parent & 0xFFFF:x}", "stats": {}}
+                    if _TCA_STATS_BASIC in st:
+                        c["stats"]["bytes"], c["stats"]["packets"] = struct.unpack_from("QI", st[_TCA_STATS_BASIC])
+                    if _TCA_STATS_QUEUE in st:
+                        q = struct.unpack_from("IIIII", st[_TCA_STATS_QUEUE])
+                        c["stats"].update(qlen=q[0], backlog=q[1], drops=q[2], requeues=q[3], overlimits=q[4])
+                    if c["class"] == "htb" and _TCA_OPTIONS in a:         # rate and ceil in bytes/s, as tc -j
+                        o = _nl_attrs(a[_TCA_OPTIONS])
+                        if _TCA_HTB_PARMS in o and len(o[_TCA_HTB_PARMS]) >= 24:
+                            c["rate"] = struct.unpack_from("I", o[_TCA_HTB_PARMS], 8)[0]
+                            c["ceil"] = struct.unpack_from("I", o[_TCA_HTB_PARMS], 20)[0]
+                        if _TCA_HTB_RATE64 in o:
+                            c["rate"] = _nl_int(o[_TCA_HTB_RATE64])
+                        if _TCA_HTB_CEIL64 in o:
+                            c["ceil"] = _nl_int(o[_TCA_HTB_CEIL64])
+                    out.append(c)
                 off += (ln + 3) & ~3
         return out
     finally:
@@ -296,7 +347,7 @@ class HtbBackend(Backend):
             return f"qdisc {verb} dev {dev} parent 1:{cid} handle {cid}: fq_codel" + (f" {self.L4S_OPTS}" if self.l4s else "")
         return f"qdisc {verb} dev {dev} parent 1:{cid} handle {cid}: bfifo limit {self._leaf_limit(tin, rate_kbit)}"
 
-    def tune_leaves(self, d: str, served_kbit: dict, guarantee: dict) -> int:
+    def tune_leaves(self, d: str, served_kbit: dict, guarantee: dict, batch: list | None = None) -> int:
         """Re-size bfifo leaves to a time target at the class's current service rate."""
         if self.leaf != "bfifo":
             return 0
@@ -313,9 +364,16 @@ class HtbBackend(Backend):
                 cmds.append(f"qdisc change dev {dev} parent 1:{HTB_CLASSID[tin]} handle {HTB_CLASSID[tin]}: "
                             f"bfifo limit {want}")
                 cur[tin] = want
-        if cmds:
+        if batch is not None:                  # the caller runs both directions in one tc process
+            batch += cmds
+        elif cmds:
             run(["tc", "-batch", "-"], "\n".join(cmds) + "\n", check=False)
         return len(cmds)
+
+    @staticmethod
+    def run_batch(cmds: list[str]) -> None:
+        if cmds:
+            run(["tc", "-batch", "-"], "\n".join(cmds) + "\n", check=False)
 
     def _class_cmds(self, verb: str, dev: str, total: float, g: dict) -> list[str]:
         b = self._burst(total)
@@ -348,7 +406,11 @@ class HtbBackend(Backend):
 
     @staticmethod
     def classes(dev: str, stats: bool = False) -> list[dict]:
-        """HTB classes of dev from `tc -j`, or from tc's text output where its JSON is unusable."""
+        """HTB classes of dev over netlink; else from `tc -j`, or tc's text output where its JSON is unusable."""
+        try:
+            return class_stats_netlink(dev)
+        except (OSError, ValueError, struct_error):
+            pass
         s = ["-s"] if stats else []
         try:
             return tc_json(["tc", "-j"] + s + ["class", "show", "dev", dev])
@@ -372,7 +434,7 @@ class HtbBackend(Backend):
         out = {}
         for d, dev in self.devs.items():
             try:
-                js = self.classes(dev, stats=True)
+                js = self.classes(dev, stats=True)      # netlink first, tc as the fallback
             except (TcError, ValueError):
                 js = []
             per = {}
@@ -421,8 +483,9 @@ class CakeBackend(Backend):
             run(self._qdisc("replace", d, plan[d]["rate"]))
 
     def apply(self, plan: dict) -> None:
-        for d in self.devs:
-            run(self._qdisc("change", d, plan[d]["rate"]))
+        # one tc process for both directions (a fork+exec is milliseconds on a router CPU busy with packets)
+        cmds = [" ".join(self._qdisc("change", d, plan[d]["rate"])[1:]) for d in self.devs]
+        run(["tc", "-batch", "-"], "\n".join(cmds) + "\n")
 
     def verify(self, plan: dict) -> bool:
         for d, dev in self.devs.items():

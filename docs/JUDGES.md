@@ -80,8 +80,11 @@ rules, no rebuffering) and a slightly lower game delay, at the cost of more uplo
 
 Yes, as an OpenWrt package (`router/dist/*.ipk`, `make ipk`): a 324 KiB package, a static C capture
 helper per CPU (54-82 KB), a pure-Python model runtime (no NumPy), procd services, UCI config, and a
-router key for the console. Measured: 2.7 % of one x86 core and 25 MB. The aarch64 build ran under
-emulation only; a physical router is the next step (`docs/ROUTER_PROFILE.md`).
+router key for the console. Measured in the lab under a full household load (about 25 flows at 100 Mbit/s): about
+2 % of one x86 core for the engine (half of what 2.0.0 used, after profiling) plus 0.2 % for the capture helper, and
+under 30 MB. On the emulated router-class CPU the engine was the limit; a physical router is the next step
+(`docs/ROUTER_PROFILE.md`). IPv4 and IPv6 are handled as one home (a device's addresses are grouped); live IPv6
+shaping is still to be tested on a real dual-stack line (`docs/KNOWN_LIMITATIONS.md`).
 
 ## Where to look next
 

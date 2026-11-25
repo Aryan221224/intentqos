@@ -242,6 +242,13 @@ class Classifier:
         self.adaptive = bool(c.get("adaptive_conformal", True))
         self.weak = WeakLabels(cfg, resolve)
         self.history: dict[str, list] = {}   # fid -> recent (phase, prediction set) for settled-label feedback
+        # CPU: the tree ensemble is the engine's largest cost under load (~a quarter of it, profiled in the lab with
+        # a full household). An established flow's features change slowly, so its last prediction is reused for
+        # `repredict_s`; young flows, whose class is still being decided, are predicted every tick.
+        self.repredict_s = float(c.get("repredict_s", 2.0))
+        self.repredict_young_s = float(c.get("repredict_young_s", 30.0))
+        self._pred: dict[str, tuple] = {}    # fid -> (time, (label, conf, set, phase))
+        self.stats_pred = {"predicted": 0, "reused": 0}
         if self.mode == "ml":
             path = resolve(c["model_path"])
             try:
@@ -342,7 +349,7 @@ class Classifier:
 
     def classify(self, flows: list[Flow], now: float) -> dict[str, Decision]:
         out: dict[str, Decision] = {}
-        ml_batch, ml_flows = [], []
+        ml_batch, ml_flows, ml_all = [], [], []
         rule_cache = {}
         for f in flows:
             if not f.hist:
@@ -355,27 +362,39 @@ class Classifier:
             rl, why = self.rules.classify(f, now)
             rule_cache[fid] = rl
             if self.mode == "ml" and self.ml is not None:
-                ml_batch.append(flow_features(f, now))
-                ml_flows.append(f)
+                ml_all.append(f)
+                c = self._pred.get(fid)
+                if c is None or now - c[0] >= self.repredict_s or now - f.first < self.repredict_young_s:
+                    ml_batch.append(flow_features(f, now))
+                    ml_flows.append(f)
             else:
                 out[fid] = Decision(rl, 1.0, "rules", [rl])
-        if ml_batch:
-            preds = self.ml.predict(ml_batch, [now - f.first for f in ml_flows], self._qhats())
+        if ml_all:
+            fresh = set()
+            if ml_batch:
+                for f, p in zip(ml_flows, self.ml.predict(ml_batch, [now - f.first for f in ml_flows], self._qhats())):
+                    self._pred[f.id()] = (now, p)
+                    fresh.add(f.id())
+            self.stats_pred["predicted"] += len(fresh)
+            self.stats_pred["reused"] += len(ml_all) - len(fresh)
+            pairs = [(f, self._pred[f.id()][1]) for f in ml_all]
             sessions: dict[tuple, str] = {}
-            for f, (lab, conf, pset, _ph) in zip(ml_flows, preds):
+            for f, (lab, conf, pset, _ph) in pairs:
                 if len(pset) == 1:
                     sessions.setdefault(_session_key(f), lab)
-            for f, (lab, conf, pset, ph) in zip(ml_flows, preds):
+            for f, (lab, conf, pset, ph) in pairs:
                 fid = f.id()
                 abstain = len(pset) != 1
-                h = self.history.setdefault(fid, [])
-                if len(h) < 6 or self.stats["ml"] % 7 == 0:       # a few sets per flow, spread over its life
-                    h.append((ph, pset))
-                    del h[:-6]
                 wl = self.weak.lookup(f.remote_ip, f.proto)
-                if wl is not None:
-                    self._feedback(ph, pset, set(wl.get("labels") or CALL_SET), "weak-label")
-                if self.drift.update(1.0 if abstain else 0.0):
+                new = fid in fresh                               # statistics count each prediction once
+                if new:
+                    h = self.history.setdefault(fid, [])
+                    if len(h) < 6 or self.stats["ml"] % 7 == 0:   # a few sets per flow, spread over its life
+                        h.append((ph, pset))
+                        del h[:-6]
+                    if wl is not None:
+                        self._feedback(ph, pset, set(wl.get("labels") or CALL_SET), "weak-label")
+                if new and self.drift.update(1.0 if abstain else 0.0):
                     self.stats["drift_alarms"] += 1
                     self.emit("drift", "abstention rate rose significantly (Page-Hinkley) -- traffic mix changed; "
                                        "consider collecting corrections and retraining", "warn")
@@ -450,6 +469,7 @@ class Classifier:
         for fid in list(self.state):
             if fid not in live and fid not in alive:
                 st = self.state.pop(fid, None) or {}
+                self._pred.pop(fid, None)
                 self.rules.forget(fid)
                 hist = self.history.pop(fid, [])
                 # a label the model held confidently until the flow ended is a (self-checked) answer for the

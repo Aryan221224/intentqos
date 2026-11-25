@@ -187,5 +187,57 @@ class IPv6Reflectors(unittest.TestCase):
         self.assertIn(43, p.pending)
 
 
+IF_INET6 = """fe80000000000000021122fffe334455 05 40 20 80   br-lan
+240149001c2a5f000000000000000001 05 40 00 80   br-lan
+fd3a1b2c3d4e00000000000000000001 05 3c 00 80   br-lan
+24014900abcd00000000000000000002 03 80 00 80     eth1
+"""
+
+
+class DelegatedPrefix(unittest.TestCase):
+    def test_lan_prefixes_from_the_interface(self):
+        import tempfile
+        from intentqos.neighbours import lan_prefixes6, merge_subnets
+        with tempfile.NamedTemporaryFile("w", suffix="if_inet6", delete=False) as f:
+            f.write(IF_INET6)
+        try:
+            self.assertEqual(lan_prefixes6("br-lan", f.name), ["2401:4900:1c2a:5f00::/64", "fd3a:1b2c:3d4e::/60"])
+            self.assertEqual(lan_prefixes6("eth1", f.name), [])                 # a /128 on the WAN is not a LAN
+        finally:
+            os.unlink(f.name)
+        self.assertEqual(merge_subnets(["192.168.8.0/24", "fd3a:1b2c:3d4e::/48"], ["fd3a:1b2c:3d4e::/60", "2401:db8::/64"]),
+                         ["192.168.8.0/24", "fd3a:1b2c:3d4e::/48", "2401:db8::/64"])
+
+    def test_new_prefix_after_isp_reconnect_reaches_the_flow_table_and_capture(self):
+        import threading
+        from unittest import mock
+        from intentqos import daemon as D
+        from intentqos.capture import FlowTable
+        events, made = [], []
+        old_cap = types.SimpleNamespace(proc=object(), stopped=False)
+        old_cap.stop = lambda: setattr(old_cap, "stopped", True)
+        cfg = {"interfaces": {"lan_subnets": ["192.168.8.0/24", "2401:4900:1c2a:5f00::/64"], "lan_ipv6_auto": True}}
+        eng = types.SimpleNamespace(cfg=cfg, lan="br-lan", lan6=["2401:4900:1c2a:5f00::/64"],
+                                    lan_subnets_cfg=["192.168.8.0/24"],
+                                    table=FlowTable(cfg["interfaces"]["lan_subnets"]), capture=old_cap,
+                                    marker=types.SimpleNamespace(attach_kernel=lambda c: made.append(("attach", c))),
+                                    emit=lambda *a: events.append(a))
+        eng.table.lock = threading.Lock()
+        self.assertFalse(eng.table.is_lan("2401:4900:77aa:1000::5"))
+        new_cap = types.SimpleNamespace(proc=object())
+        with mock.patch.object(D, "lan_prefixes6", return_value=["2401:4900:77aa:1000::/64"]), \
+                mock.patch.object(D, "make_capture", side_effect=lambda *a: made.append("new") or new_cap):
+            D.Engine._follow_lan6(eng)
+        self.assertEqual(cfg["interfaces"]["lan_subnets"], ["192.168.8.0/24", "2401:4900:77aa:1000::/64"])
+        self.assertTrue(eng.table.is_lan("2401:4900:77aa:1000::5"))
+        self.assertTrue(old_cap.stopped)
+        self.assertIs(eng.capture, new_cap)
+        self.assertEqual(made, ["new", ("attach", new_cap)])
+        self.assertIn("prefix changed", events[0][1])
+        with mock.patch.object(D, "lan_prefixes6", return_value=["2401:4900:77aa:1000::/64"]), \
+                mock.patch.object(D, "make_capture", side_effect=AssertionError("no restart without a change")):
+            D.Engine._follow_lan6(eng)
+
+
 if __name__ == "__main__":
     unittest.main()

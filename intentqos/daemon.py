@@ -40,7 +40,7 @@ from .identity import Identity
 from .intents import IntentManager
 from .metrics import Events, History, demand_normalised_jain
 from .offers import Offers
-from .neighbours import DeviceKeys
+from .neighbours import DeviceKeys, lan_prefixes6, merge_subnets
 from .outcome import OutcomeController
 from .policy import decide, demand_by_tin, flow_tins, shield, significant
 from .wifi import BottleneckLocator
@@ -64,6 +64,14 @@ class Engine:
         I = cfg["interfaces"]
         self.lan, self.wan = I["lan"], I["wan"]
         self.devreg = DeviceRegistry(os.path.join(state_dir, "devices.json"), cfg.get("devices", {}))
+        self.lan_subnets_cfg = list(I["lan_subnets"])
+        self.lan6: list[str] = []
+        if I.get("lan_ipv6_auto", True):
+            # the ISP-delegated IPv6 prefix is not known at install time: without it every IPv6 flow would be
+            # invisible to classification (shaped only as one aggregate)
+            self.lan6 = lan_prefixes6(self.lan)
+            I["lan_subnets"] = merge_subnets(self.lan_subnets_cfg, self.lan6)
+        self._last_lan6 = 0.0
         self.table = FlowTable(I["lan_subnets"])
         self.classifier = Classifier(cfg, lambda p: C.resolve(cfg, p), self.emit)
         self.estimator = CapacityEstimator(cfg, self.emit)
@@ -403,6 +411,9 @@ class Engine:
         if pr is not None:
             busy = self.passive_rtt_ps >= 10.0 and self.estimator.down.state not in ("bloat", "probe", "rebaseline")
             pr.interval = (self.probe_base_ms * (3 if busy else 1)) / 1000.0
+        if now - self._last_lan6 >= 30.0:
+            self._last_lan6 = now
+            self._follow_lan6()
         if now - self._last_ident >= 10.0:
             self._last_ident = now
             self.classifier.weak.maybe_refresh()
@@ -443,9 +454,11 @@ class Engine:
             self.active_intents = acts
         self.marker.sync(self.flow_tin)
         if hasattr(self.backend, "tune_leaves") and self.enforcer.applied:
+            batch: list = []
             for d in ("down", "up"):
                 served = {k: v["kbit"] for k, v in self.tin_view.get(d, {}).items()}
-                self.backend.tune_leaves(d, served, self.enforcer.applied[d]["guarantee"])
+                self.backend.tune_leaves(d, served, self.enforcer.applied[d]["guarantee"], batch)
+            self.backend.run_batch(batch)
         if now - self._last_refresh > 20.0:
             self._last_refresh = now
             self.marker.refresh(self.flow_tin)
@@ -530,6 +543,11 @@ class Engine:
 
     # ------------------------------------------------------------------ outputs
     def _heartbeat(self, stopped: bool = False) -> None:
+        # CPU: written at an eighth of the watchdog's timeout (1 s on a router), not every 200 ms tick
+        t = time.monotonic()
+        if not stopped and t - getattr(self, "_hb_t", -1e9) < float(self.cfg["watchdog"].get("timeout_s", 8.0)) / 8.0:
+            return
+        self._hb_t = t
         hb = {"ts": time.time(), "pid": os.getpid(), "stopped": stopped, "backend": self.backend.name,
               "lan": self.lan, "wan": self.wan}
         ap = self.enforcer.applied if hasattr(self, "enforcer") else None
@@ -724,6 +742,37 @@ class Engine:
         self.emit("device", f"{d.get('name') or ip} paused by {who}" + (f" for {minutes:.0f} min" if minutes else " until resumed"),
                   "info")
         return {"ok": True, "ip": ip, "paused_until": until}
+
+    def _follow_lan6(self) -> None:
+        """Follow the LAN's IPv6 prefixes: a new delegated prefix (ISP reconnect) joins the flow table and the
+        capture; the capture helper takes its subnets at start, so it is restarted (flows carry on)."""
+        I = self.cfg["interfaces"]
+        if not I.get("lan_ipv6_auto", True):
+            return
+        cur = lan_prefixes6(self.lan)
+        if cur == self.lan6:
+            return
+        old, self.lan6 = self.lan6, cur
+        subnets = merge_subnets(self.lan_subnets_cfg, cur)
+        if subnets == I["lan_subnets"]:
+            return
+        I["lan_subnets"] = subnets
+        import ipaddress
+        with self.table.lock:
+            self.table.nets = [ipaddress.ip_network(s, strict=False) for s in subnets]
+            self.table._lan_cache.clear()
+        self.emit("engine", f"LAN IPv6 prefix changed ({', '.join(old) or 'none'} -> {', '.join(cur) or 'none'}): "
+                            "classification follows", "info")
+        cap = getattr(self, "capture", None)
+        if cap is not None and hasattr(cap, "proc"):
+            try:
+                cap.stop()
+                self.capture = make_capture(self.cfg, self.lan, self.table, self.emit)
+                if not hasattr(self.capture, "proc"):
+                    self.capture.start()
+                self.marker.attach_kernel(self.capture)     # kernel engine: classes and current verdicts again
+            except Exception as ex:  # noqa: BLE001 -- the Python capture is the fallback, shaping is unaffected
+                self.emit("capture", f"capture restart after the prefix change failed: {ex}", "error")
 
     def _sync_pauses(self, wall: float) -> None:
         """A paused device is paused on every address it has: its IPv6 addresses (temporary ones included)

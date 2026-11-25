@@ -49,12 +49,44 @@ engine selects CAKE automatically; re-run `make eval` there to get CAKE numbers.
   `PACKET_RX_RING` and `SO_TIMESTAMPNS`, so the emulated run used the x86-64 helper and user-space
   receive timestamps. Emulated CPU numbers do not predict real ARM performance. Next step: a
   Cortex-A53 OpenWrt router.
+- **Router CPU is the open risk.** In the full-system emulation the engine used 61–94 % of one router-class core
+  under load (before the CPU work in `docs/ROUTER_PROFILE.md`, which halved its x86 CPU and removed nearly all
+  process starts); the emulated router also delivered only 43 Mbit/s on a 100 Mbit/s plan with shaping on. Neither has
+  been measured on a physical GL-MT3000. If a real router is CPU-bound, shape a lower plan rate or run the engine on
+  a Linux box with more headroom (`hwtest/README.md`).
 - The engine still needs Python (`python3-light`, about 6 MB of flash with its modules). Routers with
   16 MB of flash or 64 MB of RAM would need the control loop in C or Rust.
 - The Linux shaper (HTB or CAKE) takes a global qdisc lock and is effectively
   single-threaded. Multi-gigabit links need XDP `cpumap` scale-out (as LibreQoS
   does) or hardware QoS offload in the router SoC.
 - No hardware offload is used, and none is claimed.
+
+## IPv4 and IPv6
+
+The brief asks for IPv4 and, where available, IPv6. What the engine does for each, and how far that is verified:
+
+| | IPv4 | IPv6 | How it was verified |
+|---|---|---|---|
+| Header parsing (Python, C helper, eBPF) | yes | yes, with hop-by-hop, routing, fragment, AH and destination-options headers; non-first fragments are counted without reading payload as ports | C helper vs Python parity on raw frames of every kind (`tests/test_capture_helper.py`); eBPF program loaded by the kernel verifier |
+| Classification and class marking | yes (`cls4` map) | yes (`cls6` map) | unit tests; the lab runs below had no IPv6 |
+| LAN prefix | configured subnet | **found on the LAN interface at run time** and followed when the ISP changes the delegated prefix (the capture is restarted with it) | unit tests (`tests/test_dualstack.py`) |
+| One device, several addresses | one address | its IPv6 addresses (privacy addresses included) are grouped with its IPv4 address by MAC from the kernel neighbour table, so leases, pause, the device list, fairness accounting and experience are per device | netlink parser on kernel-format messages; IPv4 netlink path checked against `ip neigh` live |
+| Capacity estimator probes | ICMP timestamp, echo fallback | ICMPv6 echo to two public reflectors (round trip only: ICMPv6 has no timestamp message); unused, and reported as such, when the router has no IPv6 | ICMPv6 receive path unit-tested; IPv4 probes live |
+
+Limits:
+
+- **No IPv6 traffic was ever shaped live.** The kernels of every lab run, including all committed results
+  (`results*/environment.json`: `"ipv6": false`), had IPv6 disabled, and the full-system emulation passed only the IPv4
+  subnet to the capture. A real dual-stack line (most Indian fibre ISPs hand out IPv6 by default) is the test to do.
+- **CAKE shares per address, not per device.** Its `dual-dsthost`/`dual-srchost` fairness hashes on the IP address, so
+  a dual-stack laptop using its IPv4 and two IPv6 addresses can receive up to three host shares against an IPv4-only
+  TV. The HTB backend shares per flow and is not affected. The fix is CAKE's host-hash override from a tc filter
+  (classid major = device), keyed by the same device map; it was not built because this lab's kernel has no CAKE to
+  test it on.
+- **Devices behind a MAC-translating range extender** (repeater mode) share one MAC, so their IPv6 addresses cannot
+  be told apart and stay separate devices. IPv6-only devices are not grouped across their rotating temporary
+  addresses either.
+- PPPoE, DS-Lite, 464XLAT and NAT64 uplinks were not tested.
 
 ## Scope of control
 
