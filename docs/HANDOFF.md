@@ -144,7 +144,8 @@ The user excluded login and security fixes. These findings from the review are s
 ## 8. Suggested next steps for Round 2
 
 1. Decide whether to merge this branch into `main` (judges may look at the repo; CI is green here).
-2. Build the 10-slide deck and the 3-minute video (Linux lab footage plus presenter). Suggested slide outline: problem;
+2. Build the 10-slide deck and the 3-minute video (Linux lab footage plus presenter). The video is fully designed
+   in `docs/ROUND2_VIDEO_PLAN.md` (timeline, clip list, presenter script, layout from the organiser's sample, export). Suggested slide outline: problem;
    solution in one picture; architecture on Linux; header-only classification (99.3 % vs 66.9 % for rules); capacity
    estimation and failover; temporary intent; results before/after; real-firmware system test (8 bugs found);
    IPv4/IPv6 and CPU (this session); limits and roadmap.
