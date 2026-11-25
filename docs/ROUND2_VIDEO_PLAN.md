@@ -257,6 +257,13 @@ results; the sources are listed in section 9.
 segment cuts. If it runs long, cut in this order: the last sentence of segment 6, "and logs why" in segment 3, "the
 language of RDK-B and prpl gateways" in segment 8.)
 
+## 5b. Who records what
+
+| Who | What |
+|---|---|
+| **Claude (this cloud session)** | All screen clips C1–C8, recorded from the real lab on Ubuntu 24.04 here; the stills; title, end card, labels and result cards; a **guide video** (the locked screen cut with the script as captions and a countdown per segment) for the presenter to record against; the final composite, captions, audio clean-up and the <50 MB export. |
+| **The team** | The presenter footage (P1), room tone (P2), the team details (T1), and optionally the router shot (H1). Specification in section 7b. |
+
 ## 6. Clips to record
 
 ### Recording machine and settings
@@ -334,6 +341,18 @@ presenter box.
 - **Delivery:** calm, about 140 words a minute, look at the lens, small natural gestures inside the frame. Smile on
   the first and last lines.
 - **Dress:** plain, solid colour (no fine stripes or logos), contrasting with the background.
+
+## 7b. What the team sends (exact specification)
+
+| ID | What | How | Length |
+|---|---|---|---|
+| **P1** | The presenter speaking the script, **one file per segment** (10 segments, 0–9), 2 takes each | Play the guide video on a laptop beside the camera and speak each segment as its captions appear. Phone in landscape on a stand at eye level, **1920×1080, 30 fps, HDR off**, exposure and focus locked. Head and shoulders, centred, space above the head (the final crop is close to square). Plain background, face lit from the front, clip-on or earphone mic. Hold a natural smile for 2 s before the first word of segment 0 and after the last word of segment 9. | about 3 min of speech, 6–8 min of files |
+| **P2** | Room tone | Same room, same mic, everyone silent | 10 s |
+| **T1** | Team details | Team name, institute name, team leader's first name (for the file name), presenter's name tag text, team members for the end card, the submission deadline | text |
+| **H1** *(optional)* | The GL.iNet router on the desk | Only if you have it: landscape, 1080p 30 fps, steady, router with cables in and lights on, no faces or personal screens | 20 s |
+
+File names: `P1-seg03-take2.mp4`, `P2-roomtone.mp4`, `H1-router.mp4`. Do not edit, trim, add filters or compress
+them. Send the original files (a shared Google Drive folder works; name the folder in the chat).
 
 ## 8. Edit and export
 
