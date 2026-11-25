@@ -149,7 +149,7 @@ Full statistics, figures and method: [`results/REPORT.md`](results/REPORT.md)
 
 ```bash
 sudo make lab              # testbed + engine + watchdog + lab server; console at http://localhost:8090/
-make test                  # unit tests (121), no root needed
+make test                  # unit tests (134; a few need root, tc or scikit-learn and skip without them)
 pip install -r requirements.txt   # only to retrain the model or rebuild the report figures
 ```
 
