@@ -51,6 +51,13 @@ samples each):
 | 2.0.0 | 4.3–4.6 % | 16.3 |
 | now | **1.9–2.3 %** | **0.1** |
 
+The same quality, checked on the same lab with the old and new engine (ML arm): scenario 1 (ISO download and backup
+during a call), 8 seeds each, call delay p99 median 25.7 vs 25.7 ms download (Mann-Whitney p = 0.75) and 14.4 vs
+16.0 ms upload (p = 0.67), ISO 79.8 vs 78.3 Mbit/s, backup 14.4 vs 14.3 Mbit/s, page load p95 78 vs 77 ms; scenario 3
+(three TVs and a game), 3 seeds each, game delay p99 50.4 vs 46.7 ms, TV bitrate 12.4 vs 12.7 Mbit/s, no rebuffering
+and no starved seconds in either. (After 3 seeds scenario 1 looked 10 ms worse on the download call delay; 5 more
+seeds showed that was noise.)
+
 Process starts matter most on a router: each fork and exec of `tc` costs milliseconds of a core that is also
 forwarding packets (the emulated MT7981-class router ran at 56 % softirq under load). The emulated router's 61-94 %
 engine CPU was measured before these changes; it has not been measured again, and a physical router is the real test.
