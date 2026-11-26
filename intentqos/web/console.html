@@ -321,6 +321,8 @@ table.cm th{font-size:12px;border-bottom:0;text-align:center;white-space:nowrap}
 .dialog{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px;max-width:460px;width:100%;display:grid;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
 .dialog h3{font-family:var(--cond);font-size:21px;font-weight:600}
 .dialog p{margin:0;color:var(--ink2)}
+.democap{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:59;font-size:15px;max-width:min(760px,calc(100% - 32px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:10px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;gap:12px;align-items:center}
+.democap .t{font-variant-numeric:tabular-nums;opacity:.7;font-weight:500}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-weight:500;z-index:60;max-width:min(560px,calc(100% - 32px));box-shadow:0 10px 30px rgba(0,0,0,.3)}
 
 /* ---------- responsive ---------- */
@@ -354,6 +356,7 @@ table.cm th{font-size:12px;border-bottom:0;text-align:center;white-space:nowrap}
 </style>
 </head>
 <body>
+<div id="democap" class="democap" hidden><span class="t" id="democap-t"></span><span id="democap-c"></span></div>
 <div class="app">
   <div class="replaybar" id="replaybar" hidden>
     <b>Replay of a recorded session</b><span id="rp-what">Recorded live on the namespace testbed.</span>
@@ -1140,7 +1143,8 @@ VIEWS.experiments = {title: "Experiments", group: "Evidence", build() {
   set("x-inject", `<div class="preset-grid">${Object.entries(lab.presets).map(([k, n]) => `<button type="button" class="toggle" data-preset="${k}" aria-pressed="${!!tr[k]}"><b>${esc(n)}</b><span>${tr[k] ? `running · ${tr[k].flows} flow${tr[k].flows > 1 ? "s" : ""}` : "off"}</span></button>`).join("")}</div>
     <div style="margin-top:14px" id="x-link"></div>
     <div class="hstack" style="margin-top:14px"><span class="small muted">Engine: ${lab.engine.running ? "running" : "stopped"} · classifier ${esc(lab.engine.classifier)} · watchdog ${lab.engine.watchdog ? "armed" : "off"}</span><span class="sp"></span>
-      <button class="btn small danger" type="button" id="x-kill">Crash the engine</button><button class="btn small" type="button" id="x-restart">Restart engine</button><button class="btn small quiet" type="button" id="x-reset">Stop all traffic</button></div>`);
+      <button class="btn small danger" type="button" id="x-kill">Crash the engine</button><button class="btn small" type="button" id="x-restart">Restart engine</button><button class="btn small quiet" type="button" id="x-reset">Stop all traffic</button></div>
+    <div class="hstack" style="margin-top:14px"><button class="btn" type="button" id="x-demo">${lab.demo?.running ? "Stop the demo" : "Play the 80 s demo"}</button><span class="small muted">a work call, then a download and a backup, a line drop, a boost and the recovery, with a caption for each step</span></div>`);
   labLinkPanel("x-link");
 }};
 
@@ -1397,7 +1401,8 @@ async function poll() {
       S.state = await get("/api/state");
       const rows = await get("/api/history?since=" + S.lastT);
       if (rows.length) { S.hist = S.hist.concat(rows).slice(-2000); S.lastT = rows[rows.length - 1].t; }
-      if (tick % 3 === 0 && S.labTried !== false) S.lab = await get("/lab/status").catch(() => { S.labTried = false; return null; });
+      if ((tick % 3 === 0 || S.lab?.demo?.running) && S.labTried !== false) S.lab = await get("/lab/status").catch(() => { S.labTried = false; return null; });
+      demoCaption(S.lab);
       if (tick % 5 === 0 && S.view === "system") S.sys = await get("/api/system").catch(() => S.sys);
       if (tick % 5 === 0 && S.view === "experiments" && S.lab?.job?.state === "running") S.exps = await get("/lab/experiments").catch(() => S.exps);
       setConn(true, S.state.paused ? "Live · paused" : "Live");
@@ -1415,6 +1420,26 @@ async function poll() {
     if (!S.state) $("content").innerHTML = `<section class="panel"><h2>Waiting for the engine</h2><p class="sub">This console talks to the IntentQoS engine's API. Start it with <code>sudo make engine</code> (or the whole lab with <code>sudo make lab</code>); this page retries every second.</p></section>`;
   } finally { pollBusy = false; }
 }
+
+/* ------------------------------------------------------------------ the 80 s video demo (lab only) */
+// A caption bar narrates each step while the lab plays the demo. Open the console with #autoplay (the Windows
+// "Video demo" launcher does) and the demo starts by itself once the engine and the lab are up.
+let demoShownUntil = 0;
+function demoCaption(lab) {
+  const d = lab?.demo, el = $("democap");
+  if (!el) return;
+  if (d?.running) demoShownUntil = Date.now() + 8000;
+  if (d && d.caption && Date.now() < demoShownUntil) {
+    el.hidden = false;
+    $("democap-t").textContent = d.running ? `${Math.floor(d.t || 0)} s / ${d.length_s} s` : "";
+    $("democap-c").textContent = d.caption;
+  } else el.hidden = true;
+  if (S.autoplay && lab?.lab && lab.engine?.running && !d?.running && !S.autoplayed) {
+    S.autoplayed = true;
+    setTimeout(() => send("POST", "/lab/demo", {action: "start"}).catch(() => { S.autoplayed = false; }), 4000);
+  }
+}
+S.autoplay = /autoplay/.test(location.hash) || /[?&]demo=play/.test(location.search);
 
 /* ------------------------------------------------------------------ replay */
 function startReplay() {
@@ -1483,6 +1508,7 @@ document.addEventListener("click", async (e) => {
   if (b.dataset.rate) { const [d, u] = b.dataset.rate.split(",").map(Number); await send("POST", "/lab/condition", {down: d, up: u}); toast(`Access link set to ${d}/${u} Mbit/s.`); S.lab = await get("/lab/status").catch(() => S.lab); render(); return; }
   if (b.id === "x-kill") { if (await ask("Crash the engine?", "The engine is killed with SIGKILL, so it cannot clean up. The watchdog should restore the safe state within a few seconds. Restart it afterwards.", "Crash it", true)) { await send("POST", "/lab/engine", {action: "kill"}); toast("Engine killed. Watch the watchdog take over on the System view."); } return; }
   if (b.id === "x-restart") { await send("POST", "/lab/engine", {action: "restart"}); toast("Engine restarting."); return; }
+  if (b.id === "x-demo") { await send("POST", "/lab/demo", {action: S.lab?.demo?.running ? "stop" : "start"}); S.lab = await get("/lab/status").catch(() => S.lab); render(); return; }
   if (b.id === "x-reset") { await send("POST", "/lab/reset"); toast("All lab traffic stopped and the link is back at the plan rate."); S.lab = await get("/lab/status").catch(() => S.lab); render(); return; }
 });
 document.addEventListener("change", async (e) => {

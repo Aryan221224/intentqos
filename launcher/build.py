@@ -29,6 +29,7 @@ PARTS = [  # part, file name, icon
     ("operator", "IntentQoS Operator Console", "operator"),
     ("app", "SampleNet Home App", "app"),
     ("demo", "IntentQoS Demo (all three)", "demo"),
+    ("video", "IntentQoS Video Demo (no router)", "demo"),
     ("stop", "Stop IntentQoS", "stop"),
 ]
 SKIP_PREFIX = ("launcher/", "dist/", "docs/img/", "docs/console-replay.html", "results/replay.json", "results/runs/", "ml/data/",

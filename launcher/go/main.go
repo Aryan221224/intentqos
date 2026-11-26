@@ -64,6 +64,8 @@ var (
 	gateway  = window{"gateway", "http://localhost:8090/", "http://127.0.0.1:8090/api/healthz", 1600, 1000}
 	operator = window{"operator", "http://localhost:8088/ops/", "http://127.0.0.1:8088/healthz", 1600, 1000}
 	app      = window{"app", "http://localhost:8088/app/", "http://127.0.0.1:8088/healthz", 430, 900}
+	// the video demo: the gateway console plays the 80 s scripted demo by itself, with a caption per step
+	gatewayAuto = window{"gateway", "http://localhost:8090/#autoplay", "http://127.0.0.1:8090/api/healthz", 1600, 1000}
 )
 
 var parts = map[string]partDef{
@@ -71,6 +73,7 @@ var parts = map[string]partDef{
 	"operator": {"IntentQoS Fleet", "controller", "#F3F4F6", "#1B2130", "#576173", []window{operator}},
 	"app":      {"SampleNet Fibre", "controller", "#1D2B5E", "#FFFFFF", "#C9D0EC", []window{app}},
 	"demo":     {"IntentQoS", "all", "#121922", "#E6ECF2", "#9AABBD", []window{operator, app, gateway}},
+	"video":    {"IntentQoS video demo", "all", "#121922", "#E6ECF2", "#9AABBD", []window{operator, app, gatewayAuto}},
 }
 
 var (
@@ -135,6 +138,14 @@ func layout(ws []window) [][4]int {
 		k++
 	}
 	return out
+}
+
+// askYesNo shows a Yes/No question; true for Yes.
+func askYesNo(title, text string) bool {
+	t, _ := syscall.UTF16PtrFromString(text)
+	c, _ := syscall.UTF16PtrFromString(title)
+	r, _, _ := messageBoxW.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), 0x4|0x20) // MB_YESNO | MB_ICONQUESTION
+	return r == 6                                                                                    // IDYES
 }
 
 func msgBox(title, text string, icon uint32) {
@@ -467,9 +478,22 @@ func main() {
 	distro, err = pickDistro()
 	if err != nil {
 		logf("no distro: %v", err)
-		msgBox("IntentQoS needs WSL 2", "IntentQoS runs its gateway and controller inside Windows Subsystem for Linux (WSL 2), "+
-			"because the engine needs Linux network namespaces, tc and nftables.\n\nProblem: "+err.Error()+
-			"\n\nTo install: open PowerShell as administrator, run\n    wsl --install -d Ubuntu\nrestart Windows, open Ubuntu once to create a user, then run this launcher again.", mbIconError)
+		if askYesNo("IntentQoS needs WSL 2", "IntentQoS runs its gateway and controller inside Windows Subsystem for Linux (WSL 2), "+
+			"because the engine needs Linux network namespaces, tc and nftables.\n\n("+err.Error()+")\n\n"+
+			"Install WSL with Ubuntu now? Windows asks for administrator permission and downloads Ubuntu (about 500 MB, "+
+			"a few minutes). Then restart Windows: an Ubuntu window opens once and asks for a user name and password "+
+			"(any you like). After that, double-click this program again.") {
+			cmd := exec.Command("powershell", "-NoProfile", "-Command",
+				"Start-Process -FilePath wsl.exe -ArgumentList '--install','-d','Ubuntu' -Verb RunAs -Wait")
+			hidden(cmd, 0)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				logf("wsl --install: %v %s", err, out)
+				msgBox("IntentQoS", "WSL was not installed ("+err.Error()+"). Open PowerShell as administrator and run:\n    wsl --install -d Ubuntu", mbIconError)
+				return
+			}
+			msgBox("IntentQoS", "WSL is being installed. Restart Windows when it finishes, set up the Ubuntu user when its window "+
+				"opens, then double-click this program again.", mbIconInfo)
+		}
 		return
 	}
 	steps := []string{"Find WSL (" + distro + ")", "Install or update IntentQoS in WSL", "Start the services", "Wait until they answer"}

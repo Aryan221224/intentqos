@@ -63,6 +63,21 @@ PRESETS = {
     "browse": {"name": "Browsing on the phone", "flows": [("web", "phone", {})]},
 }
 
+# The 80 s video demo (the lab console's "Play the demo"): the golden path of scripts/demo.py, driven through the
+# same lab controls, with a caption per step for the person watching.
+DEMO_STEPS = [
+    (0, "traffic", "call", "A work video call starts on the laptop."),
+    (2, "traffic", "tvs", "Three TVs start streaming."),
+    (4, "traffic", "game", "An online game starts on the console."),
+    (10, "traffic", "iso", "A big ISO download starts on the desktop."),
+    (12, "traffic", "backup", "A cloud backup starts on the NAS. Bulk moves to the bottom lane; the call stays smooth."),
+    (28, "rate", (20, 5), "The fibre drops to 20/5 Mbit/s. IntentQoS measures the new line from delay and reshapes."),
+    (44, "lease", None, "\"Boost my work call\": a 30-minute lease for the laptop, inside the household's budget."),
+    (62, "nominal", None, "The line recovers. The shaper probes back up in small steps."),
+    (80, "end", None, "Demo finished: the call stayed usable through a download, a backup and a line drop."),
+]
+
+
 SCEN_INFO = {
     "s1_iso_during_call": {"short": "ISO download during a video call", "duration_s": 50,
                            "story": "A large ISO download and a cloud backup start ten seconds into a video call."},
@@ -102,6 +117,78 @@ class Lab:
         self.agent: subprocess.Popen | None = None
         self.speedsrv: subprocess.Popen | None = None
         self.with_agent = False
+        self.demo: dict = {"running": False}
+        self._demo_stop = threading.Event()
+
+    # ------------------------------------------------------------ the 80 s video demo
+    def demo_start(self) -> dict:
+        with self.lock:
+            if self.demo.get("running"):
+                return self.demo_status()
+            self._demo_stop = threading.Event()
+            self.demo = {"running": True, "started": time.time(), "caption": "Starting the demo…", "step": 0,
+                         "of": len(DEMO_STEPS), "length_s": DEMO_STEPS[-1][0]}
+        threading.Thread(target=self._demo_run, args=(self._demo_stop,), daemon=True, name="lab-demo").start()
+        return self.demo_status()
+
+    def demo_stop(self) -> None:
+        self._demo_stop.set()
+        with self.lock:
+            self.demo = {"running": False, "caption": "Demo stopped."}
+
+    def demo_status(self) -> dict:
+        with self.lock:
+            d = dict(self.demo)
+        if d.get("running"):
+            d["t"] = round(time.time() - d["started"], 1)
+        return d
+
+    def _cancel_demo_leases(self) -> None:
+        try:
+            with urllib.request.urlopen(ENGINE + "/api/state", timeout=6) as r:
+                st = json.load(r)
+            for it in st.get("intents") or []:
+                if isinstance(it, dict) and it.get("requester") == "demo":
+                    urllib.request.urlopen(urllib.request.Request(ENGINE + "/api/intents/" + it["id"], method="DELETE"), timeout=6).close()
+        except Exception:
+            pass
+
+    def _demo_run(self, stop: threading.Event) -> None:
+        t0 = time.time()
+        try:
+            self.traffic_stop()
+            self._cancel_demo_leases()                # a retake starts clean
+            st = TB.status()
+            nominal = (st.get("nominal_down", 100), st.get("nominal_up", 20))
+            TB.set_isp_rate(*nominal)
+            for i, (at, kind, arg, caption) in enumerate(DEMO_STEPS):
+                if stop.wait(max(0.0, t0 + at - time.time())):
+                    return
+                try:
+                    if kind == "traffic":
+                        self.traffic_start(arg, 120)
+                    elif kind == "rate":
+                        TB.set_isp_rate(*arg)
+                    elif kind == "nominal":
+                        TB.set_isp_rate(*nominal)
+                    elif kind == "lease":
+                        body = json.dumps({"target": "laptop", "duration_s": 1800, "goal": "low_latency", "priority": 3,
+                                           "requester": "demo", "label": "work call"}).encode()
+                        req = urllib.request.Request(ENGINE + "/api/intents", data=body, method="POST",
+                                                     headers={"Content-Type": "application/json"})
+                        with urllib.request.urlopen(req, timeout=6) as r:
+                            json.load(r)
+                except Exception as e:                # a step that fails is reported, the demo goes on
+                    caption += f" ({e})"
+                with self.lock:
+                    if stop.is_set():
+                        return
+                    self.demo.update(caption=caption, step=i + 1)
+            with self.lock:
+                self.demo.update(running=False)
+        except Exception as e:
+            with self.lock:
+                self.demo = {"running": False, "caption": f"Demo stopped: {e}"}
 
     # ------------------------------------------------------------ processes
     def _spawn(self, ns: str, args: list[str], log: str) -> subprocess.Popen:
@@ -366,6 +453,7 @@ def make_handler(lab: Lab):
                                    "python": lab.engine_python,
                                    "watchdog": lab.watchdog is not None and lab.watchdog.poll() is None},
                         "traffic": lab.traffic_status(),
+                        "demo": lab.demo_status(),
                         "presets": {k: v["name"] for k, v in PRESETS.items()},
                         "job": Lab._public(lab.job) if lab.job else None})
                 if p == "/lab/condition" and method == "POST":
@@ -380,7 +468,13 @@ def make_handler(lab: Lab):
                         return self._send(200, {"ok": True})
                     return self._send(200, lab.traffic_start(body.get("preset", ""),
                                                              float(body.get("duration_s", 3600))))
+                if p == "/lab/demo" and method == "POST":
+                    if body.get("action", "start") == "stop":
+                        lab.demo_stop()
+                        return self._send(200, {"ok": True})
+                    return self._send(200, lab.demo_start())
                 if p == "/lab/reset" and method == "POST":
+                    lab.demo_stop()
                     lab.traffic_stop()
                     st = TB.status()
                     TB.set_isp_rate(st.get("nominal_down", 100), st.get("nominal_up", 20))

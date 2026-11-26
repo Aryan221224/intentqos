@@ -1,0 +1,28 @@
+INTENTQOS WITHOUT A ROUTER (Linux lab on this Windows laptop)
+=============================================================
+
+The same IntentQoS engine as on the router, running on Linux (Windows Subsystem for Linux, WSL 2) with an emulated
+home network: a laptop on a work call, three TVs, a game console, a NAS and a phone behind a bloated 100/20 Mbit/s
+fibre modem.
+
+First: unzip. Right-click the zip -> Extract All, and run the programs from the extracted folder.
+
+For the video
+  Double-click  "IntentQoS Video Demo (no router).exe"
+    - First time on this laptop: if WSL is not installed it offers to install it (one administrator prompt, a
+      download, a Windows restart, then Ubuntu asks once for a user name and password: any you like). Then
+      double-click it again. The first start also copies IntentQoS into WSL (a few minutes).
+    - Three windows open: the operator console, the household app (phone-sized) and the home gateway console.
+    - The gateway console plays an 80-second demo by itself, with a caption for each step:
+        a work video call; a big download and a cloud backup start (the call stays smooth);
+        the fibre drops to 20/5 Mbit/s (IntentQoS measures it and reshapes); "boost my work call";
+        the line recovers.
+    - Play it again: Experiments page -> "Play the 80 s demo", or press F5 in the gateway window.
+
+  "IntentQoS Demo (all three).exe"  the same three windows without the scripted demo (click the lab controls yourself)
+  "Stop IntentQoS.exe"              stops everything when you are done
+
+On a Linux computer (Ubuntu/Debian) instead of Windows:  sudo bash scripts/video-demo.sh   (in the project folder)
+
+Rehearse once the day before: the first start on a laptop is the slow one.
+Logs: %LOCALAPPDATA%\IntentQoS\launcher.log

@@ -1,6 +1,6 @@
 # Windows launchers
 
-Five double-click programs for Windows 10/11. They run IntentQoS inside WSL 2, because the gateway
+Six double-click programs for Windows 10/11. They run IntentQoS inside WSL 2, because the gateway
 engine needs Linux network namespaces, `tc` and `nftables`; nothing is emulated or mocked on the
 Windows side.
 
@@ -10,12 +10,13 @@ Windows side.
 | `IntentQoS Operator Console.exe` | the fleet controller and 240 simulated homes | http://localhost:8088/ops/ |
 | `SampleNet Home App.exe` | the same controller | the subscriber app, http://localhost:8088/app/, in a phone-sized window |
 | `IntentQoS Demo (all three).exe` | everything | all three windows |
+| `IntentQoS Video Demo (no router).exe` | everything, like the demo | the same three windows; the gateway console plays the 80 s scripted demo by itself (`#autoplay`), with a caption per step |
 | `Stop IntentQoS.exe` | stops everything and closes its windows | a confirmation |
 
 ## What happens when you double-click
 
-1. It finds a WSL 2 distribution (Ubuntu first). Without one it explains how to install it
-   (`wsl --install -d Ubuntu`).
+1. It finds a WSL 2 distribution (Ubuntu first). Without one it offers to install it (`wsl --install -d Ubuntu`,
+   one administrator prompt, then a Windows restart and Ubuntu's one-time user setup).
 2. It opens its window at once and shows progress there.
 3. If the release inside the exe differs from the one in `/opt/intentqos`, it copies it into WSL and
    runs `wsl-setup.sh`: unpack, keep the controller database, keys and lab data, and install only
