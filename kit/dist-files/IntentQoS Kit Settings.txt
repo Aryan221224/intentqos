@@ -1,0 +1,15 @@
+# IntentQoS Kit Settings
+# Keep this file next to the IntentQoS programs, and copy the same file to every laptop.
+# With it, each program does its job by itself: double-click, and it runs (a 5 second countdown with a Stop
+# button comes first). Delete a line, or this whole file, and the program asks for that value instead.
+
+team_pin        = @PIN@     # the same 6 digits on every laptop: the console uses them, the other programs pair with them
+plan_down       = 100        # your internet plan, Mbit/s (from the ISP bill), download
+plan_up         = 100        #   and upload
+router_address  =            # leave empty: Router Setup finds the router (GL.iNet 192.168.8.1, OpenWrt 192.168.1.1)
+router_user     = root
+router_password =            # optional: GL.iNet admin panel password. Router Setup also remembers it after the first sign-in
+auto            = yes        # yes: every program starts its job by itself. no: everything by hand, as before
+tests           = call, game, everyone   # Test Kit tests, in order: call, game, everyone, rpm, home
+test_seconds    = 30         # seconds per measurement (each test runs twice: IntentQoS off, then on)
+failover        = yes        # after the tests: the fibre -> 4G failover test (IntentQoS on, one cable move)

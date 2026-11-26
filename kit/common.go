@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -84,7 +85,9 @@ type Profile struct {
 	TestToken  string            `json:"testkit_token,omitempty"`
 	Routers    []RouterInfo      `json:"routers,omitempty"`
 	KnownHosts map[string]string `json:"known_hosts,omitempty"` // router address -> SSH host key fingerprint
-	Extra      map[string]any    `json:"extra,omitempty"`
+	// router address -> its SSH password, base64 of protect() (Windows: DPAPI for this user), so a re-run signs in by itself
+	RouterPasswords map[string]string `json:"router_passwords,omitempty"`
+	Extra           map[string]any    `json:"extra,omitempty"`
 }
 
 type ConsoleInfo struct {
@@ -126,6 +129,9 @@ func loadProfile() *Profile {
 	}
 	if p.KnownHosts == nil {
 		p.KnownHosts = map[string]string{}
+	}
+	if p.RouterPasswords == nil {
+		p.RouterPasswords = map[string]string{}
 	}
 	return p
 }
@@ -523,4 +529,33 @@ func defaultGateways() []string {
 		}
 	}
 	return uniq(out)
+}
+
+// rememberPassword keeps a router's SSH password on this laptop (encrypted for this user on Windows).
+func rememberPassword(host, pass string) {
+	b, err := protect([]byte(pass))
+	if err != nil {
+		logf("could not protect the router password: %v", err)
+		return
+	}
+	p := loadProfile()
+	p.RouterPasswords[host] = base64.StdEncoding.EncodeToString(b)
+	_ = p.save()
+}
+
+// savedPassword is the remembered password for a router ("", false when none).
+func savedPassword(host string) (string, bool) {
+	enc, ok := loadProfile().RouterPasswords[host]
+	if !ok {
+		return "", false
+	}
+	raw, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil {
+		return "", false
+	}
+	b, err := unprotect(raw)
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
 }

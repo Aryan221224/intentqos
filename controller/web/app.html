@@ -411,7 +411,7 @@ function toast(m) { const e = document.createElement("div"); e.className = "toas
 async function api(method, path, body) {
   const r = await fetch(path, {method, headers: {"Content-Type": "application/json"}, credentials: "same-origin", body: body ? JSON.stringify(body) : undefined});
   let d = null; try { d = await r.json(); } catch (e) {}
-  if (r.status === 401 && !/\/(otp|login|quick)$/.test(path)) { renderLogin(); throw new Error("signed out"); }
+  if (r.status === 401 && !/\/(otp|login|quick|kitlink)$/.test(path)) { renderLogin(); throw new Error("signed out"); }
   if (!r.ok) throw new Error((d && (d.error || d.reason)) || t("wrong", {code: r.status}));
   return d;
 }
@@ -783,6 +783,7 @@ function renderLogin() {
       <div id="otp" hidden style="display:grid;gap:12px"><label class="f" for="lc">${t("code6")}<input class="in code" id="lc" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></label><div id="demo"></div></div>
       <p id="lm" style="color:var(--bad);margin:0;font-size:15px" role="alert"></p><button class="btn" type="submit" id="lb">${t("send_code")}</button>
       <button class="lang" type="button" id="lang0" style="color:var(--text);border-color:var(--line);justify-self:start">${S.lang === "hi" ? "English" : "हिन्दी"}</button></form></div></div>`;
+  if (S.kitErr) { $("lm").textContent = S.kitErr; S.kitErr = ""; }
   $("lang0").onclick = () => { S.lang = S.lang === "hi" ? "en" : "hi"; try { localStorage.setItem("iqa-lang", S.lang); } catch (e) {} renderLogin(); };
   fetch("/v1/auth/quick-roles").then((r) => r.json()).then((q) => {
     if (!q.enabled) return;
@@ -810,7 +811,15 @@ async function start() {
   try { await refreshHome(); } catch (e) { if (e.message === "signed out") return; }
   renderShell(); route();
 }
-start();
+// home kit: the QR code on the Operator Console carries a short-lived sign-in link (#k=...), so the phone opens
+// straight into the app; the link is removed from the address bar before anything else runs
+async function kitLink() {
+  const m = /^#k=([A-Za-z0-9_-]{8,64})$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  try { await api("POST", "/v1/app/kitlink", {token: m[1]}); } catch (err) { S.kitErr = err.message; }
+}
+kitLink().then(start);
 </script>
 <script>
 // installable app: the service worker needs a secure origin (https, or the phone app's own wrapper)

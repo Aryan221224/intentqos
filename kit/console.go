@@ -82,11 +82,14 @@ func runPart(args []string) {
 	httpsPort := fs.Int("https-port", 8443, "port for routers and the pairing API (HTTPS)")
 	appPort := fs.Int("app-port", 8088, "port for the phone app (plain HTTP on the home network)")
 	fwOnly := fs.Bool("add-firewall-rules", false, "internal: add the Windows firewall rules (run elevated)")
+	noFW := fs.Bool("no-firewall", false, "do not touch the Windows firewall (local-only checks)")
+	var progs multiFlag
+	fs.Var(&progs, "program", "internal, with --add-firewall-rules: also allow this program (repeatable)")
 	_ = fs.Parse(args)
 	setupLog("console")
 	logf("%s %s starting (%s/%s)", partTitle, version, runtime.GOOS, runtime.GOARCH)
 	if *fwOnly {
-		if err := addFirewallRules(*httpsPort, *appPort); err != nil {
+		if err := addFirewallRules(*httpsPort, *appPort, progs); err != nil {
 			logf("firewall: %v", err)
 			os.Exit(1)
 		}
@@ -124,7 +127,7 @@ func runPart(args []string) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- runController(ctx, st, *httpsPort, *appPort) }()
+	go func() { done <- runController(ctx, st, *httpsPort, *appPort, *noFW) }()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -163,13 +166,34 @@ func consoleUp(appPort int) bool {
 }
 
 // runController prepares everything and keeps the controller process running until ctx ends.
-func runController(ctx context.Context, st *consoleState, httpsPort, appPort int) error {
+func runController(ctx context.Context, st *consoleState, httpsPort, appPort int, noFW bool) error {
 	dir := dataDir("console")
+	set := loadSettings()
+	// another program on a port the console needs: say which, before anything starts (not a crash later)
+	if busy := busyPorts([]int{httpsPort, appPort, labHTTPSPort}, []int{discoveryPort, labUDPPort}); len(busy) > 0 {
+		e := fmt.Errorf("port %s is already used by %s. Close that program (or restart the laptop) and start the console again",
+			joinInts(busy), portOwner(busy[0]))
+		st.fail(e, "")
+		return e
+	}
 	st.step("Preparing the console files")
 	py, err := ensurePython(dir)
 	if err != nil {
 		st.fail(err, "")
 		return err
+	}
+	// Windows: allow routers and phones in, for the ports AND for this program and its Python, before anything
+	// listens. A rule per program stops Windows' own "allow Python?" prompt, whose Cancel would add a block rule.
+	if runtime.GOOS == "windows" && !noFW {
+		exe, _ := os.Executable()
+		if !firewallRulesPresent(py) {
+			st.step("Allowing routers and phones to reach this laptop (Windows asks for permission once)")
+			if err := runElevated("--add-firewall-rules", "--https-port", itoa(httpsPort), "--app-port", itoa(appPort),
+				"--program", exe, "--program", py); err != nil {
+				st.warn("Windows Firewall rules were not added (" + err.Error() + "). Routers and phones may not reach this laptop; " +
+					"start the console again and choose Yes when Windows asks.")
+			}
+		}
 	}
 	appDir, err := ensureApp(dir)
 	if err != nil {
@@ -191,7 +215,7 @@ func runController(ctx context.Context, st *consoleState, httpsPort, appPort int
 	// had a certificate for 127.0.0.1 only and every router failed TLS ("IP address mismatch") until a restart.
 	go watchAddresses(ctx, filepath.Join(data, "pki"), ips)
 	cfgPath := filepath.Join(dir, "controller.toml")
-	if err := writeConsoleConfig(cfgPath, data, httpsPort, appPort); err != nil {
+	if err := writeConsoleConfig(cfgPath, data, httpsPort, appPort, set.TeamPIN); err != nil {
 		st.fail(err, "")
 		return err
 	}
@@ -215,15 +239,6 @@ func runController(ctx context.Context, st *consoleState, httpsPort, appPort int
 			e := fmt.Errorf("could not create the database: %v", err)
 			st.fail(e, lastLines(string(out), 15))
 			return e
-		}
-	}
-	if runtime.GOOS == "windows" {
-		if !firewallRulesPresent() {
-			st.step("Allowing routers and phones to reach this laptop (Windows asks for permission once)")
-			if err := runElevated("--add-firewall-rules", "--https-port", itoa(httpsPort), "--app-port", itoa(appPort)); err != nil {
-				st.warn("Windows Firewall rules were not added (" + err.Error() + "). Routers and phones may not reach this laptop; " +
-					"if Windows asks whether Python may use the network, allow it on private networks.")
-			}
 		}
 	}
 	logPath := filepath.Join(dataDir("logs"), "controller.log")
@@ -409,7 +424,7 @@ func unzip(b []byte, dst string) error {
 	return nil
 }
 
-func writeConsoleConfig(path, data string, httpsPort, appPort int) error {
+func writeConsoleConfig(path, data string, httpsPort, appPort int, teamPIN string) error {
 	d := filepath.ToSlash(data)
 	cfg := fmt.Sprintf(`# written by IntentQoS Operator Console on every start; settings that persist live in the database
 listen = "0.0.0.0:%d"
@@ -425,6 +440,7 @@ test_server = "https://speed.cloudflare.com/__down?bytes=1000000000"
 
 [kit]
 enabled = true
+%s
 
 [brand]
 name = "SampleNet Fibre"
@@ -437,7 +453,7 @@ accent = "#3987e5"
 raw_hours = 48
 rollup_days = 90
 events_days = 90
-`, httpsPort, d, d+"/pki/server.pem", d+"/pki/server.key", appPort)
+`, httpsPort, d, d+"/pki/server.pem", d+"/pki/server.key", appPort, pinLine(teamPIN))
 	return os.WriteFile(path, []byte(cfg), 0o600)
 }
 
@@ -562,22 +578,26 @@ func writePEM(path, typ string, der []byte, mode os.FileMode) error {
 
 const fwRule = "IntentQoS-Operator-Console" // no spaces: netsh parses name=... itself
 
-func firewallRulesPresent() bool {
-	for _, n := range []string{fwRule, fwRule + "-LabUDP"} { // older installs lack the lab rules: add them once
+func firewallRulesPresent(python string) bool {
+	for _, n := range []string{fwRule, fwRule + "-LabUDP", fwRule + "-App1", fwRule + "-App2"} { // older installs lack some: add once
 		cmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+n)
 		hideWindow(cmd)
 		if cmd.Run() != nil {
 			return false
 		}
 	}
-	return true
+	// the Python runtime moves when the console is updated: its rule must name the current one
+	cmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+fwRule+"-App2", "verbose")
+	hideWindow(cmd)
+	out, _ := cmd.Output()
+	return strings.Contains(strings.ToLower(string(out)), strings.ToLower(python))
 }
 
-func addFirewallRules(httpsPort, appPort int) error {
+func addFirewallRules(httpsPort, appPort int, programs []string) error {
 	del := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+fwRule) // re-adding: no duplicates
 	hideWindow(del)
 	_ = del.Run()
-	for _, n := range []string{"-Discovery", "-Lab", "-LabUDP"} {
+	for _, n := range []string{"-Discovery", "-Lab", "-LabUDP", "-App1", "-App2", "-App3"} {
 		d := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+fwRule+n)
 		hideWindow(d)
 		_ = d.Run()
@@ -587,6 +607,14 @@ func addFirewallRules(httpsPort, appPort int) error {
 		{"name=" + fwRule + "-Discovery", "dir=in", "action=allow", "protocol=UDP", fmt.Sprintf("localport=%d", discoveryPort), "remoteip=localsubnet", "profile=any"},
 		{"name=" + fwRule + "-Lab", "dir=in", "action=allow", "protocol=TCP", fmt.Sprintf("localport=%d", labHTTPSPort), "remoteip=localsubnet", "profile=any"},
 		{"name=" + fwRule + "-LabUDP", "dir=in", "action=allow", "protocol=UDP", fmt.Sprintf("localport=%d", labUDPPort), "remoteip=localsubnet", "profile=any"},
+	}
+	for i, p := range programs {
+		// a Cancel on Windows' own prompt leaves a "block" rule for the program, and block wins over allow
+		d := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name=all", "dir=in", "program="+p)
+		hideWindow(d)
+		_ = d.Run()
+		rules = append(rules, []string{"name=" + fmt.Sprintf("%s-App%d", fwRule, i+1), "dir=in", "action=allow", "program=" + p,
+			"enable=yes", "profile=any"})
 	}
 	for _, r := range rules {
 		cmd := exec.Command("netsh", append([]string{"advfirewall", "firewall", "add", "rule"}, r...)...)
@@ -614,4 +642,49 @@ func lastLines(s string, n int) string {
 		ls = ls[len(ls)-n:]
 	}
 	return strings.Join(ls, "\n")
+}
+
+// multiFlag is a repeatable string flag.
+type multiFlag []string
+
+func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
+
+func pinLine(pin string) string {
+	if pin == "" {
+		return "# pin: a new one on every start (set team_pin in the kit settings file for a fixed one)"
+	}
+	return fmt.Sprintf("pin = %q                # team_pin from %s", pin, settingsName)
+}
+
+func joinInts(xs []int) string {
+	s := make([]string, len(xs))
+	for i, x := range xs {
+		s[i] = itoa(x)
+	}
+	return strings.Join(s, ", ")
+}
+
+// portOwner names the program holding a port (Windows: netstat + tasklist), or "another program".
+func portOwner(port int) string {
+	if runtime.GOOS != "windows" {
+		return "another program"
+	}
+	cmd := exec.Command("netstat", "-ano")
+	hideWindow(cmd)
+	out, _ := cmd.Output()
+	for _, ln := range strings.Split(string(out), "\n") {
+		f := strings.Fields(ln)
+		if len(f) >= 4 && strings.HasSuffix(f[1], ":"+itoa(port)) {
+			pid := f[len(f)-1]
+			t := exec.Command("tasklist", "/FI", "PID eq "+pid, "/FO", "CSV", "/NH")
+			hideWindow(t)
+			o, _ := t.Output()
+			if name, _, ok := strings.Cut(strings.TrimSpace(string(o)), ","); ok {
+				return strings.Trim(name, `"`) + " (process " + pid + ")"
+			}
+			return "process " + pid
+		}
+	}
+	return "another program"
 }

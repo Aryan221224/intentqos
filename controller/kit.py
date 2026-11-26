@@ -77,8 +77,10 @@ class Kit:
         self.ctl, self.cfg, self.db = ctl, cfg, ctl.db
         self.kcfg = cfg.get("kit", {})
         self.enabled = bool(self.kcfg.get("enabled"))
-        self.pin = f"{secrets.randbelow(10 ** 6):06d}"
+        team = re.sub(r"[\s-]", "", str(self.kcfg.get("pin", "")))   # the team's fixed PIN (kit settings file)
+        self.pin = team if re.fullmatch(r"[0-9]{6}", team) else f"{secrets.randbelow(10 ** 6):06d}"
         self.fails: list[float] = []
+        self.links: dict[str, list] = {}          # one-scan phone sign-in: token -> [minted, uses]
         self.lock = threading.Lock()
         self.dir = os.path.join(cfg["data_dir"], "kit", "results")
         os.makedirs(self.dir, exist_ok=True)
@@ -223,6 +225,39 @@ class Kit:
             raise PermissionError("pair this program with the Operator Console first")
         return row
 
+    # ------------------------------------------------------------ one-scan phone sign-in
+    LINK_TTL = 900            # a QR code's link works for 15 minutes
+    LINK_REFRESH = 600        # the kit page shows a new one after 10, so a code on screen is always valid
+    LINK_USES = 20
+
+    def phone_link_token(self) -> str:
+        """The token in the kit page's QR code (memory only; never shown to other home devices)."""
+        t = time.time()
+        with self.lock:
+            self.links = {k: v for k, v in self.links.items() if t - v[0] < self.LINK_TTL}
+            fresh = [k for k, v in self.links.items() if t - v[0] < self.LINK_REFRESH]
+            if fresh:
+                return fresh[0]
+            tok = secrets.token_urlsafe(16)
+            self.links[tok] = [t, 0]
+            return tok
+
+    def redeem_phone_link(self, token: str) -> dict:
+        """The household subscriber for a scanned QR code, or PermissionError with what to do."""
+        t = time.time()
+        with self.lock:
+            hit = None
+            for k, v in self.links.items():
+                if secrets.compare_digest(str(token), k):
+                    hit = v
+            if hit is None or t - hit[0] >= self.LINK_TTL or hit[1] >= self.LINK_USES:
+                raise PermissionError("this sign-in link has expired: scan the QR code on the console again")
+            hit[1] += 1
+        sub = self.db.one("SELECT * FROM subscribers WHERE account=?", (self.household()["account"],))
+        if not sub:
+            raise PermissionError("no home is set up yet: pair the router with Router Setup first, then scan again")
+        return sub
+
     # ------------------------------------------------------------ test reports
     def save_result(self, who: dict, body: dict) -> dict:
         rid = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
@@ -264,4 +299,6 @@ class Kit:
              "demo_otp": bool(self.cfg.get("demo_otp"))}
         if local:
             d["pin"] = self.pin
+            tok = self.phone_link_token()
+            d["app_link_urls"] = [f"{u}#k={tok}" for u in d["app_urls"]]
         return d

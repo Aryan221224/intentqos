@@ -18,6 +18,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -73,14 +74,67 @@ func sshDial(host, user, pass string, trustNew bool) (*ssh.Client, string, error
 				"reflashed the router this is expected: tick 'trust the new router identity' and connect again")
 		}
 		if strings.Contains(err.Error(), "unable to authenticate") {
-			return nil, seenFP, errors.New("the router did not accept that password. GL.iNet: use the admin panel password. " +
-				"OpenWrt: the root password set in LuCI (leave it empty if you never set one)")
+			return nil, seenFP, errBadPassword
 		}
 		return nil, seenFP, fmt.Errorf("could not reach the router's SSH service at %s: %v", addr, err)
 	}
 	prof.KnownHosts[host] = seenFP
 	_ = prof.save()
 	return c, seenFP, nil
+}
+
+var errBadPassword = errors.New("the router did not accept that password. GL.iNet: use the admin panel password. " +
+	"OpenWrt: the root password set in LuCI (leave it empty if you never set one)")
+
+// connectSaved signs in without typing: the password this laptop remembers for the router, then the one in the
+// kit settings file, then an empty one (a new OpenWrt router). Three tries at most, no loop.
+func connectSaved(host, user string, set Settings, trust bool) (*ssh.Client, string, error) {
+	var tries []string
+	if pw, ok := savedPassword(host); ok {
+		tries = append(tries, pw)
+	}
+	if set.RouterPassword != "" {
+		tries = append(tries, set.RouterPassword)
+	}
+	tries = append(tries, "")
+	seen := map[string]bool{}
+	for _, pw := range tries {
+		if seen[pw] {
+			continue
+		}
+		seen[pw] = true
+		c, _, err := sshDial(host, user, pw, trust)
+		if err == nil {
+			return c, pw, nil
+		}
+		if !errors.Is(err, errBadPassword) {
+			return nil, "", err
+		}
+	}
+	return nil, "", errBadPassword
+}
+
+// routerReady: this router already runs this IntentQoS version and is paired with this console, so a hands-off
+// run (a retake) has nothing to install.
+func routerReady(f map[string]string, payload, consoleHTTPS string) bool {
+	norm := func(u string) string { return strings.TrimRight(strings.TrimSpace(u), "/") }
+	return f["installed"] == payload && f["agent"] == "1" && consoleHTTPS != "" && norm(f["controller"]) == norm(consoleHTTPS)
+}
+
+// preflight finds what would stop an install half-way, before anything is uploaded ("" when fine).
+func preflight(f map[string]string) string {
+	if f["python"] != "" {
+		return "" // Python and tc are there already: nothing has to be downloaded
+	}
+	if f["internet"] == "no" {
+		return "the router has no internet connection. Connect its WAN port to your internet (the ISP router or modem) " +
+			"and run this again: the first install downloads Python and tc (about 20 MB) from the router's package feed"
+	}
+	if kb, err := strconv.Atoi(f["free_kb"]); err == nil && kb > 0 && kb < 22000 {
+		return fmt.Sprintf("the router has only %d MB of free space and the install needs about 22 MB. Remove unused "+
+			"packages or reset the router to its factory firmware, then run this again", kb/1024)
+	}
+	return ""
 }
 
 func sshRun(c *ssh.Client, cmd string) (string, error) {
@@ -147,6 +201,7 @@ echo "installed=$(cat /usr/lib/intentqos/VERSION 2>/dev/null)"
 echo "lan_ip=$(uci -q get network.lan.ipaddr | cut -d/ -f1)"
 echo "python=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"
 if ping -c 1 -W 3 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then echo internet=yes; else echo internet=no; fi
+echo "hwnat=$([ -d /sys/module/mtkhnat ] && echo mtk; [ -d /sys/module/shortcut_fe ] && echo sfe)"
 echo "agent=$(uci -q get intentqos.agent.enabled)"
 echo "controller=$(uci -q get intentqos.agent.controller_url)"`
 	out, _ := sshRun(c, script)
@@ -467,10 +522,13 @@ func runPart(args []string) {
 		wg.Wait()
 		writeJSON(w, 200, map[string]any{"routers": routers, "consoles": cons, "version": version})
 	})
+	app.Mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, loadSettings().settingsJSON())
+	})
 	app.Mux.HandleFunc("/api/connect", func(w http.ResponseWriter, r *http.Request) {
 		var q struct {
-			Host, User, Password string
-			Trust                bool
+			Host, User, Password, Console string
+			Trust, UseSaved               bool
 		}
 		if err := readJSON(r, &q); err != nil {
 			errJSON(w, err)
@@ -479,11 +537,23 @@ func runPart(args []string) {
 		if q.User == "" {
 			q.User = "root"
 		}
-		c, _, err := sshDial(q.Host, q.User, q.Password, q.Trust)
+		var c *ssh.Client
+		var err error
+		pw := q.Password
+		if q.UseSaved && pw == "" {
+			c, pw, err = connectSaved(q.Host, q.User, loadSettings(), q.Trust)
+		} else {
+			c, _, err = sshDial(q.Host, q.User, q.Password, q.Trust)
+		}
 		if err != nil {
+			if errors.Is(err, errBadPassword) {
+				writeJSON(w, 401, map[string]any{"error": err.Error(), "need_password": true})
+				return
+			}
 			errJSON(w, err)
 			return
 		}
+		rememberPassword(q.Host, pw)
 		f := routerFacts(c)
 		rc.mu.Lock()
 		if rc.client != nil {
@@ -495,7 +565,14 @@ func runPart(args []string) {
 			errJSON(w, errors.New("this device is not running OpenWrt, prplOS or GL.iNet firmware"))
 			return
 		}
-		writeJSON(w, 200, map[string]any{"facts": f, "payload_version": version})
+		res := map[string]any{"facts": f, "payload_version": version, "ready": routerReady(f, version, q.Console),
+			"preflight": preflight(f)}
+		for _, ri := range loadProfile().Routers {
+			if ri.LanIP == q.Host || ri.LanIP == f["lan_ip"] {
+				res["router"] = ri
+			}
+		}
+		writeJSON(w, 200, res)
 	})
 	app.Mux.HandleFunc("/api/install", func(w http.ResponseWriter, r *http.Request) {
 		var q installReq

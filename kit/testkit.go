@@ -600,6 +600,40 @@ type foRun struct {
 
 var foSignal = make(chan struct{}, 1)
 
+// short names for the kit settings file's "tests" line
+var shortTests = map[string]string{"call": "call_backup", "game": "game_downloads", "everyone": "busy_home", "busy": "busy_home",
+	"rpm": "rpm", "home": "home_network"}
+
+func scenarioFor(name string) string {
+	if id, ok := shortTests[name]; ok {
+		return id
+	}
+	for _, sc := range scenarios {
+		if sc.ID == name {
+			return sc.ID
+		}
+	}
+	return ""
+}
+
+// wanGateway is the router's current WAN gateway from its /api/state ("" when it does not say).
+func wanGateway(st map[string]any) string {
+	if c, ok := st["config"].(map[string]any); ok {
+		if g, ok := c["wan_gateway"].(string); ok {
+			return g
+		}
+	}
+	return ""
+}
+
+func (r *router) gateway() string {
+	var st map[string]any
+	if r.call("GET", "/api/state", nil, &st) != nil {
+		return ""
+	}
+	return wanGateway(st)
+}
+
 func runFailover(ctx context.Context, rt *router, qos string, ep endpoints, before, after time.Duration, auto bool) (foRun, error) {
 	if qos == "off" {
 		if err := rt.bypass(true, (before+after).Minutes()+1); err != nil {
@@ -624,21 +658,36 @@ func runFailover(ctx context.Context, rt *router, qos string, ep endpoints, befo
 			}
 		})
 	}
+	gw0 := rt.gateway() // the fibre's gateway: when the router reports another one, the cable has moved
 	s1, d1, u1 := measure(ctx, ep, 6, 4, before, t0, onS, nil)
 	run.Before = arm{QoS: qos, Samples: s1, DownMbps: d1, UpMbps: u1}
 	stats(&run.Before)
 	L.set(func(l *live) {
 		l.Phase = "Failover test: move the cable now"
-		l.Waiting = "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, then press “Cable moved”."
+		l.Waiting = "Move the router's WAN cable from the ISP router to the 4G Bridge laptop now, the test notices the move by itself (or press “Cable moved”)."
 	})
 	if !auto {
-		select {
-		case <-foSignal:
-		case <-ctx.Done():
-			return run, ctx.Err()
-		case <-time.After(5 * time.Minute):
-			return run, errors.New("the cable was not moved within 5 minutes")
+		tick := time.NewTicker(time.Second)
+		limit := time.After(5 * time.Minute)
+	wait:
+		for {
+			select {
+			case <-foSignal:
+				break wait
+			case <-ctx.Done():
+				tick.Stop()
+				return run, ctx.Err()
+			case <-limit:
+				tick.Stop()
+				return run, errors.New("the cable was not moved within 5 minutes")
+			case <-tick.C:
+				if g := rt.gateway(); gw0 != "" && g != "" && g != gw0 {
+					logf("failover: the router's WAN gateway changed %s -> %s: the cable has moved", gw0, g)
+					break wait
+				}
+			}
 		}
+		tick.Stop()
 	}
 	run.SwitchT = time.Since(t0).Seconds()
 	L.set(func(l *live) { l.Waiting = ""; l.Phase = "Failover test (" + qos + "): on 4G, measuring recovery" })
@@ -896,6 +945,20 @@ func runPart(args []string) {
 		p := loadProfile()
 		writeJSON(w, 200, map[string]any{"console": p.Console, "paired": p.TestToken != "", "routers": p.Routers,
 			"scenarios": scenarios, "consoles": discoverConsoles(1200 * time.Millisecond), "gateways": defaultGateways()})
+	})
+	app.Mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+		set := loadSettings()
+		j := set.settingsJSON()
+		var ids []string
+		for _, t := range set.Tests {
+			if id := scenarioFor(t); id != "" {
+				ids = append(ids, id)
+			} else {
+				logf("settings: unknown test %q skipped (use: call, game, everyone, rpm, home)", t)
+			}
+		}
+		j["scenario_ids"] = ids
+		writeJSON(w, 200, j)
 	})
 	app.Mux.HandleFunc("/api/pair", func(w http.ResponseWriter, r *http.Request) {
 		var q struct{ Console, PIN string }

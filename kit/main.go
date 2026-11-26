@@ -12,5 +12,6 @@ package main
 import "os"
 
 func main() {
+	unblockSiblings() // before anything else: later kit programs on this laptop then open without SmartScreen
 	runPart(os.Args[1:])
 }

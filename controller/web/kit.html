@@ -59,14 +59,14 @@ th{color:var(--text-2);font-weight:500}
   <section class="card pin">
     <h2>Pairing PIN</h2>
     <div class="pinv" id="pin">······</div>
-    <div class="muted small">Type this in <b>IntentQoS Router Setup</b> and <b>IntentQoS Test Kit</b> when they ask. A new PIN is made each time the console starts.</div>
+    <div class="muted small">Router Setup and the Test Kit fill it in by themselves from <b>IntentQoS Kit Settings.txt</b> (team_pin); without that file, type it when they ask (then a new PIN is made each time the console starts).</div>
     <div class="small muted" style="margin-top:10px">This laptop on the home network: <span class="mono" id="addrs">…</span></div>
   </section>
   <section class="card phone">
     <h2>Phone app</h2>
     <div id="qr"></div>
     <div class="small" style="text-align:center"><a id="appurl" class="mono" href="#" target="_blank">…</a></div>
-    <div class="small muted" style="margin-top:8px">Phone on the router's Wi-Fi: scan, open, then <b>Add to Home screen</b>. Sign in with <b class="mono" id="hhphone">…</b>; <span id="otpnote">the one-time code appears on the phone.</span></div>
+    <div class="small muted" style="margin-top:8px">Phone on the router's Wi-Fi: scan with the camera and open the link. The app opens <b>already signed in</b>; then use <b>Add to Home screen</b>. (By hand: sign in with <b class="mono" id="hhphone">…</b>; <span id="otpnote">the one-time code appears on the phone.</span>)</div>
   </section>
   <section class="card flow">
     <h2>Setup checklist</h2>
@@ -122,7 +122,8 @@ async function refresh() {
   try { st = await j("GET", "/v1/kit/status"); } catch (e) { $("devs").innerHTML = `<div class="empty">Console not answering: ${esc(e.message)}</div>`; return; }
   $("pin").textContent = (st.pin || "").replace(/(\d{3})(\d{3})/, "$1 $2");
   $("addrs").textContent = st.addresses.join(", ");
-  const app = st.app_urls[0]; $("appurl").textContent = app; $("appurl").href = app; qr(app);
+  const app = st.app_urls[0]; $("appurl").textContent = app; $("appurl").href = app;
+  qr((st.app_link_urls && st.app_link_urls[0]) || app);   // scanning signs the phone in (link valid 15 min)
   household = st.household;
   $("hhphone").textContent = st.household.phone.replace(/(\d{5})(\d{5})/, "$1 $2");
   $("otpnote").textContent = st.demo_otp ? "the one-time code appears on the phone (demo mode, no SMS)." : "a code is sent by SMS.";

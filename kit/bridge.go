@@ -260,6 +260,9 @@ func runPart(args []string) {
 		}
 		writeJSON(w, 200, res)
 	})
+	app.Mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, loadSettings().settingsJSON())
+	})
 	app.Mux.HandleFunc("/api/share", func(w http.ResponseWriter, r *http.Request) {
 		var q struct{ Phone, Eth string }
 		if err := readJSON(r, &q); err != nil {

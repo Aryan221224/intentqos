@@ -105,3 +105,24 @@ func TestLabEndpointsOnLoopback(t *testing.T) {
 		t.Fatal("a wrong fingerprint must be refused")
 	}
 }
+
+func TestWanGateway(t *testing.T) {
+	if g := wanGateway(map[string]any{"config": map[string]any{"wan_gateway": "10.42.0.1"}}); g != "10.42.0.1" {
+		t.Fatalf("got %q", g)
+	}
+	if g := wanGateway(map[string]any{"config": map[string]any{"wan_gateway": nil}}); g != "" {
+		t.Fatalf("null gateway: %q", g)
+	}
+	if g := wanGateway(map[string]any{}); g != "" {
+		t.Fatalf("older router: %q", g)
+	}
+}
+
+func TestShortTestNames(t *testing.T) {
+	for in, want := range map[string]string{"call": "call_backup", "game": "game_downloads", "everyone": "busy_home",
+		"home": "home_network", "busy_home": "busy_home", "nope": ""} {
+		if got := scenarioFor(in); got != want {
+			t.Fatalf("scenarioFor(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

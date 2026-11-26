@@ -4,6 +4,7 @@
 <body>
 <header><img src="/icon.png" alt=""><b>IntentQoS 4G Bridge</b><span class="sub">turns this laptop into the router's 4G backup line</span></header>
 <main>
+  <div id="auto" class="note hidden" style="margin-bottom:12px"></div>
   <section class="card">
     <h2>How it is wired</h2>
     <div class="mono small" style="background:var(--sunken);border-radius:8px;padding:12px;white-space:pre">Phone (4G) ──USB cable, USB tethering on──▶ this laptop ──Ethernet cable──▶ router's WAN port</div>
@@ -53,7 +54,31 @@ async function refresh() {
       ["Internet on this laptop", s.internet ? '<span class="pill ok">working</span>' : '<span class="pill bad">not reachable</span>'],
       ["Sharing", sharing ? `<span class="pill ok">on</span> to ${esc(sharing.name)} (${esc((sharing.ips || []).join(", "))})` : '<span class="pill">off</span>']];
     $("state").innerHTML = `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+    autoShare(phones, wired, sharing);
   } catch (e) { $("state").innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+}
+// hands-off mode (kit settings file, auto = yes): share as soon as the phone and the Ethernet port are both there
+let S = {}, busy = false, tried = "";
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function banner(html, kind) { const b = $("auto"); b.className = "note " + (kind || ""); b.innerHTML = html; b.classList.remove("hidden"); }
+async function autoShare(phones, wired, sharing) {
+  if (!S.auto || busy) return;
+  if (sharing) { banner("Sharing the phone's 4G. Plug the router's WAN cable in here when the failover test asks.", "ok"); return; }
+  if (!phones.length) { banner('<span class="spin"></span> Waiting for the phone: plug it in by USB and turn on USB tethering…'); return; }
+  if (!wired.length) { banner("No Ethernet port found on this laptop: plug in the USB Ethernet adapter.", "warn"); return; }
+  const key = phones[0].name + ">" + wired[0].name;
+  if (tried === key) return;                       // one automatic try per phone/port pair; then the buttons
+  busy = true; tried = key;
+  let stop = false;
+  for (let i = 5; i > 0 && !stop; i--) {
+    banner(`Sharing the phone's 4G in <b>${i}</b> s &nbsp;<button class="ghost" id="stopauto">Stop</button>`);
+    $("stopauto").onclick = () => { stop = true; };
+    await sleep(1000);
+  }
+  if (stop) { banner("Stopped. Use the buttons below."); busy = false; return; }
+  $("phone").value = phones[0].name; $("eth").value = wired[0].name;
+  await $("share").onclick();
+  busy = false;
 }
 $("refresh").onclick = refresh;
 $("share").onclick = async () => {
@@ -63,6 +88,7 @@ $("share").onclick = async () => {
   refresh();
 };
 $("unshare").onclick = async () => { try { await api("/api/unshare", {}); note("Sharing is off.", ""); } catch (e) { note(e.message, "bad"); } refresh(); };
-refresh(); setInterval(refresh, 8000);
+api("/api/settings").then(d => { S = d; if (S.auto) setInterval(refresh, 3000); }).catch(() => {}).finally(refresh);
+setInterval(refresh, 8000);
 </script>
 </body></html>

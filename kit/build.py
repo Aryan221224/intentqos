@@ -184,6 +184,28 @@ def build(goos: str, goarch: str, outdir: str, ico: dict, rsrc: str | None) -> N
             os.remove(syso)
 
 
+def add_kit_files(outdir: str, crlf: bool) -> None:
+    """The settings file (a fresh team PIN per build, so one zip = one team) and the filming-day sheet."""
+    import secrets
+    pin = f"{secrets.randbelow(900000) + 100000}"
+    for name in sorted(os.listdir(os.path.join(HERE, "dist-files"))):
+        text = open(os.path.join(HERE, "dist-files", name), encoding="utf-8").read().replace("@PIN@", pin)
+        if crlf:
+            text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+        with open(os.path.join(outdir, name), "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+
+
+def kit_zip() -> None:
+    """dist/kit/IntentQoS-Kit-Windows.zip: one folder, copied as it is to every laptop."""
+    src = os.path.join(DIST, "windows")
+    out = os.path.join(DIST, "IntentQoS-Kit-Windows.zip")
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for name in sorted(os.listdir(src)):
+            z.write(os.path.join(src, name), f"IntentQoS Kit/{name}")
+    print("kit zip:", out, os.path.getsize(out) // 1024 // 1024, "MiB")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", choices=sorted(PLATFORMS), action="append")
@@ -197,10 +219,13 @@ def main() -> int:
     for plat in a.only or list(PLATFORMS):
         for goos, goarch, sub in PLATFORMS[plat]:
             build(goos, goarch, os.path.join(DIST, sub), ico, rsrc)
+            add_kit_files(os.path.join(DIST, sub), crlf=goos == "windows")
+    if "windows" in (a.only or list(PLATFORMS)):
+        kit_zip()
     with open(os.path.join(DIST, "SHA256SUMS.txt"), "w") as f:
         for dp, _, fn in sorted(os.walk(DIST)):
             for x in sorted(fn):
-                if x == "SHA256SUMS.txt":
+                if x == "SHA256SUMS.txt" or x.endswith(".zip"):
                     continue
                 fp = os.path.join(dp, x)
                 f.write(f"{hashlib.sha256(open(fp, 'rb').read()).hexdigest()}  {os.path.relpath(fp, DIST)}\n")

@@ -19,6 +19,34 @@ Linux builds have the same programs (`intentqos-console`, `intentqos-router-setu
 `intentqos-4g-bridge`). macOS has Router Setup and Test Kit; its Operator Console needs Python 3.11 or newer
 installed from python.org. One laptop can run several programs: the operator laptop can also be the test laptop.
 
+## Hands-off mode (for filming)
+
+Put **`IntentQoS Kit Settings.txt`** (shipped next to the programs) in the same folder as the programs on every
+laptop. With `auto = yes` each program does its job by itself after a 5-second countdown with a **Stop** button;
+nothing is typed and, after one rehearsal run, no Windows prompt appears. Delete a line (or the file) and that
+program asks as before.
+
+| Program | What it does by itself |
+|---|---|
+| Operator Console | uses the fixed `team_pin`; its phone QR code is a sign-in link (valid 15 min), so the phone opens the app already signed in |
+| Router Setup | finds the router, signs in with the password this laptop remembers (Windows DPAPI) or `router_password`; if this IntentQoS version is installed and paired with this console it only shows **Ready** (retakes reinstall nothing); otherwise installs and pairs with `team_pin`. Missing router internet or flash space is reported before anything is uploaded; GL.iNet hardware acceleration is shown as "One step left" with the clicks |
+| Test Kit | pairs with `team_pin`, waits for the console and the router, runs `tests` (`call`, `game`, `everyone`, `rpm`, `home`) for `test_seconds`, then, with `failover = yes`, the failover test with IntentQoS on: it notices the WAN cable move by itself from the router's new WAN gateway (the **Cable moved** button stays as a fallback). The report opens at the end |
+| 4G Bridge | shares the phone's 4G as soon as the phone (USB tethering) and an Ethernet port are both present |
+
+One-time prompts are moved into the rehearsal: the first kit program opened on a laptop removes Windows'
+downloaded-file mark from the other kit programs in its folder (one SmartScreen warning per laptop), and the
+console's single administrator prompt adds firewall rules for its ports, for itself and for its Python, and removes
+any block rule Windows made after a "Cancel" on its own prompt. The console also checks before starting that its
+ports (8443, 8088, 8446, UDP 47815 and 8447) are free and names the program that holds one.
+
+The step-by-step filming sheet is `Filming day.txt`, next to the programs.
+
+**No router?** `IntentQoS Video Demo (no router).exe` (Windows, runs inside WSL 2; see `launcher/README.md`) or
+`sudo bash scripts/video-demo.sh` (any Ubuntu/Debian Linux) starts the emulated home, the real engine and the
+operator controller, and the gateway console plays an 80-second scripted demo with a caption per step (a work call,
+a download and a backup, a fibre drop to 20/5 Mbit/s, a "boost my work call" lease, the recovery). The console's
+Experiments page has **Play the 80 s demo** to play it again.
+
 ## Before you start
 
 * **Router.** A GL.iNet GL-MT3000, or any router running OpenWrt 21.02 or newer (24.10 and 25.12 tested, both

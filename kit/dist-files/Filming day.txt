@@ -1,0 +1,57 @@
+INTENTQOS: FILMING DAY
+======================
+
+First: unzip. Right-click the zip -> Extract All, and run the programs from the extracted folder (a program
+started from inside the zip cannot see its settings file).
+
+What you need
+  * Router: GL.iNet GL-MT3000 (or any OpenWrt router), its WAN port cabled to your ISP router, its own internet working.
+  * Laptop A (operator + test): IntentQoS Operator Console, IntentQoS Router Setup, IntentQoS Test Kit.
+  * Laptop B (4G bridge): IntentQoS 4G Bridge, a USB Ethernet adapter, a phone with mobile data and a USB cable.
+  * A phone on the router's Wi-Fi (it can be the same phone, unplugged, for the app shots).
+  * One folder with the four programs AND "IntentQoS Kit Settings.txt", copied to each laptop.
+  (One laptop can run everything except the 4G Bridge.)
+
+THE DAY BEFORE: REHEARSAL (gets every one-time Windows prompt out of the way)
+  1. Open "IntentQoS Kit Settings.txt" in Notepad. Put in your plan speeds. Save.
+  2. Laptop A: join the router's Wi-Fi (or a LAN cable). Laptop B stays off the router's network: it only
+     talks to the phone (USB) and, during the failover test, to the router's WAN cable.
+  3. Laptop A: double-click IntentQoS Operator Console.
+       - "Windows protected your PC": More info -> Run anyway. (Only once per laptop: the other kit programs
+         in the folder then open without it.)
+       - "Do you want to allow this app to make changes": Yes. (Firewall rules, once.)
+  4. Laptop A: double-click IntentQoS Router Setup. It finds the router; type the router password once
+     (GL.iNet: the admin-panel password). It installs and pairs by itself (a few minutes the first time).
+       - If it shows "One step left": GL.iNet admin panel -> Network -> Network Acceleration -> Off.
+  5. Phone: scan the QR code on the console window. The app opens signed in. Browser menu -> Add to Home screen.
+  6. Laptop B: plug the phone in by USB, turn on USB tethering, double-click IntentQoS 4G Bridge.
+     It shares the phone's 4G by itself (Windows asks for permission once: Yes).
+  7. Laptop A: double-click IntentQoS Test Kit. It pairs, runs the tests and the failover test by itself.
+     When it asks, move the router's WAN cable from the ISP router to laptop B's Ethernet adapter.
+     It notices the move by itself. Afterwards, put the cable back on the ISP router.
+  If all of this ran once without a prompt you did not expect, you are ready to film.
+
+FILMING (each take; nothing is typed, no Windows prompt appears)
+  1. Laptop A: double-click IntentQoS Operator Console. Wait for "Ready" (about 15 s).
+  2. Laptop A: double-click IntentQoS Router Setup. It shows "Ready: IntentQoS is installed and paired"
+     (nothing is reinstalled on a retake).
+  3. Phone: open the app from the home screen: devices, live status, "Boost my work call".
+  4. Laptop B: double-click IntentQoS 4G Bridge (phone plugged in, tethering on). It shows "Sharing".
+  5. Laptop A: double-click IntentQoS Test Kit. It counts down 5 s and runs: each test with IntentQoS off,
+     then on, live chart on screen. Then the failover test: move the WAN cable when it asks.
+     At the end the report opens by itself.
+  6. Optional shots: the router console (http://192.168.8.1:8080/), the Operator Console's fleet view,
+     the test reports on the console.
+
+Retakes: close the windows and start again from step 1. A Stop button sits next to every countdown.
+
+If something is not right
+  * A program says a port is in use: close the program it names, or restart the laptop.
+  * Router Setup asks for the password again: the password changed; type it once.
+  * "No difference measured": GL.iNet Network Acceleration must be off; check plan_down / plan_up.
+  * Test Kit waits for the console or the router: the console must be open on laptop A, both laptops
+    on the router's network, and Router Setup must have finished once.
+  * Logs: %LOCALAPPDATA%\IntentQoS\logs\
+
+NO ROUTER? Use the "IntentQoS Linux Lab (no router)" folder instead: the same IntentQoS engine on Linux
+(Windows Subsystem for Linux), with an emulated home network. See its "Start here.txt".

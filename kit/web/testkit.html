@@ -4,6 +4,7 @@
 <body>
 <header><img src="/icon.png" alt=""><b>IntentQoS Test Kit</b><span class="sub">measures your line with IntentQoS off and on</span></header>
 <main>
+  <div id="auto" class="note hidden" style="margin-bottom:12px"></div>
   <section class="card" id="conn">
     <h2>1 Connect to your router</h2>
     <div id="known" class="small"></div>
@@ -86,15 +87,16 @@ async function check() {
   } catch (e) { connected = false; $("run").disabled = true; $("fo").disabled = true; $("checkres").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
 }
 $("check").onclick = check;
+async function pairNow() {
+  const d = await api("/api/pair", {console: $("console").value.trim(), pin: $("pin").value.replace(/\s/g, "")});
+  const r = (d.routers || []).filter(x => x.key).slice(-1)[0];
+  if (r) { $("rip").value = r.lan_ip; $("key").value = r.key; }
+  $("pairres").textContent = `Paired with the console at ${d.console.ip}.` + (r ? "" : " It knows no router yet: run Router Setup first.");
+  return r;
+}
 $("pairbtn").onclick = async () => {
   $("pairres").innerHTML = '<span class="spin"></span>';
-  try {
-    const d = await api("/api/pair", {console: $("console").value.trim(), pin: $("pin").value.replace(/\s/g, "")});
-    const r = (d.routers || []).filter(x => x.key).slice(-1)[0];
-    if (r) { $("rip").value = r.lan_ip; $("key").value = r.key; }
-    $("pairres").textContent = `Paired with the console at ${d.console.ip}.` + (r ? "" : " It knows no router yet: run Router Setup first.");
-    if (r) check();
-  } catch (e) { $("pairres").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  try { if (await pairNow()) check(); } catch (e) { $("pairres").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
 };
 function chosen() { return [...document.querySelectorAll("#scen input:checked")].map(x => x.value); }
 async function begin(path, body) {
@@ -156,6 +158,73 @@ async function poll() {
   }
   setTimeout(poll, 500);
 }
-load();
+// ---------------------------------------------------------------- hands-off mode (kit settings file, auto = yes)
+let S = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function banner(html, kind) { const b = $("auto"); b.className = "note " + (kind || ""); b.innerHTML = html; b.classList.remove("hidden"); }
+async function countdown(label, secs) {
+  let stop = false;
+  for (let i = secs; i > 0; i--) {
+    banner(`${esc(label)} in <b>${i}</b> s &nbsp;<button class="ghost" id="stopauto">Stop</button>`);
+    $("stopauto").onclick = () => { stop = true; };
+    await sleep(1000);
+    if (stop) { banner("Stopped. Carry on by hand below."); return false; }
+  }
+  return true;
+}
+async function finished() {
+  for (;;) { await sleep(1000); try { const l = await api("/api/live"); if (!l.running && l.done) return l; } catch (e) {} }
+}
+function noDifference(l) {
+  const rows = (l.results || []).filter(r => !/RPM|capacity/.test(r.metric || "") && !isNaN(parseFloat(r.off)) && !isNaN(parseFloat(r.on)));
+  return rows.length > 0 && rows.every(r => parseFloat(r.on) >= parseFloat(r.off));
+}
+async function auto() {
+  try { S = await api("/api/settings"); } catch (e) { S = {}; }
+  if (S.team_pin) $("pin").value = S.team_pin.replace(/(\d{3})(\d{3})/, "$1 $2");
+  if (S.test_seconds) {
+    if (![...$("secs").options].some(o => +o.value === S.test_seconds)) $("secs").add(new Option(`${S.test_seconds}`, S.test_seconds));
+    $("secs").value = String(S.test_seconds);
+  }
+  if (S.scenario_ids && S.scenario_ids.length)
+    document.querySelectorAll("#scen input").forEach(el => { el.checked = S.scenario_ids.includes(el.value); });
+  if (!S.auto) return;
+  // 1. router and key: from this laptop's profile, or by pairing with the team PIN (the console knows the router)
+  for (let i = 0; !connected; i++) {
+    if (!$("key").value.trim()) {
+      if (!S.team_pin) { banner("Set team_pin in the kit settings file, or type the router address and key below.", "warn"); return; }
+      banner('<span class="spin"></span> Pairing with the Operator Console…');
+      try {
+        if (!await pairNow()) { banner('<span class="spin"></span> Waiting for the router: run IntentQoS Router Setup (the console does not know a router yet)…'); await sleep(6000); continue; }
+      } catch (e) {
+        if (/wrong PIN|locked/i.test(e.message)) { banner(`${esc(e.message)}. Check that every laptop has the same settings file.`, "bad"); return; }
+        banner(`<span class="spin"></span> Waiting for the Operator Console… <span class="small muted">${esc(e.message)}</span>`); await sleep(5000); continue;
+      }
+    }
+    banner('<span class="spin"></span> Connecting to the router…');
+    await check();
+    if (!connected) { banner('<span class="spin"></span> Waiting for the router to answer (IntentQoS starting, or Router Setup still installing)…'); await sleep(5000); if (S.team_pin && i % 3 === 2) $("key").value = ""; }
+  }
+  // 2. the tests, off then on
+  const ids = S.scenario_ids && S.scenario_ids.length ? S.scenario_ids : chosen();
+  if (!await countdown("Running the tests (IntentQoS off, then on)", 5)) return;
+  banner('<span class="spin"></span> Running the tests…');
+  await begin("/api/run", {router: $("rip").value.trim(), key: $("key").value.trim(), seconds: +$("secs").value, scenarios: ids});
+  let l = await finished();
+  if (l.error) { banner(`The tests stopped: ${esc(l.error)}`, "bad"); return; }
+  const hint = noDifference(l) ? " No difference was measured: check that GL.iNet Network Acceleration is off and that the plan speeds match your line." : "";
+  if (hint) banner(hint, "warn");
+  // 3. failover (one cable move, IntentQoS on)
+  if (S.failover) {
+    if (!await countdown("Failover test (fibre → 4G): get ready to move the WAN cable", 8)) return;
+    banner('<span class="spin"></span> Failover test running: move the cable when asked; the test notices the move by itself.');
+    await begin("/api/failover", {router: $("rip").value.trim(), key: $("key").value.trim(), qos: "on"});
+    l = await finished();
+    if (l.error) { banner(`The failover test stopped: ${esc(l.error)}`, "bad"); return; }
+  }
+  banner("Done. The report is open, saved in Documents › IntentQoS Reports" + (l.uploaded ? ", and on the Operator Console." : ".") + hint, hint ? "warn" : "ok");
+  api("/api/open-report", {}).catch(() => {});
+}
+load().then(auto, auto);
 </script>
 </body></html>

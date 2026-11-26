@@ -689,6 +689,18 @@ def make_handler(ctl: Controller):
                      (S.h(tok), "app", sub["id"], now() + 30 * 86400, now()))
                 ctl.audit(sub["account"], "subscriber", "app_login", str(sub["id"]), {}, self._ip())
                 return self._send(200, {"ok": True}, headers={"Set-Cookie": f"iqapp={tok}; Path=/; HttpOnly;{self._secure()} SameSite=Strict; Max-Age=2592000"})
+            if p == "/v1/app/kitlink" and method == "POST":    # home kit: the console's QR code signs the phone in
+                if not ctl.kit.enabled:
+                    raise HTTPError(404, "kit mode is off")
+                try:
+                    sub = ctl.kit.redeem_phone_link(str(body.get("token", "")))
+                except PermissionError as e:
+                    raise HTTPError(401, str(e))
+                tok = S.token()
+                db.x("INSERT INTO sessions (token, kind, principal, expires, created) VALUES (?,?,?,?,?)",
+                     (S.h(tok), "app", sub["id"], now() + 30 * 86400, now()))
+                ctl.audit(sub["account"], "subscriber", "app_login_kitlink", str(sub["id"]), {}, self._ip())
+                return self._send(200, {"ok": True}, headers={"Set-Cookie": f"iqapp={tok}; Path=/; HttpOnly;{self._secure()} SameSite=Strict; Max-Age=2592000"})
             if p == "/v1/app/quick" and method == "POST":      # lab only, like demo_otp
                 sub = db.one("SELECT * FROM subscribers WHERE phone LIKE ?", ("%9800000001",)) if self._quick_ok() else None
                 if not sub:

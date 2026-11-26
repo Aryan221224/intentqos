@@ -4,6 +4,7 @@
 <body>
 <header><img src="/icon.png" alt=""><b>IntentQoS Router Setup</b><span class="sub">installs IntentQoS on your OpenWrt or GL.iNet router</span></header>
 <main>
+  <div id="auto" class="note hidden" style="margin-bottom:12px"></div>
   <ol class="steps" id="steps"><li id="t1" class="on">1 Find</li><li id="t2">2 Sign in</li><li id="t3">3 Settings</li><li id="t4">4 Install</li><li id="t5">5 Done</li></ol>
 
   <section class="card" id="p1">
@@ -21,7 +22,7 @@
       <div><label for="user">User</label><input id="user" value="root"></div>
       <div><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"></div>
     </div>
-    <p class="small muted">GL.iNet: the password of the router's admin panel. OpenWrt: the root password you set in LuCI (empty if never set). It is used only to reach the router over SSH and is not stored.</p>
+    <p class="small muted">GL.iNet: the password of the router's admin panel. OpenWrt: the root password you set in LuCI (empty if never set). It is used only to reach the router over SSH. This laptop remembers it (encrypted for your Windows account), so the next run signs in by itself.</p>
     <label class="row small" style="gap:6px;color:var(--text)"><input type="checkbox" id="trust" style="width:auto"> trust a new router identity (only after resetting or reflashing the router)</label>
     <div class="row" style="margin-top:12px"><button id="next2">Sign in</button><button class="ghost" id="back2">Back</button></div>
     <div id="err2" class="note bad hidden" style="margin-top:12px"></div>
@@ -59,7 +60,8 @@
   </section>
 
   <section class="card hidden" id="p5">
-    <h2 style="color:var(--ok)">IntentQoS is running on your router</h2>
+    <h2 style="color:var(--ok)" id="h5">IntentQoS is running on your router</h2>
+    <div id="oneleft"></div>
     <dl class="kv" id="done"></dl>
     <div id="pairres" style="margin-top:12px"></div>
     <div class="row" style="margin-top:16px"><button id="openc">Open the router console</button><button class="ghost" id="copyk">Copy router key</button></div>
@@ -75,8 +77,27 @@ let consoles = [], facts = {}, result = null;
 async function api(path, body) {
   const r = await fetch(path, {method: body ? "POST" : "GET", headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : undefined});
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  if (!r.ok) { const e = new Error(d.error || `HTTP ${r.status}`); e.data = d; throw e; }
   return d;
+}
+let S = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function banner(html, kind) { const b = $("auto"); b.className = "note " + (kind || ""); b.innerHTML = html; b.classList.remove("hidden"); }
+// hands-off mode: a visible 5 s countdown with a Stop button before anything changes on the router
+async function countdown(label, secs) {
+  let stop = false;
+  for (let i = secs; i > 0; i--) {
+    banner(`${esc(label)} in <b>${i}</b> s &nbsp;<button class="ghost" id="stopauto">Stop</button>`);
+    $("stopauto").onclick = () => { stop = true; };
+    await sleep(1000);
+    if (stop) { banner("Stopped. Carry on by hand below."); return false; }
+  }
+  return true;
+}
+function oneLeft(host) {
+  const hw = facts.hwnat || "";
+  $("oneleft").innerHTML = hw ? `<div class="note warn" style="margin:10px 0"><b>One step left:</b> this router's hardware acceleration lets packets skip the shaper.
+    Open the router's admin panel (<a href="http://${esc(host)}/" target="_blank">http://${esc(host)}/</a>) → <b>Network</b> → <b>Network Acceleration</b> → turn it <b>off</b> → Apply.</div>` : "";
 }
 function show(n) {
   for (let i = 1; i <= 5; i++) { $("p" + i).classList.toggle("hidden", i !== n); $("t" + i).className = i < n ? "done" : i === n ? "on" : ""; }
@@ -106,7 +127,13 @@ $("pw").addEventListener("keydown", e => { if (e.key === "Enter") $("next2").cli
 $("next2").onclick = async () => {
   $("err2").classList.add("hidden"); $("next2").disabled = true; $("next2").textContent = "Signing in…";
   try {
-    const d = await api("/api/connect", {host: $("host").value.trim(), user: $("user").value.trim(), password: $("pw").value, trust: $("trust").checked});
+    const d = await api("/api/connect", {host: $("host").value.trim(), user: $("user").value.trim(), password: $("pw").value, trust: $("trust").checked,
+      console: consoles[0] ? consoles[0].https : ""});
+    afterConnect(d);
+  } catch (e) { $("err2").textContent = e.message; $("err2").classList.remove("hidden"); }
+  $("next2").disabled = false; $("next2").textContent = "Sign in";
+};
+async function afterConnect(d) {
     facts = d.facts;
     const rows = [["Model", facts.model || "unknown"], ["Firmware", (facts.gl ? `GL.iNet ${facts.gl} · ` : "") + (facts.description || "")],
       ["CPU", facts.machine], ["Free flash", facts.free_kb ? `${Math.round(facts.free_kb / 1024)} MB` : "?"], ["Router internet", facts.internet === "yes" ? "connected" : "not connected"],
@@ -121,9 +148,50 @@ $("next2").onclick = async () => {
     $("install").textContent = facts.installed ? (facts.installed === d.payload_version ? "Reinstall" : `Update to ${d.payload_version}`) : "Install IntentQoS";
     $("uninstall").classList.toggle("hidden", !facts.installed);
     show(3);
-  } catch (e) { $("err2").textContent = e.message; $("err2").classList.remove("hidden"); }
-  $("next2").disabled = false; $("next2").textContent = "Sign in";
-};
+    if (!S.auto) return;
+    const host = $("host").value.trim();
+    if (d.ready) {                                   // a retake: nothing to install
+      result = {console: `http://${host}:8080/`, key: (d.router && d.router.key) || ""};
+      $("h5").textContent = "Ready: IntentQoS is installed and paired";
+      $("done").innerHTML = [["Router console", `<a href="${esc(result.console)}" target="_blank">${esc(result.console)}</a>`],
+        ["Router key", result.key ? `<span class="mono">${esc(result.key)}</span>` : "kept on the router"], ["Firmware", esc(facts.description || "")],
+        ["IntentQoS", esc(facts.installed)]].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+      $("pairres").innerHTML = `<div class="note ok">Paired with the Operator Console at ${esc(consoles[0].ip)}.</div>`;
+      oneLeft(host); show(5);
+      banner(`Ready. This router already runs IntentQoS ${esc(facts.installed)} and reports to the Operator Console: nothing to install.`, "ok");
+      return;
+    }
+    if (d.preflight) { banner(esc(d.preflight), "bad"); return; }
+    if (!S.team_pin && !consoles.length) $("pair").checked = false;
+    if (await countdown(facts.installed ? `Updating IntentQoS to ${d.payload_version}` : "Installing IntentQoS", 5)) start();
+}
+// hands-off mode (kit settings file, auto = yes): find, sign in, then install or report "Ready", with no typing
+async function auto() {
+  try { S = await api("/api/settings"); } catch (e) { S = {}; }
+  if (S.plan_down) $("down").value = S.plan_down;
+  if (S.plan_up) $("up").value = S.plan_up;
+  if (S.team_pin) $("pin").value = S.team_pin.replace(/(\d{3})(\d{3})/, "$1 $2");
+  if (S.router_user) $("user").value = S.router_user;
+  await find();
+  if (S.router_address) $("host").value = S.router_address;
+  if (!S.auto) return;
+  for (let waited = 0; S.team_pin && !consoles.length && waited < 300; waited += 4) {
+    banner('<span class="spin"></span> Waiting for the Operator Console to start on the operator laptop…');
+    await sleep(4000); await find();
+  }
+  const host = $("host").value.trim();
+  if (!host) { banner("No router found. Connect this laptop to the router (its Wi-Fi or a LAN port), then press Search again.", "warn"); return; }
+  banner(`<span class="spin"></span> Signing in to the router at ${esc(host)}…`);
+  try {
+    const d = await api("/api/connect", {host, user: $("user").value.trim(), password: "", usesaved: true, console: consoles[0] ? consoles[0].https : ""});
+    afterConnect(d);
+  } catch (e) {
+    show(2);
+    if (e.data && e.data.need_password) banner("Type the router password once (GL.iNet: the admin panel password) and press Sign in. This laptop remembers it, so the next run is automatic.", "warn");
+    else banner(esc(e.message), "bad");
+    $("pw").focus();
+  }
+}
 $("pair").onchange = () => $("pairbox").classList.toggle("hidden", !$("pair").checked);
 async function start() {
   $("err4").classList.add("hidden"); $("retry4").classList.add("hidden"); $("log").innerHTML = "";
@@ -142,6 +210,8 @@ async function poll() {
   if (!j.done) { setTimeout(poll, 600); return; }
   if (!j.ok) { $("h4").textContent = "Install stopped"; $("err4").textContent = j.error; $("err4").classList.remove("hidden"); $("retry4").classList.remove("hidden"); return; }
   result = j.result;
+  oneLeft($("host").value.trim());
+  if (S.auto) banner(j.pair_error ? "Installed, but pairing failed (see below)." : "Done: IntentQoS is installed" + (j.paired ? " and paired." : "."), j.pair_error ? "warn" : "ok");
   $("done").innerHTML = [["Router console", `<a href="${esc(result.console)}" target="_blank">${esc(result.console)}</a>`], ["Router key", `<span class="mono">${esc(result.key)}</span>`],
     ["Detected", `LAN ${esc(result.lan)} (${esc(result.subnet)}), WAN ${esc(result.wan)}`], ["Firmware", esc(result.firmware)], ["IntentQoS", esc(result.version) + ` · Python ${esc(result.python)}`]]
     .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
@@ -165,6 +235,6 @@ $("unyes").onclick = async () => {
   catch (e) { $("unres").textContent = e.message; }
   $("unyes").disabled = false;
 };
-find();
+auto();
 </script>
 </body></html>

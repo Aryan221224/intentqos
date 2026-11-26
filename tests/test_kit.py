@@ -92,6 +92,50 @@ class KitMode(unittest.TestCase):
             self.kit.pair({"pin": self.kit.pin, "role": "router", "serial": "x; rm -rf /"}, "10.0.0.2")
 
 
+    def _kit(self, **kit):
+        from controller.kit import Kit
+        from controller.server import DEFAULTS
+        cfg = dict(DEFAULTS, data_dir=self.d, listen="0.0.0.0:8443", ui_listen="0.0.0.0:8088", kit=dict({"enabled": True}, **kit))
+        return Kit(self.ctl, cfg)
+
+    def test_team_pin_from_settings(self):
+        self.assertEqual(self._kit(pin="482 913").pin, "482913")          # typed with a space in the settings file
+
+    def test_bad_team_pin_falls_back_to_random(self):
+        k = self._kit(pin="4829")
+        self.assertRegex(k.pin, r"^[0-9]{6}$")
+        self.assertNotEqual(k.pin, "4829")
+
+    def test_phone_link_signs_in_household(self):
+        self.kit.pair({"pin": self.kit.pin, "role": "router", "serial": "IQ-AABBCCDDEEFF", "lan_ip": "192.168.8.1",
+                       "router_key": "K", "down_mbit": 100, "up_mbit": 100}, "192.168.8.20")
+        tok = self.kit.phone_link_token()
+        self.assertEqual(self.kit.phone_link_token(), tok)                 # same code while it is fresh
+        sub = self.kit.redeem_phone_link(tok)
+        self.assertEqual(sub["account"], self.kit.household()["account"])
+        with self.assertRaises(PermissionError) as e:
+            self.kit.redeem_phone_link("wrong-token-123")
+        self.assertIn("scan the QR code", str(e.exception))
+
+    def test_phone_link_expires(self):
+        import controller.kit as K
+        tok = self.kit.phone_link_token()
+        real = K.time.time
+        try:
+            K.time.time = lambda: real() + 16 * 60
+            with self.assertRaises(PermissionError) as e:
+                self.kit.redeem_phone_link(tok)
+            self.assertIn("expired", str(e.exception))
+            self.assertNotEqual(self.kit.phone_link_token(), tok)            # a new code for the QR
+        finally:
+            K.time.time = real
+
+    def test_phone_link_only_in_local_status(self):
+        self.assertIn("app_link_urls", self.kit.status(True))
+        self.assertNotIn("app_link_urls", self.kit.status(False))
+        self.assertTrue(self.kit.status(True)["app_link_urls"][0].split("#k=")[1])
+
+
 class RouterPayload(unittest.TestCase):
     def test_installer_scripts_parse(self):
         sh = shutil.which("busybox") and ["busybox", "sh"] or (shutil.which("dash") and ["dash"]) or ["sh"]
