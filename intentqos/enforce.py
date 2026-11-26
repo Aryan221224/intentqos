@@ -389,7 +389,9 @@ class HtbBackend(Backend):
         for d, dev in self.devs.items():
             run(["tc", "qdisc", "del", "dev", dev, "root"], check=False)
             total = plan[d]["rate"]
-            cmds.append(f"qdisc add dev {dev} root handle 1: htb default {HTB_CLASSID[TIN_BE]} r2q 10")
+            # replace, not add: if the watchdog put its safe HTB back between the delete above and this batch (an engine
+            # restarting while the watchdog trips), "add" fails with "Exclusivity flag on" and the engine would not start
+            cmds.append(f"qdisc replace dev {dev} root handle 1: htb default {HTB_CLASSID[TIN_BE]} r2q 10")
             cmds += self._class_cmds("replace", dev, total, plan[d]["guarantee"])
             cmds.append(f"class replace dev {dev} parent 1: classid 1:{self.PROBE_CLASSID} htb rate 256kbit "
                         f"ceil 10000000kbit prio 0 quantum 1514")

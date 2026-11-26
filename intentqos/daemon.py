@@ -132,6 +132,9 @@ class Engine:
 
     # ------------------------------------------------------------------ lifecycle
     def start(self) -> None:
+        # a fresh heartbeat first: a heartbeat file left by an engine that died earlier would otherwise make the
+        # watchdog restore its safe plan in the middle of this setup
+        self._heartbeat()
         rd = self.estimator.down.rate
         ru = self.estimator.up.rate
         plan = decide(self.cfg, {"down": rd, "up": ru}, _zero_demand(), [])
@@ -664,7 +667,7 @@ class Engine:
         return {
             "t": wall, "version": __version__, "uptime_s": round(wall - self.t_start, 1),
             "config": {"backend": self.backend.name, "leaf": getattr(self.backend, "leaf", None),
-                       "lan": self.lan, "wan": self.wan,
+                       "lan": self.lan, "wan": self.wan, "wan_gateway": getattr(self, "_wan_gw", None),
                        "nominal_down_mbit": self.cfg["link"]["down_mbit"], "nominal_up_mbit": self.cfg["link"]["up_mbit"],
                        "classifier": self.classifier.mode, "estimator": self.estimator.enabled,
                        "adaptive_shares": self.cfg["policy"]["adaptive_shares"],
